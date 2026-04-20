@@ -1,4 +1,5 @@
 'use client'
+export const runtime = 'edge';
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -213,4 +214,3 @@ export default function Home() {
     </main>
   )
 }
-export const runtime = 'edge';
