@@ -3,6 +3,9 @@ compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".open-next/assets"
 
+[build]
+command = "npm run pages:build"
+
 [vars]
 NEXT_PUBLIC_SUPABASE_URL = ""
 NEXT_PUBLIC_SUPABASE_ANON_KEY = ""
