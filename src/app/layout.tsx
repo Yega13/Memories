@@ -17,10 +17,10 @@ const playfair = Playfair_Display({
 export const runtime = 'nodejs'
 
 export const metadata: Metadata = {
-  title: "Memories — Share photos with just a link",
+  title: "Husher — Share photos with just a link",
   description: "Create a shared photo album in seconds. Anyone with the link can view and add photos — no sign-up, no app, no friction.",
   openGraph: {
-    title: "Memories — Share photos with just a link",
+    title: "Husher — Share photos with just a link",
     description: "Create a shared photo album in seconds. No account needed.",
     type: "website",
   },

@@ -62,7 +62,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <Leaf className="w-5 h-5" style={{ color: '#254F22' }} />
             <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: '1.25rem', fontWeight: 700 }}>
-              Memories
+              Husher
             </span>
           </div>
           <span className="text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
@@ -168,18 +168,143 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Steps */}
-      <section className="max-w-4xl mx-auto px-8 pb-20">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      {/* Steps — polaroid filmstrip */}
+      <section className="max-w-5xl mx-auto px-6 pb-24 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-14 md:gap-6 items-start">
           {[
-            { num: '01', title: 'Create an album', desc: 'Give it a name and get a unique link instantly. No account needed.' },
-            { num: '02', title: 'Share the link', desc: 'Send it via message, display a QR code at your event, or email it.' },
-            { num: '03', title: 'Collect memories', desc: 'Everyone adds photos. You own the album forever — it never expires.' },
-          ].map(({ num, title, desc }) => (
-            <div key={num} className="flex flex-col gap-3">
-              <span style={{ fontFamily: 'var(--font-serif)', fontSize: '2.5rem', color: '#DDD5C5', fontWeight: 700, lineHeight: 1 }}>{num}</span>
-              <h3 className="font-semibold text-lg" style={{ color: '#254F22' }}>{title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: '#7C5C3E' }}>{desc}</p>
+            {
+              rot: -3.5,
+              lift: 0,
+              bg: '#F2E9D8',
+              tapeColor: 'rgba(196, 152, 96, 0.45)',
+              captionColor: '#7C4A2D',
+              caption: '"Name it."',
+              label: 'First',
+              desc: 'Give your album a name. You get a private link you own — no account, no app.',
+              illo: (
+                <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none" stroke="#7C4A2D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 78 L52 44 L62 54 L28 88 L14 92 Z" fill="#FBF4E4" />
+                  <path d="M52 44 L66 30 A6 6 0 0 1 76 40 L62 54" fill="#E8D5B0" />
+                  <path d="M14 92 L18 78" />
+                  <path d="M30 62 L50 42" opacity="0.35" />
+                </svg>
+              ),
+            },
+            {
+              rot: 2.5,
+              lift: 32,
+              bg: '#E6EEE3',
+              tapeColor: 'rgba(120, 150, 110, 0.4)',
+              captionColor: '#254F22',
+              caption: '"Share it."',
+              label: 'Then',
+              desc: 'Text it, print a QR for the table, drop it in the group chat. One link, everyone in.',
+              illo: (
+                <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none" stroke="#254F22">
+                  <rect x="18" y="18" width="26" height="26" rx="2" strokeWidth="2.5" />
+                  <rect x="24" y="24" width="6" height="6" fill="#254F22" />
+                  <rect x="32" y="24" width="6" height="6" fill="#254F22" />
+                  <rect x="24" y="32" width="6" height="6" fill="#254F22" />
+                  <rect x="56" y="18" width="26" height="26" rx="2" strokeWidth="2.5" />
+                  <rect x="62" y="24" width="6" height="6" fill="#254F22" />
+                  <rect x="70" y="24" width="6" height="6" fill="#254F22" />
+                  <rect x="70" y="32" width="6" height="6" fill="#254F22" />
+                  <rect x="18" y="56" width="26" height="26" rx="2" strokeWidth="2.5" />
+                  <rect x="24" y="62" width="6" height="6" fill="#254F22" />
+                  <rect x="24" y="70" width="6" height="6" fill="#254F22" />
+                  <rect x="32" y="70" width="6" height="6" fill="#254F22" />
+                  <rect x="56" y="56" width="4" height="4" fill="#254F22" />
+                  <rect x="64" y="56" width="4" height="4" fill="#254F22" />
+                  <rect x="72" y="56" width="4" height="4" fill="#254F22" />
+                  <rect x="56" y="64" width="4" height="4" fill="#254F22" />
+                  <rect x="64" y="72" width="4" height="4" fill="#254F22" />
+                  <rect x="72" y="64" width="4" height="4" fill="#254F22" />
+                  <rect x="72" y="72" width="4" height="4" fill="#254F22" />
+                </svg>
+              ),
+            },
+            {
+              rot: -1.5,
+              lift: 12,
+              bg: '#DCE4EE',
+              tapeColor: 'rgba(120, 135, 170, 0.4)',
+              captionColor: '#1B3A6B',
+              caption: '"Keep it."',
+              label: 'Forever',
+              desc: 'Photos flow in from everyone who came. The album is yours — it never expires.',
+              illo: (
+                <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none">
+                  <rect x="14" y="28" width="48" height="48" rx="3" fill="#FBF4E4" stroke="#1B3A6B" strokeWidth="2" transform="rotate(-8 38 52)" />
+                  <rect x="28" y="22" width="48" height="48" rx="3" fill="#EAE2D0" stroke="#1B3A6B" strokeWidth="2" transform="rotate(4 52 46)" />
+                  <rect x="24" y="20" width="48" height="48" rx="3" fill="#FFFFFF" stroke="#1B3A6B" strokeWidth="2" />
+                  <circle cx="38" cy="36" r="4" fill="#1B3A6B" />
+                  <path d="M24 60 L36 48 L48 56 L60 44 L72 56 L72 68 L24 68 Z" fill="#254F22" opacity="0.85" />
+                </svg>
+              ),
+            },
+          ].map((step, i) => (
+            <div key={i} className="flex flex-col items-center" style={{ marginTop: step.lift }}>
+              {/* Polaroid */}
+              <div
+                className="relative bg-white"
+                style={{
+                  width: '240px',
+                  padding: '14px 14px 56px 14px',
+                  transform: `rotate(${step.rot}deg)`,
+                  boxShadow: '0 18px 44px rgba(37,79,34,0.16), 0 2px 8px rgba(37,79,34,0.08)',
+                }}
+              >
+                {/* Masking tape at top */}
+                <div
+                  className="absolute -top-3 left-1/2"
+                  style={{
+                    width: '64px',
+                    height: '22px',
+                    background: step.tapeColor,
+                    transform: 'translateX(-50%) rotate(-3deg)',
+                    borderRadius: '1px',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                  }}
+                />
+
+                {/* Photo area */}
+                <div
+                  className="flex items-center justify-center aspect-square"
+                  style={{ background: step.bg }}
+                >
+                  {step.illo}
+                </div>
+
+                {/* Handwritten caption in the white margin */}
+                <div className="absolute bottom-3 left-0 right-0 text-center">
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-serif)',
+                      fontStyle: 'italic',
+                      color: step.captionColor,
+                      fontSize: '1.15rem',
+                    }}
+                  >
+                    {step.caption}
+                  </span>
+                </div>
+              </div>
+
+              {/* Description under the polaroid — counter-rotated so copy stays level */}
+              <div
+                className="mt-8 text-center px-2"
+                style={{ maxWidth: '240px', transform: `rotate(${-step.rot * 0.3}deg)` }}
+              >
+                <p
+                  className="text-xs uppercase mb-2"
+                  style={{ color: '#8B6F4E', letterSpacing: '0.18em', fontWeight: 600 }}
+                >
+                  {step.label}
+                </p>
+                <p className="text-sm leading-relaxed" style={{ color: '#6B5A4E' }}>
+                  {step.desc}
+                </p>
+              </div>
             </div>
           ))}
         </div>
@@ -207,7 +332,7 @@ export default function Home() {
       <footer className="px-8 py-6 flex items-center justify-between text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
         <div className="flex items-center gap-2">
           <Leaf className="w-4 h-4" style={{ color: '#254F22' }} />
-          <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontWeight: 600 }}>Memories</span>
+          <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontWeight: 600 }}>Husher</span>
         </div>
         <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
       </footer>
