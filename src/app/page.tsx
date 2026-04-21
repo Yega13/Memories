@@ -230,8 +230,8 @@ export default function Home() {
               tapeColor: 'rgba(120, 135, 170, 0.4)',
               captionColor: '#1B3A6B',
               caption: '"Keep it."',
-              label: 'Forever',
-              desc: 'Photos flow in from everyone who came. The album is yours — it never expires.',
+              label: 'As long as you want',
+              desc: 'Photos flow in from everyone who came. Free albums stay put — untouched for a year, they quietly retire. Active ones live on.',
               illo: (
                 <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none">
                   <rect x="14" y="28" width="48" height="48" rx="3" fill="#FBF4E4" stroke="#1B3A6B" strokeWidth="2" transform="rotate(-8 38 52)" />
@@ -310,22 +310,150 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Bottom CTA */}
-      <section className="mx-8 mb-16 rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #254F22 0%, #1B3A6B 100%)' }}>
-        <div className="px-12 py-14 flex flex-col md:flex-row items-center justify-between gap-8">
-          <div>
-            <h2 style={{ fontFamily: 'var(--font-serif)', color: '#FDFAF5', fontSize: '2rem', fontWeight: 700, marginBottom: '0.5rem' }}>
-              Ready to preserve a moment?
-            </h2>
-            <p style={{ color: '#B8D9B2' }}>Free forever for small albums. No credit card required.</p>
+      {/* Bottom CTA — photo postcard */}
+      <section className="mx-4 md:mx-8 mb-20 relative">
+        <div
+          className="relative rounded-[28px] overflow-hidden"
+          style={{
+            minHeight: '440px',
+            backgroundImage: 'url(/wedding.jpg)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            boxShadow: '0 24px 60px rgba(37,79,34,0.22)',
+          }}
+        >
+          {/* Warm painterly overlay */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(115deg, rgba(30,45,25,0.72) 0%, rgba(55,40,30,0.55) 45%, rgba(80,50,30,0.15) 100%)',
+            }}
+          />
+
+          {/* Grain texture using radial dots */}
+          <div
+            className="absolute inset-0 opacity-[0.12] mix-blend-overlay pointer-events-none"
+            style={{
+              backgroundImage:
+                'radial-gradient(rgba(255,240,200,0.6) 1px, transparent 1px)',
+              backgroundSize: '3px 3px',
+            }}
+          />
+
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-0 min-h-[440px]">
+            {/* Left — floating paper card */}
+            <div className="md:col-span-7 flex items-center px-6 sm:px-10 md:px-14 py-14">
+              <div
+                className="relative max-w-lg p-8 md:p-10"
+                style={{
+                  background: 'rgba(253, 248, 237, 0.96)',
+                  backdropFilter: 'blur(6px)',
+                  border: '1px solid rgba(196, 166, 120, 0.35)',
+                  boxShadow: '0 14px 40px rgba(20,30,15,0.35)',
+                  transform: 'rotate(-1.2deg)',
+                  borderRadius: '4px',
+                }}
+              >
+                {/* Corner stamp */}
+                <div
+                  className="absolute -top-3 -right-3 w-16 h-20 flex flex-col items-center justify-center"
+                  style={{
+                    background: '#F3E0BC',
+                    border: '1.5px dashed #8B6F4E',
+                    transform: 'rotate(6deg)',
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.12)',
+                  }}
+                >
+                  <Leaf className="w-5 h-5" style={{ color: '#254F22' }} />
+                  <span
+                    className="text-[9px] mt-1 tracking-widest uppercase"
+                    style={{ color: '#7C4A2D', fontWeight: 700 }}
+                  >
+                    Hushare
+                  </span>
+                </div>
+
+                {/* Postmark circle */}
+                <div
+                  className="absolute -top-6 right-16 w-20 h-20 rounded-full hidden md:flex items-center justify-center opacity-60"
+                  style={{
+                    border: '1.5px solid #7C4A2D',
+                    transform: 'rotate(-8deg)',
+                  }}
+                >
+                  <span
+                    className="text-[10px] tracking-[0.2em] uppercase"
+                    style={{ color: '#7C4A2D', fontFamily: 'var(--font-serif)' }}
+                  >
+                    Kept · 2026
+                  </span>
+                </div>
+
+                {/* "To:" line */}
+                <p
+                  className="text-[11px] uppercase mb-3"
+                  style={{ color: '#8B6F4E', letterSpacing: '0.22em', fontWeight: 600 }}
+                >
+                  To — the keeper of moments
+                </p>
+
+                <h2
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontStyle: 'italic',
+                    color: '#254F22',
+                    fontSize: 'clamp(1.9rem, 3.4vw, 2.5rem)',
+                    lineHeight: 1.15,
+                    fontWeight: 700,
+                  }}
+                >
+                  Start your first<br />shared album.
+                </h2>
+
+                <div
+                  className="my-5 h-px w-16"
+                  style={{ background: '#C4A678' }}
+                />
+
+                <p
+                  className="text-sm leading-relaxed"
+                  style={{ color: '#5C4A3C', maxWidth: '24rem' }}
+                >
+                  Free while we're in beta. One link, any number of guests, no
+                  app to install. Albums stay until they sit untouched for a year.
+                </p>
+
+                <button
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="mt-7 inline-flex items-center gap-2 font-semibold transition hover:opacity-90"
+                  style={{
+                    background: '#254F22',
+                    color: '#FDFAF5',
+                    padding: '14px 28px',
+                    borderRadius: '999px',
+                    boxShadow: '0 6px 18px rgba(37,79,34,0.35)',
+                  }}
+                >
+                  Create your album <ArrowRight className="w-4 h-4" />
+                </button>
+
+                {/* Signature mark */}
+                <p
+                  className="mt-6 text-sm italic"
+                  style={{
+                    color: '#7C4A2D',
+                    fontFamily: 'var(--font-serif)',
+                  }}
+                >
+                  — with love, from Yerevan
+                </p>
+              </div>
+            </div>
+
+            {/* Right — intentionally empty so photo breathes on desktop */}
+            <div className="md:col-span-5" />
           </div>
-          <button
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="flex items-center gap-2 font-semibold rounded-2xl px-8 py-4 transition hover:opacity-90 whitespace-nowrap"
-            style={{ background: '#FDFAF5', color: '#254F22' }}
-          >
-            Start for free <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </section>
 
