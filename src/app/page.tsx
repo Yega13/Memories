@@ -29,8 +29,29 @@ export default function Home() {
   return (
     <main style={{ background: '#FDFAF5', fontFamily: 'var(--font-sans)' }} className="min-h-screen">
 
+      {/* Sticky Nav */}
+      <nav
+        className="sticky top-0 z-50 flex items-center justify-between px-8 py-5"
+        style={{
+          background: 'rgba(253, 250, 245, 0.85)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          borderBottom: '1px solid rgba(221, 213, 197, 0.5)',
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <Leaf className="w-5 h-5" style={{ color: '#254F22' }} />
+          <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: '1.25rem', fontWeight: 700 }}>
+            Husher
+          </span>
+        </div>
+        <span className="text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
+          Free during beta
+        </span>
+      </nav>
+
       {/* ── HERO ── full-bleed, image takes right half with diagonal cut */}
-      <div className="relative min-h-screen overflow-hidden">
+      <div className="relative overflow-hidden" style={{ minHeight: 'calc(100vh - 73px)' }}>
 
         {/* Nature image — right half, angled clip */}
         <div
@@ -57,21 +78,8 @@ export default function Home() {
           }}
         />
 
-        {/* Nav */}
-        <nav className="relative z-10 flex items-center justify-between px-8 py-5" style={{ borderBottom: '1px solid rgba(232,224,208,0.6)' }}>
-          <div className="flex items-center gap-2">
-            <Leaf className="w-5 h-5" style={{ color: '#254F22' }} />
-            <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: '1.25rem', fontWeight: 700 }}>
-              Husher
-            </span>
-          </div>
-          <span className="text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
-            Free during beta
-          </span>
-        </nav>
-
         {/* Hero content grid */}
-        <div className="relative z-10 max-w-6xl mx-auto px-8 pt-16 pb-24 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-[calc(100vh-73px)]">
+        <div className="relative z-10 max-w-6xl mx-auto px-8 pt-16 pb-24 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center" style={{ minHeight: 'calc(100vh - 73px)' }}>
 
           {/* Left — text + form */}
           <div>
@@ -144,7 +152,7 @@ export default function Home() {
 
             {/* Card 4 — bottom right */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ bottom: '30px', right: '20px', width: '190px', height: '190px', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/children.jpg" alt="" className="w-full h-full object-cover" />
+              <img src="/children.avif" alt="" className="w-full h-full object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
               </div>
@@ -311,10 +319,22 @@ export default function Home() {
       </section>
 
       {/* FAQ divider */}
-      <div className="max-w-6xl mx-auto px-8 pt-8 pb-10">
+      <div className="max-w-6xl mx-auto px-8 pt-10 pb-12">
         <div className="flex items-center gap-6">
           <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
-          <p className="text-sm italic" style={{ color: '#B0A090', fontFamily: 'var(--font-serif)', whiteSpace: 'nowrap' }}>frequently asked</p>
+          <p
+            style={{
+              color: '#254F22',
+              fontFamily: 'var(--font-serif)',
+              fontSize: '1.75rem',
+              fontWeight: 700,
+              letterSpacing: '0.25em',
+              whiteSpace: 'nowrap',
+              lineHeight: 1,
+            }}
+          >
+            FAQ
+          </p>
           <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
         </div>
       </div>
