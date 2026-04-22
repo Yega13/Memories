@@ -163,10 +163,10 @@ const jsonLd = {
       mainEntity: [
         {
           "@type": "Question",
-          name: "Do guests need an account to add photos to a shared album?",
+          name: "Do guests need an account to add photos?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "No. Anyone with your Hushare album link can view and add photos — no sign-up, no app download.",
+            text: "No. Anyone with your album link can view and add photos — no sign-up, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.",
           },
         },
         {
@@ -174,23 +174,55 @@ const jsonLd = {
           name: "How long does Hushare keep my photos?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Free albums are kept as long as they remain active. If an album sits untouched for 12 months, it is automatically retired. Active albums live on indefinitely.",
+            text: "Free albums are preserved as long as they remain active. If an album sits untouched by everyone for 12 months, it is automatically retired and its media is deleted. Active albums live on indefinitely. Paid tiers will remove this inactivity rule.",
           },
         },
         {
           "@type": "Question",
-          name: "Is Hushare free?",
+          name: "Is Hushare really free?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Yes. Hushare is free during beta, with no credit card required.",
+            text: "Yes — free during beta, with no credit card. When we introduce paid tiers, free albums will remain free; paid tiers will add larger storage caps, HD video, and removal of the 12-month inactivity rule.",
           },
         },
         {
           "@type": "Question",
-          name: "Can I collect photos from wedding guests with a QR code?",
+          name: "Can I use a QR code at a wedding or event?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Yes. Each album has a unique link you can turn into a QR code and place on tables, invitations, or programs.",
+            text: "Yes. Every album has a unique link you can turn into a QR code and print on table cards, invitations, programs, or a welcome sign. Guests scan it and start adding photos instantly.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Can I download all the photos at once?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Yes. From the owner view of your album, you can download the full collection as a single ZIP file — originals, not compressed thumbnails.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "Who can see my album?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "Only people with the link. Albums are unlisted — they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "What happens if I lose my owner link?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "The owner link is how Hushare recognises you as the album creator. Bookmark it as soon as you create an album, or forward it to yourself. If you do lose it, contact us with your album name and approximate creation date and we will verify you manually.",
+          },
+        },
+        {
+          "@type": "Question",
+          name: "What photo formats and sizes are supported?",
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: "JPG, PNG, HEIC, and WebP images up to 25 MB each. Short video clips (MP4, MOV) are planned for a future release. There is no cap on the number of photos per free album during beta.",
           },
         },
       ],

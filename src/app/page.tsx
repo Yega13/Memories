@@ -144,9 +144,9 @@ export default function Home() {
 
             {/* Card 4 — bottom right */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ bottom: '30px', right: '20px', width: '190px', height: '190px', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/card4.jpg" alt="" className="w-full h-full object-cover" />
+              <img src="/children.jpg" alt="" className="w-full h-full object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
-                <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Wild flowers</span>
+                <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
               </div>
             </div>
 
@@ -308,6 +308,121 @@ export default function Home() {
             </div>
           ))}
         </div>
+      </section>
+
+      {/* FAQ divider */}
+      <div className="max-w-6xl mx-auto px-8 pt-8 pb-10">
+        <div className="flex items-center gap-6">
+          <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
+          <p className="text-sm italic" style={{ color: '#B0A090', fontFamily: 'var(--font-serif)', whiteSpace: 'nowrap' }}>frequently asked</p>
+          <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
+        </div>
+      </div>
+
+      {/* FAQ — journal-page style */}
+      <section className="max-w-3xl mx-auto px-6 pb-24">
+        <div
+          className="rounded-[8px] px-6 py-4 md:px-10 md:py-6"
+          style={{
+            background: '#FBF4E4',
+            border: '1px solid rgba(196,166,120,0.35)',
+            boxShadow: '0 10px 36px rgba(37,79,34,0.08)',
+            backgroundImage:
+              'repeating-linear-gradient(to bottom, transparent 0, transparent 47px, rgba(196,166,120,0.15) 47px, rgba(196,166,120,0.15) 48px)',
+          }}
+        >
+          {[
+            {
+              q: 'Do guests need an account to add photos?',
+              a: 'No. Anyone with your album link can view and add photos — no sign-up, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.',
+            },
+            {
+              q: 'How long does Hushare keep my photos?',
+              a: 'Free albums are preserved as long as they remain active. If an album sits untouched by everyone for 12 months, it is automatically retired and its media is deleted. Active albums live on indefinitely. Paid tiers will remove this inactivity rule.',
+            },
+            {
+              q: 'Is Hushare really free?',
+              a: 'Yes — free during beta, with no credit card. When we introduce paid tiers, free albums will remain free; paid tiers will add larger storage caps, HD video, and removal of the 12-month inactivity rule.',
+            },
+            {
+              q: 'Can I use a QR code at a wedding or event?',
+              a: 'Yes. Every album has a unique link you can turn into a QR code and print on table cards, invitations, programs, or a welcome sign. Guests scan it and start adding photos instantly.',
+            },
+            {
+              q: 'Can I download all the photos at once?',
+              a: 'Yes. From the owner view of your album, you can download the full collection as a single ZIP file — originals, not compressed thumbnails.',
+            },
+            {
+              q: 'Who can see my album?',
+              a: 'Only people with the link. Albums are unlisted — they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.',
+            },
+            {
+              q: 'What happens if I lose my owner link?',
+              a: 'The owner link is how Hushare recognises you as the album creator. Bookmark it as soon as you create an album, or forward it to yourself. If you do lose it, contact us with your album name and approximate creation date and we will verify you manually.',
+            },
+            {
+              q: 'What photo formats and sizes are supported?',
+              a: 'JPG, PNG, HEIC, and WebP images up to 25 MB each. Short video clips (MP4, MOV) are planned for a future release. There is no cap on the number of photos per free album during beta.',
+            },
+          ].map(({ q, a }, i, arr) => (
+            <details
+              key={i}
+              className="group"
+              style={{
+                borderBottom: i === arr.length - 1 ? 'none' : '1px dashed rgba(196,166,120,0.45)',
+              }}
+            >
+              <summary
+                className="list-none cursor-pointer flex items-start gap-4 py-5 select-none"
+                style={{ outline: 'none' }}
+              >
+                <span
+                  aria-hidden
+                  className="flex-none inline-flex items-center justify-center rounded-full transition-transform group-open:rotate-45"
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    background: '#254F22',
+                    color: '#FDFAF5',
+                    fontSize: '18px',
+                    lineHeight: 1,
+                    marginTop: '2px',
+                  }}
+                >
+                  +
+                </span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    color: '#254F22',
+                    fontSize: '1.15rem',
+                    fontWeight: 600,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {q}
+                </span>
+              </summary>
+              <p
+                className="pb-6 pl-12 pr-2 text-[0.95rem] leading-relaxed"
+                style={{ color: '#5C4A3C' }}
+              >
+                {a}
+              </p>
+            </details>
+          ))}
+        </div>
+
+        {/* Footer note under FAQ */}
+        <p
+          className="text-center text-sm mt-8 italic"
+          style={{ color: '#8B6F4E', fontFamily: 'var(--font-serif)' }}
+        >
+          Still curious? Write to us at{' '}
+          <a href="mailto:hello@hushare.org" style={{ color: '#254F22', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
+            hello@hushare.org
+          </a>
+        </p>
       </section>
 
       {/* Bottom CTA — photo postcard */}
