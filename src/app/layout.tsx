@@ -90,10 +90,9 @@ export const metadata: Metadata = {
   verification: {
     google: "c69Mks9gyxr7Q0EBB3cP4CGlbSFyQxTvxes0pu0eQYI",
     yandex: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION,
-    yahoo: process.env.NEXT_PUBLIC_YAHOO_VERIFICATION,
-    other: process.env.NEXT_PUBLIC_BING_VERIFICATION
-      ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_VERIFICATION }
-      : undefined,
+    other: {
+      "msvalidate.01": "22AB3EC00DB3D5ECE126BEDD09A3DD8E",
+    },
   },
   icons: {
     icon: "/favicon.ico",

@@ -31,7 +31,7 @@ export default function Home() {
 
       {/* Sticky Nav */}
       <nav
-        className="sticky top-0 z-50 flex items-center justify-between px-8 py-5"
+        className="sticky top-0 z-50 flex items-center justify-between px-5 sm:px-8 py-5"
         style={{
           background: 'rgba(253, 250, 245, 0.85)',
           backdropFilter: 'blur(12px)',
@@ -45,17 +45,22 @@ export default function Home() {
             Hushare
           </span>
         </div>
-        <span className="text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
-          Free during beta
-        </span>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <a href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+            Pricing
+          </a>
+          <span className="hidden sm:inline-block text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
+            Free during beta
+          </span>
+        </div>
       </nav>
 
-      {/* ── HERO ── full-bleed, image takes right half with diagonal cut */}
-      <div className="relative overflow-hidden" style={{ minHeight: 'calc(100vh - 73px)' }}>
+      {/* ── HERO ── full-bleed, image takes right half with diagonal cut (desktop only) */}
+      <div className="relative overflow-hidden lg:min-h-[calc(100vh_-_73px)]">
 
-        {/* Nature image — right half, angled clip */}
+        {/* Nature image — right half, angled clip. Desktop only — drowned the form on mobile. */}
         <div
-          className="absolute inset-y-0 right-0 w-full lg:w-[58%]"
+          className="absolute inset-y-0 right-0 hidden lg:block lg:w-[58%]"
           style={{
             backgroundImage: `url(${NATURE_IMG})`,
             backgroundSize: 'cover',
@@ -79,22 +84,22 @@ export default function Home() {
         />
 
         {/* Hero content grid */}
-        <div className="relative z-10 max-w-6xl mx-auto px-8 pt-16 pb-24 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center" style={{ minHeight: 'calc(100vh - 73px)' }}>
+        <div className="relative z-10 max-w-6xl mx-auto px-5 sm:px-8 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center lg:min-h-[calc(100vh_-_73px)]">
 
           {/* Left — text + form */}
           <div>
-            <p className="text-sm font-medium uppercase mb-5" style={{ color: '#8B6F4E', letterSpacing: '0.15em' }}>
+            <p className="text-xs sm:text-sm font-medium uppercase mb-4 sm:mb-5" style={{ color: '#8B6F4E', letterSpacing: '0.15em' }}>
               No account · No friction
             </p>
-            <h1 style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: 'clamp(2.8rem, 5vw, 4rem)', lineHeight: 1.1, fontWeight: 700, marginBottom: '1.5rem' }}>
+            <h1 style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: 'clamp(2rem, 8vw, 4rem)', lineHeight: 1.1, fontWeight: 700, marginBottom: '1.25rem' }}>
               Every moment,<br />
               <em style={{ color: '#7C4A2D' }}>beautifully kept</em>
             </h1>
-            <p className="text-lg leading-relaxed mb-10" style={{ color: '#6B5A4E', maxWidth: '420px' }}>
+            <p className="text-base sm:text-lg leading-relaxed mb-8 sm:mb-10" style={{ color: '#6B5A4E', maxWidth: '420px' }}>
               Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
             </p>
 
-            <div className="rounded-2xl p-6" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)' }}>
+            <div className="rounded-2xl p-5 sm:p-6" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)' }}>
               <label className="block text-sm font-medium mb-2" style={{ color: '#8B6F4E' }}>
                 Name your album
               </label>
@@ -128,7 +133,7 @@ export default function Home() {
 
             {/* Card 1 — top left */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '30px', left: '10px', width: '200px', height: '250px', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/card1.jpg" alt="" className="w-full h-full object-cover" />
+              <img src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" className="w-full h-full object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
               </div>
@@ -136,7 +141,7 @@ export default function Home() {
 
             {/* Card 2 — top right */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '10px', right: '30px', width: '180px', height: '220px', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/card2.jpg" alt="" className="w-full h-full object-cover" />
+              <img src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" className="w-full h-full object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(124,74,45,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Golden hour</span>
               </div>
@@ -144,7 +149,7 @@ export default function Home() {
 
             {/* Card 3 — center, largest */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '160px', left: '70px', width: '240px', height: '270px', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
-              <img src="/card3.jpg" alt="" className="w-full h-full object-cover" />
+              <img src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" className="w-full h-full object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
               </div>
@@ -152,7 +157,7 @@ export default function Home() {
 
             {/* Card 4 — bottom right */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ bottom: '30px', right: '20px', width: '190px', height: '190px', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/children.avif" alt="" className="w-full h-full object-cover" />
+              <img src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" className="w-full h-full object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
               </div>
@@ -177,8 +182,8 @@ export default function Home() {
       </div>
 
       {/* Steps — polaroid filmstrip */}
-      <section className="max-w-5xl mx-auto px-6 pb-24 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-14 md:gap-6 items-start">
+      <section className="max-w-5xl mx-auto px-6 pb-20 sm:pb-24 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-6 items-start">
           {[
             {
               rot: -3.5,
@@ -251,7 +256,11 @@ export default function Home() {
               ),
             },
           ].map((step, i) => (
-            <div key={i} className="flex flex-col items-center" style={{ marginTop: step.lift }}>
+            <div
+              key={i}
+              className="flex flex-col items-center md:[margin-top:var(--lift)]"
+              style={{ ['--lift' as string]: `${step.lift}px` }}
+            >
               {/* Polaroid */}
               <div
                 className="relative bg-white"
@@ -630,6 +639,7 @@ export default function Home() {
           <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontWeight: 600 }}>Hushare</span>
         </div>
         <div className="flex items-center gap-5">
+          <a href="/pricing" style={{ color: '#7C5C3E' }} className="hover:underline">Pricing</a>
           <a href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</a>
           <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
         </div>

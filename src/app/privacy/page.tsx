@@ -400,6 +400,9 @@ export default function PrivacyPage() {
           </span>
         </Link>
         <div className="flex items-center gap-5">
+          <Link href="/pricing" style={{ color: "#7C5C3E" }} className="hover:underline">
+            Pricing
+          </Link>
           <Link href="/privacy" style={{ color: "#7C5C3E" }} className="hover:underline">
             Privacy
           </Link>
