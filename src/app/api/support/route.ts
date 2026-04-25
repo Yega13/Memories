@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   if (!email || !EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "Please enter a valid email" }, { status: 400 });
   }
-  if (!message || message.length < 5) {
+  if (!message) {
     return NextResponse.json({ error: "Please write a message" }, { status: 400 });
   }
 
