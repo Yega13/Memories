@@ -2,16 +2,32 @@ import type { MetadataRoute } from "next";
 
 export const runtime = "nodejs";
 
+const SITE_URL = "https://hushare.space";
+
+const PUBLIC_AGENTS = [
+  "Googlebot",
+  "Googlebot-Image",
+  "Bingbot",
+  "Slurp",
+  "DuckDuckBot",
+  "YandexBot",
+  "YandexImages",
+  "Baiduspider",
+  "Applebot",
+];
+
 export default function robots(): MetadataRoute.Robots {
+  const allowAll = {
+    allow: ["/", "/privacy"],
+    disallow: ["/api/"],
+  };
+
   return {
     rules: [
-      {
-        userAgent: "*",
-        allow: "/",
-        disallow: ["/api/"],
-      },
+      { userAgent: "*", ...allowAll },
+      ...PUBLIC_AGENTS.map((userAgent) => ({ userAgent, ...allowAll })),
     ],
-    sitemap: "https://hushare.org/sitemap.xml",
-    host: "https://hushare.org",
+    sitemap: `${SITE_URL}/sitemap.xml`,
+    host: SITE_URL,
   };
 }

@@ -17,7 +17,7 @@ export default function AlbumHeader({ album, photoCount, isOwner }: Props) {
       <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 transition hover:opacity-70">
           <Images className="w-5 h-5" style={{ color: '#254F22' }} />
-          <span className="font-bold" style={{ color: '#254F22' }}>Husher</span>
+          <span className="font-bold" style={{ color: '#254F22' }}>Hushare</span>
         </Link>
 
         <div className="text-center flex-1 px-4">

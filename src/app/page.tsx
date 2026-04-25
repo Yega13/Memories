@@ -42,7 +42,7 @@ export default function Home() {
         <div className="flex items-center gap-2">
           <Leaf className="w-5 h-5" style={{ color: '#254F22' }} />
           <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: '1.25rem', fontWeight: 700 }}>
-            Husher
+            Hushare
           </span>
         </div>
         <span className="text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
@@ -354,35 +354,67 @@ export default function Home() {
           {[
             {
               q: 'Do guests need an account to add photos?',
-              a: 'No. Anyone with your album link can view and add photos — no sign-up, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.',
+              a: (
+                <>
+                  No. Anyone with your album link can view and add photos — <strong className="font-semibold" style={{ color: '#254F22' }}>no sign-up</strong>, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.
+                </>
+              ),
             },
             {
               q: 'How long does Hushare keep my photos?',
-              a: 'Free albums are preserved as long as they remain active. If an album sits untouched by everyone for 12 months, it is automatically retired and its media is deleted. Active albums live on indefinitely. Paid tiers will remove this inactivity rule.',
+              a: (
+                <>
+                  Free albums are preserved as long as they remain active. If an album sits untouched for <strong className="font-semibold" style={{ color: '#254F22' }}>12 months</strong>, it is automatically retired and its media is deleted. Active albums live on indefinitely. Paid tiers will remove this inactivity rule.
+                </>
+              ),
             },
             {
               q: 'Is Hushare really free?',
-              a: 'Yes — free during beta, with no credit card. When we introduce paid tiers, free albums will remain free; paid tiers will add larger storage caps, HD video, and removal of the 12-month inactivity rule.',
+              a: (
+                <>
+                  Yes — <strong className="font-semibold" style={{ color: '#254F22' }}>free</strong> during beta, with no credit card. When we introduce paid tiers, free albums will remain free; paid tiers will add larger storage caps, HD video, and removal of the 12-month inactivity rule.
+                </>
+              ),
             },
             {
               q: 'Can I use a QR code at a wedding or event?',
-              a: 'Yes. Every album has a unique link you can turn into a QR code and print on table cards, invitations, programs, or a welcome sign. Guests scan it and start adding photos instantly.',
+              a: (
+                <>
+                  Yes. Every album has a unique link you can turn into a <strong className="font-semibold" style={{ color: '#254F22' }}>QR code</strong> and print on table cards, invitations, programs, or a welcome sign. Guests scan it and start adding photos instantly.
+                </>
+              ),
             },
             {
               q: 'Can I download all the photos at once?',
-              a: 'Yes. From the owner view of your album, you can download the full collection as a single ZIP file — originals, not compressed thumbnails.',
+              a: (
+                <>
+                  Yes. From the owner view of your album, you can download the full collection as a single <strong className="font-semibold" style={{ color: '#254F22' }}>ZIP</strong> file — <strong className="font-semibold" style={{ color: '#254F22' }}>originals</strong>, not compressed thumbnails.
+                </>
+              ),
             },
             {
               q: 'Who can see my album?',
-              a: 'Only people with the link. Albums are unlisted — they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.',
+              a: (
+                <>
+                  Only people with the link. Albums are <strong className="font-semibold" style={{ color: '#254F22' }}>unlisted</strong> — they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.
+                </>
+              ),
             },
             {
               q: 'What happens if I lose my owner link?',
-              a: 'The owner link is how Hushare recognises you as the album creator. Bookmark it as soon as you create an album, or forward it to yourself. If you do lose it, contact us with your album name and approximate creation date and we will verify you manually.',
+              a: (
+                <>
+                  The owner link is how Hushare recognises you as the album creator. <strong className="font-semibold" style={{ color: '#254F22' }}>Bookmark it</strong> as soon as you create an album, or forward it to yourself. If you do lose it, contact us with your album name and approximate creation date and we will verify you manually.
+                </>
+              ),
             },
             {
               q: 'What photo formats and sizes are supported?',
-              a: 'JPG, PNG, HEIC, and WebP images up to 25 MB each. Short video clips (MP4, MOV) are planned for a future release. There is no cap on the number of photos per free album during beta.',
+              a: (
+                <>
+                  JPG, PNG, HEIC, and WebP images up to <strong className="font-semibold" style={{ color: '#254F22' }}>25 MB</strong> each. Short video clips (MP4, MOV) are planned for a future release. There is no cap on the number of photos per free album during beta.
+                </>
+              ),
             },
           ].map(({ q, a }, i, arr) => (
             <details
@@ -439,8 +471,8 @@ export default function Home() {
           style={{ color: '#8B6F4E', fontFamily: 'var(--font-serif)' }}
         >
           Still curious? Write to us at{' '}
-          <a href="mailto:hello@hushare.org" style={{ color: '#254F22', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
-            hello@hushare.org
+          <a href="mailto:hello@hushare.space" style={{ color: '#254F22', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
+            hello@hushare.space
           </a>
         </p>
       </section>
@@ -592,12 +624,15 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="px-8 py-6 flex items-center justify-between text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
+      <footer className="px-8 py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
         <div className="flex items-center gap-2">
           <Leaf className="w-4 h-4" style={{ color: '#254F22' }} />
-          <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontWeight: 600 }}>Husher</span>
+          <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontWeight: 600 }}>Hushare</span>
         </div>
-        <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
+        <div className="flex items-center gap-5">
+          <a href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</a>
+          <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
+        </div>
       </footer>
     </main>
   )

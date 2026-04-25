@@ -10,7 +10,9 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
       "Bash(npm show *)",
       "Bash(pkill -f \"next dev\")",
-      "Bash(npx wrangler *)"
+      "Bash(npx wrangler *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"exit=$?\")"
     ]
   }
 }

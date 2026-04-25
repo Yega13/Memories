@@ -15,7 +15,7 @@ const playfair = Playfair_Display({
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.org";
+const SITE_URL = "https://hushare.space";
 const SITE_NAME = "Hushare";
 const TAGLINE = "Shared photo albums from one link";
 const DESCRIPTION =
@@ -87,6 +87,14 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
+  verification: {
+    google: "c69Mks9gyxr7Q0EBB3cP4CGlbSFyQxTvxes0pu0eQYI",
+    yandex: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION,
+    yahoo: process.env.NEXT_PUBLIC_YAHOO_VERIFICATION,
+    other: process.env.NEXT_PUBLIC_BING_VERIFICATION
+      ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_VERIFICATION }
+      : undefined,
+  },
   icons: {
     icon: "/favicon.ico",
     shortcut: "/favicon.ico",
@@ -156,6 +164,64 @@ const jsonLd = {
         "Download every photo as a ZIP",
       ],
       publisher: { "@id": `${SITE_URL}#organization` },
+    },
+    {
+      "@type": "HowTo",
+      "@id": `${SITE_URL}#howto`,
+      name: "How to create a shared photo album with Hushare",
+      description:
+        "Create a shared album, share the link, and let everyone add photos — in three steps, no account required.",
+      totalTime: "PT1M",
+      tool: [{ "@type": "HowToTool", name: "Any web browser" }],
+      step: [
+        {
+          "@type": "HowToStep",
+          position: 1,
+          name: "Name your album",
+          text: "Give your album a name on the Hushare home page. You instantly receive a private link only you control — no sign-up, no app.",
+          url: `${SITE_URL}#step-name`,
+        },
+        {
+          "@type": "HowToStep",
+          position: 2,
+          name: "Share the link",
+          text: "Send the link by text, post a QR code at your event, or drop it in a group chat. Anyone with the link can view and add photos.",
+          url: `${SITE_URL}#step-share`,
+        },
+        {
+          "@type": "HowToStep",
+          position: 3,
+          name: "Keep it forever",
+          text: "Photos arrive from everyone you invited. Active albums live on indefinitely; download the whole album as a ZIP anytime.",
+          url: `${SITE_URL}#step-keep`,
+        },
+      ],
+    },
+    {
+      "@type": "WebPage",
+      "@id": `${SITE_URL}#webpage`,
+      url: SITE_URL,
+      name: `${SITE_NAME} — ${TAGLINE}`,
+      description: DESCRIPTION,
+      inLanguage: "en",
+      isPartOf: { "@id": `${SITE_URL}#website` },
+      primaryImageOfPage: {
+        "@type": "ImageObject",
+        url: `${SITE_URL}/wedding.jpg`,
+      },
+      breadcrumb: { "@id": `${SITE_URL}#breadcrumb` },
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": `${SITE_URL}#breadcrumb`,
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Home",
+          item: SITE_URL,
+        },
+      ],
     },
     {
       "@type": "FAQPage",
