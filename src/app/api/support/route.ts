@@ -2,9 +2,16 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const SUPPORT_DESTINATION = "hello@hushare.space";
-const FROM_ADDRESS = "Hushare Support <hello@hushare.space>";
-const RESEND_FALLBACK_FROM = "Hushare Support <onboarding@resend.dev>";
+// Once hushare.space is verified in Resend AND RESEND_DOMAIN_VERIFIED=true is set,
+// the From address becomes hello@hushare.space and we send to hello@hushare.space
+// (which Cloudflare Email Routing forwards to husharesupport@gmail.com).
+//
+// Until then we send from Resend's shared sender to the gmail directly — that's the
+// only TO address Resend permits in unverified test mode.
+const VERIFIED_FROM = "Hushare Support <hello@hushare.space>";
+const VERIFIED_TO = "hello@hushare.space";
+const FALLBACK_FROM = "Hushare Support <onboarding@resend.dev>";
+const FALLBACK_TO = "husharesupport@gmail.com";
 
 type Body = {
   name?: string;
@@ -52,19 +59,14 @@ export async function POST(req: Request) {
       length: message.length,
     });
     return NextResponse.json(
-      {
-        error:
-          "Our message system is not yet configured. Please email us directly at hello@hushare.space",
-      },
+      { error: "Our message system isn't configured yet" },
       { status: 503 },
     );
   }
 
-  // Resend allows a verified domain in the From; until hushare.space is
-  // verified there, fall back to onboarding@resend.dev which works in test mode.
-  const fromAddress = process.env.RESEND_DOMAIN_VERIFIED === "true"
-    ? FROM_ADDRESS
-    : RESEND_FALLBACK_FROM;
+  const domainVerified = process.env.RESEND_DOMAIN_VERIFIED === "true";
+  const fromAddress = domainVerified ? VERIFIED_FROM : FALLBACK_FROM;
+  const toAddress = domainVerified ? VERIFIED_TO : FALLBACK_TO;
 
   const safeName = name || "(no name)";
   const subjectLine = subject || "Hushare support — new message";
@@ -89,7 +91,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         from: fromAddress,
-        to: [SUPPORT_DESTINATION],
+        to: [toAddress],
         reply_to: email,
         subject: `[Support] ${subjectLine}`,
         html,
@@ -98,12 +100,19 @@ export async function POST(req: Request) {
 
     if (!res.ok) {
       const errBody = await res.text();
-      console.error("[support] Resend error:", res.status, errBody);
+      console.error(
+        "[support] Resend error:",
+        res.status,
+        errBody,
+        "domainVerified=",
+        domainVerified,
+        "from=",
+        fromAddress,
+        "to=",
+        toAddress,
+      );
       return NextResponse.json(
-        {
-          error:
-            "We couldn't send your message right now. Please email us directly at hello@hushare.space",
-        },
+        { error: "Our mail service rejected the message" },
         { status: 502 },
       );
     }
@@ -112,10 +121,7 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("[support] fetch failed:", err);
     return NextResponse.json(
-      {
-        error:
-          "Network error reaching our mail service. Please email us directly at hello@hushare.space",
-      },
+      { error: "Network error reaching our mail service" },
       { status: 502 },
     );
   }
