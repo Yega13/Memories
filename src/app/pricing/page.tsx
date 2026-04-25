@@ -39,7 +39,20 @@ export const metadata: Metadata = {
   },
 };
 
-const tiers = [
+type Tier = {
+  name: string;
+  tagline: string;
+  price: string;
+  cadence: string;
+  annual?: string;
+  promo?: string;
+  cta: string;
+  href: string;
+  highlight: boolean;
+  features: string[];
+};
+
+const tiers: Tier[] = [
   {
     name: "Free",
     tagline: "For one-off events and trips",
@@ -59,8 +72,10 @@ const tiers = [
   {
     name: "Pro",
     tagline: "For people who keep coming back",
-    price: "$5",
+    price: "$4",
     cadence: "per month",
+    annual: "$40 / year — save 2 months",
+    promo: "First month $1.99",
     cta: "Notify me at launch",
     href: "mailto:hello@hushare.space?subject=Hushare%20Pro%20waitlist",
     highlight: true,
@@ -76,8 +91,10 @@ const tiers = [
   {
     name: "Studio",
     tagline: "For photographers & event planners",
-    price: "$15",
+    price: "$10",
     cadence: "per month",
+    annual: "$100 / year — save 2 months",
+    promo: "First month $7",
     cta: "Notify me at launch",
     href: "mailto:hello@hushare.space?subject=Hushare%20Studio%20waitlist",
     highlight: false,
@@ -106,7 +123,11 @@ const billingFaq = [
   },
   {
     q: "Do you offer annual pricing?",
-    a: "Annual plans will land at launch with two months free (Pro $50/yr, Studio $150/yr). Want to lock that in early? Email us and we'll honour the annual price for the first year.",
+    a: "Yes — Pro is $40/year and Studio is $100/year, both with two months free compared to paying month-by-month. Choose annual at checkout. Want to lock it in before launch? Email us and we'll honour the annual price for your first year.",
+  },
+  {
+    q: "Is there a first-month discount?",
+    a: "Yes — Pro is $1.99 for the first month, then $4/month after. Studio is $7 for the first month, then $10/month. The discount applies once per account, on monthly plans, and renews at the standard rate from month two.",
   },
   {
     q: "Which currencies do you accept?",
@@ -147,14 +168,72 @@ const jsonLd = {
       name: "Hushare",
       description: PAGE_DESCRIPTION,
       brand: { "@type": "Brand", name: "Hushare" },
-      offers: tiers.map((t) => ({
-        "@type": "Offer",
-        name: `Hushare ${t.name}`,
-        price: t.price.replace("$", ""),
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
-        url: `${SITE_URL}/pricing#${t.name.toLowerCase()}`,
-      })),
+      offers: [
+        {
+          "@type": "Offer",
+          name: "Hushare Free",
+          price: "0",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+          url: `${SITE_URL}/pricing#free`,
+        },
+        {
+          "@type": "Offer",
+          name: "Hushare Pro (monthly)",
+          price: "4",
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: "4",
+            priceCurrency: "USD",
+            referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
+          },
+          availability: "https://schema.org/InStock",
+          url: `${SITE_URL}/pricing#pro`,
+        },
+        {
+          "@type": "Offer",
+          name: "Hushare Pro (annual)",
+          price: "40",
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: "40",
+            priceCurrency: "USD",
+            referenceQuantity: { "@type": "QuantitativeValue", value: 12, unitCode: "MON" },
+          },
+          availability: "https://schema.org/InStock",
+          url: `${SITE_URL}/pricing#pro`,
+        },
+        {
+          "@type": "Offer",
+          name: "Hushare Studio (monthly)",
+          price: "10",
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: "10",
+            priceCurrency: "USD",
+            referenceQuantity: { "@type": "QuantitativeValue", value: 1, unitCode: "MON" },
+          },
+          availability: "https://schema.org/InStock",
+          url: `${SITE_URL}/pricing#studio`,
+        },
+        {
+          "@type": "Offer",
+          name: "Hushare Studio (annual)",
+          price: "100",
+          priceCurrency: "USD",
+          priceSpecification: {
+            "@type": "UnitPriceSpecification",
+            price: "100",
+            priceCurrency: "USD",
+            referenceQuantity: { "@type": "QuantitativeValue", value: 12, unitCode: "MON" },
+          },
+          availability: "https://schema.org/InStock",
+          url: `${SITE_URL}/pricing#studio`,
+        },
+      ],
     },
     {
       "@type": "FAQPage",
@@ -307,6 +386,32 @@ export default function PricingPage() {
                   {t.cadence}
                 </span>
               </div>
+
+              {t.annual && (
+                <p
+                  className="text-xs mt-1"
+                  style={{
+                    color: t.highlight ? "rgba(253,250,245,0.75)" : "#8B6F4E",
+                  }}
+                >
+                  or <span style={{ fontWeight: 600 }}>{t.annual}</span>
+                </p>
+              )}
+
+              {t.promo && (
+                <p
+                  className="inline-block text-[11px] font-semibold tracking-wide uppercase mt-3 px-2.5 py-1 rounded-full"
+                  style={{
+                    background: t.highlight ? "#F3E0BC" : "#EAF0E8",
+                    color: t.highlight ? "#7C4A2D" : "#254F22",
+                    border: t.highlight
+                      ? "1px solid #C4A678"
+                      : "1px solid rgba(37,79,34,0.18)",
+                  }}
+                >
+                  {t.promo}
+                </p>
+              )}
 
               <div
                 className="my-6 h-px w-full"

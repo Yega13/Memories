@@ -89,7 +89,7 @@ export const metadata: Metadata = {
   },
   verification: {
     google: "c69Mks9gyxr7Q0EBB3cP4CGlbSFyQxTvxes0pu0eQYI",
-    yandex: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION,
+    yandex: "0d69c5ed99d50ec6",
     other: {
       "msvalidate.01": "22AB3EC00DB3D5ECE126BEDD09A3DD8E",
     },
