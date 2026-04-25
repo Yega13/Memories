@@ -1,0 +1,215 @@
+'use client'
+
+import { useState } from 'react'
+import { Send, CheckCircle2, AlertCircle } from 'lucide-react'
+
+type Status = 'idle' | 'sending' | 'sent' | 'error'
+
+export default function SupportForm() {
+  const [status, setStatus] = useState<Status>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (status === 'sending') return
+
+    const form = e.currentTarget
+    const data = new FormData(form)
+
+    // Honeypot — bots fill this; real users don't see it
+    if (data.get('website')) {
+      setStatus('sent')
+      form.reset()
+      return
+    }
+
+    setStatus('sending')
+    setErrorMsg('')
+
+    try {
+      const res = await fetch('/api/support', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: (data.get('name') as string)?.trim() || '',
+          email: (data.get('email') as string)?.trim() || '',
+          subject: (data.get('subject') as string)?.trim() || '',
+          message: (data.get('message') as string)?.trim() || '',
+        }),
+      })
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || `Request failed (${res.status})`)
+      }
+
+      setStatus('sent')
+      form.reset()
+    } catch (err) {
+      setStatus('error')
+      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong')
+    }
+  }
+
+  if (status === 'sent') {
+    return (
+      <div
+        className="rounded-2xl p-8 text-center"
+        style={{
+          background: '#EAF0E8',
+          border: '1px solid #C8D6C2',
+        }}
+      >
+        <CheckCircle2 className="w-10 h-10 mx-auto mb-3" style={{ color: '#254F22' }} />
+        <h3
+          className="text-xl font-bold mb-2"
+          style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
+        >
+          Message sent
+        </h3>
+        <p className="text-sm" style={{ color: '#5C4A3C' }}>
+          Thanks — we'll reply to your inbox within one business day.
+        </p>
+        <button
+          type="button"
+          onClick={() => setStatus('idle')}
+          className="mt-5 text-sm font-semibold hover:underline"
+          style={{ color: '#254F22' }}
+        >
+          Send another message
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      className="rounded-2xl p-6 sm:p-8"
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #DDD5C5',
+        boxShadow: '0 4px 32px rgba(37,79,34,0.10)',
+      }}
+    >
+      {/* Honeypot — hidden from real users */}
+      <div aria-hidden style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}>
+        <label>
+          Website (leave blank)
+          <input type="text" name="website" tabIndex={-1} autoComplete="off" />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label
+            htmlFor="name"
+            className="block text-sm font-medium mb-2"
+            style={{ color: '#8B6F4E' }}
+          >
+            Your name <span style={{ color: '#B0A090' }}>(optional)</span>
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            maxLength={80}
+            className="w-full rounded-xl px-4 py-3 focus:outline-none transition text-base"
+            style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium mb-2"
+            style={{ color: '#8B6F4E' }}
+          >
+            Your email <span style={{ color: '#C0392B' }}>*</span>
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            maxLength={120}
+            className="w-full rounded-xl px-4 py-3 focus:outline-none transition text-base"
+            style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+          />
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <label
+          htmlFor="subject"
+          className="block text-sm font-medium mb-2"
+          style={{ color: '#8B6F4E' }}
+        >
+          Subject <span style={{ color: '#B0A090' }}>(optional)</span>
+        </label>
+        <input
+          id="subject"
+          name="subject"
+          type="text"
+          maxLength={120}
+          placeholder="e.g. I lost my owner link for an album"
+          className="w-full rounded-xl px-4 py-3 focus:outline-none transition text-base"
+          style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+        />
+      </div>
+
+      <div className="mb-5">
+        <label
+          htmlFor="message"
+          className="block text-sm font-medium mb-2"
+          style={{ color: '#8B6F4E' }}
+        >
+          Message <span style={{ color: '#C0392B' }}>*</span>
+        </label>
+        <textarea
+          id="message"
+          name="message"
+          required
+          rows={6}
+          maxLength={4000}
+          placeholder="Tell us what's going on. Album link, screenshots, anything that helps."
+          className="w-full rounded-xl px-4 py-3 focus:outline-none transition text-base resize-y"
+          style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22', minHeight: '140px' }}
+        />
+      </div>
+
+      {status === 'error' && (
+        <div
+          className="flex items-start gap-3 mb-4 rounded-xl px-4 py-3"
+          style={{ background: '#FBEAE6', border: '1px solid #E8C2B8' }}
+        >
+          <AlertCircle className="w-4 h-4 flex-none mt-0.5" style={{ color: '#C0392B' }} />
+          <div className="text-sm" style={{ color: '#7A2A1F' }}>
+            <p className="font-semibold mb-0.5">Couldn't send your message</p>
+            <p>{errorMsg}. You can also email us directly at{' '}
+              <a href="mailto:hello@hushare.space" className="underline" style={{ color: '#7A2A1F' }}>
+                hello@hushare.space
+              </a>.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={status === 'sending'}
+        className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
+        style={{ background: '#254F22', color: '#FDFAF5' }}
+      >
+        {status === 'sending' ? (
+          'Sending...'
+        ) : (
+          <>
+            Send message <Send className="w-4 h-4" />
+          </>
+        )}
+      </button>
+    </form>
+  )
+}

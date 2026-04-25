@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { generateSlug, generateOwnerToken } from '@/lib/utils'
-import { ArrowRight, Leaf } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 const NATURE_IMG = 'https://live.staticflickr.com/8731/17080622367_6c7109db98_h.jpg'
 
@@ -31,7 +31,7 @@ export default function Home() {
 
       {/* Sticky Nav */}
       <nav
-        className="sticky top-0 z-50 flex items-center justify-between px-5 sm:px-8 py-5"
+        className="sticky top-0 z-50 flex items-center justify-between px-5 sm:px-8 py-4"
         style={{
           background: 'rgba(253, 250, 245, 0.85)',
           backdropFilter: 'blur(12px)',
@@ -39,26 +39,51 @@ export default function Home() {
           borderBottom: '1px solid rgba(221, 213, 197, 0.5)',
         }}
       >
-        <div className="flex items-center gap-2">
-          <Leaf className="w-5 h-5" style={{ color: '#254F22' }} />
-          <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: '1.25rem', fontWeight: 700 }}>
-            Hushare
-          </span>
-        </div>
+        <a href="/" className="flex items-center" aria-label="Hushare home">
+          <img
+            src="/logo/logo-dark-transparent.png"
+            alt="Hushare"
+            width={618}
+            height={146}
+            style={{ height: '28px', width: 'auto' }}
+          />
+        </a>
         <div className="flex items-center gap-3 sm:gap-4">
           <a href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Pricing
           </a>
-          <span className="hidden sm:inline-block text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
+          <a href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+            Support
+          </a>
+          <span className="hidden md:inline-block text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
             Free during beta
           </span>
         </div>
       </nav>
 
-      {/* ── HERO ── full-bleed, image takes right half with diagonal cut (desktop only) */}
+      {/* ── HERO ── mobile: full-bleed image bg with overlay; desktop: image right with diagonal cut */}
       <div className="relative overflow-hidden lg:min-h-[calc(100vh_-_73px)]">
 
-        {/* Nature image — right half, angled clip. Desktop only — drowned the form on mobile. */}
+        {/* Mobile-only background image — full bleed, no clip */}
+        <div
+          className="absolute inset-0 lg:hidden"
+          style={{
+            backgroundImage: `url(${NATURE_IMG})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        >
+          {/* Strong dark overlay so heading + paragraph stay readable on phone */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(160deg, rgba(20,40,18,0.78) 0%, rgba(37,79,34,0.62) 50%, rgba(27,58,107,0.55) 100%)',
+            }}
+          />
+        </div>
+
+        {/* Desktop nature image — right half, angled clip */}
         <div
           className="absolute inset-y-0 right-0 hidden lg:block lg:w-[58%]"
           style={{
@@ -72,7 +97,7 @@ export default function Home() {
           <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(37,79,34,0.45) 0%, rgba(27,58,107,0.25) 100%)' }} />
         </div>
 
-        {/* Soft feather where image meets beige */}
+        {/* Soft feather where image meets beige (desktop only) */}
         <div
           className="absolute inset-y-0 hidden lg:block"
           style={{
@@ -88,14 +113,23 @@ export default function Home() {
 
           {/* Left — text + form */}
           <div>
-            <p className="text-xs sm:text-sm font-medium uppercase mb-4 sm:mb-5" style={{ color: '#8B6F4E', letterSpacing: '0.15em' }}>
+            <p
+              className="text-xs sm:text-sm font-medium uppercase mb-4 sm:mb-5 text-[#F3E0BC] lg:text-[#8B6F4E]"
+              style={{ letterSpacing: '0.15em' }}
+            >
               No account · No friction
             </p>
-            <h1 style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontSize: 'clamp(2rem, 8vw, 4rem)', lineHeight: 1.1, fontWeight: 700, marginBottom: '1.25rem' }}>
+            <h1
+              className="text-[#FDFAF5] lg:text-[#254F22] [text-shadow:0_2px_18px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
+              style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(2rem, 8vw, 4rem)', lineHeight: 1.1, fontWeight: 700, marginBottom: '1.25rem' }}
+            >
               Every moment,<br />
-              <em style={{ color: '#7C4A2D' }}>beautifully kept</em>
+              <em className="text-[#F3E0BC] lg:text-[#7C4A2D]">beautifully kept</em>
             </h1>
-            <p className="text-base sm:text-lg leading-relaxed mb-8 sm:mb-10" style={{ color: '#6B5A4E', maxWidth: '420px' }}>
+            <p
+              className="text-base sm:text-lg leading-relaxed mb-8 sm:mb-10 text-[#FBF4E4] lg:text-[#6B5A4E] [text-shadow:0_1px_10px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
+              style={{ maxWidth: '420px' }}
+            >
               Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
             </p>
 
@@ -541,7 +575,13 @@ export default function Home() {
                     boxShadow: '0 4px 10px rgba(0,0,0,0.12)',
                   }}
                 >
-                  <Leaf className="w-5 h-5" style={{ color: '#254F22' }} />
+                  <img
+                    src="/logo/logo-icon-dark-transparent.png"
+                    alt=""
+                    width={500}
+                    height={500}
+                    style={{ width: '22px', height: '22px' }}
+                  />
                   <span
                     className="text-[9px] mt-1 tracking-widest uppercase"
                     style={{ color: '#7C4A2D', fontWeight: 700 }}
@@ -634,12 +674,18 @@ export default function Home() {
       </section>
 
       <footer className="px-8 py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
-        <div className="flex items-center gap-2">
-          <Leaf className="w-4 h-4" style={{ color: '#254F22' }} />
-          <span style={{ fontFamily: 'var(--font-serif)', color: '#254F22', fontWeight: 600 }}>Hushare</span>
-        </div>
+        <a href="/" className="flex items-center" aria-label="Hushare home">
+          <img
+            src="/logo/logo-dark-transparent.png"
+            alt="Hushare"
+            width={618}
+            height={146}
+            style={{ height: '24px', width: 'auto' }}
+          />
+        </a>
         <div className="flex items-center gap-5">
           <a href="/pricing" style={{ color: '#7C5C3E' }} className="hover:underline">Pricing</a>
+          <a href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</a>
           <a href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</a>
           <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
         </div>

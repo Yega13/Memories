@@ -95,9 +95,12 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon.ico",
-    apple: "/favicon.ico",
+    icon: [
+      { url: "/logo/logo-favicon.png", type: "image/png", sizes: "64x64" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    shortcut: "/logo/logo-favicon.png",
+    apple: "/logo/logo-icon.png",
   },
   referrer: "origin-when-cross-origin",
   formatDetection: {

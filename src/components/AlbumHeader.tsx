@@ -1,6 +1,5 @@
 'use client'
 
-import { Images } from 'lucide-react'
 import { type Album } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import Link from 'next/link'
@@ -15,9 +14,14 @@ export default function AlbumHeader({ album, photoCount, isOwner }: Props) {
   return (
     <div style={{ borderBottom: '1px solid #DDD5C5', background: '#FDFAF5' }}>
       <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 transition hover:opacity-70">
-          <Images className="w-5 h-5" style={{ color: '#254F22' }} />
-          <span className="font-bold" style={{ color: '#254F22' }}>Hushare</span>
+        <Link href="/" className="flex items-center transition hover:opacity-70" aria-label="Hushare home">
+          <img
+            src="/logo/logo-dark-transparent.png"
+            alt="Hushare"
+            width={618}
+            height={146}
+            style={{ height: '26px', width: 'auto' }}
+          />
         </Link>
 
         <div className="text-center flex-1 px-4">

@@ -18,7 +18,7 @@ const PUBLIC_AGENTS = [
 
 export default function robots(): MetadataRoute.Robots {
   const allowAll = {
-    allow: ["/", "/pricing", "/privacy"],
+    allow: ["/", "/pricing", "/support", "/privacy"],
     disallow: ["/api/"],
   };
 

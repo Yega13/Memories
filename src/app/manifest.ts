@@ -17,9 +17,21 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["photo", "social", "lifestyle"],
     icons: [
       {
-        src: "/favicon.ico",
-        sizes: "any",
-        type: "image/x-icon",
+        src: "/logo/logo-favicon.png",
+        sizes: "64x64",
+        type: "image/png",
+      },
+      {
+        src: "/logo/logo-icon.png",
+        sizes: "500x500",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/logo/logo-icon-light-transparent.png",
+        sizes: "500x500",
+        type: "image/png",
+        purpose: "maskable",
       },
     ],
   };

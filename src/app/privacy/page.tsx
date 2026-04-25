@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Leaf } from "lucide-react";
 
 export const runtime = "nodejs";
 
@@ -132,18 +131,14 @@ export default function PrivacyPage() {
           borderBottom: "1px solid rgba(221, 213, 197, 0.5)",
         }}
       >
-        <Link href="/" className="flex items-center gap-2">
-          <Leaf className="w-5 h-5" style={INK} />
-          <span
-            style={{
-              ...SERIF,
-              ...INK,
-              fontSize: "1.25rem",
-              fontWeight: 700,
-            }}
-          >
-            Hushare
-          </span>
+        <Link href="/" className="flex items-center" aria-label="Hushare home">
+          <img
+            src="/logo/logo-dark-transparent.png"
+            alt="Hushare"
+            width={618}
+            height={146}
+            style={{ height: "28px", width: "auto" }}
+          />
         </Link>
         <Link
           href="/"
@@ -392,16 +387,20 @@ export default function PrivacyPage() {
         style={{ borderTop: "1px solid #E8E0D0" }}
       >
         <Link href="/" className="flex items-center gap-2">
-          <Leaf className="w-4 h-4" style={INK} />
-          <span
-            style={{ ...SERIF, ...INK, fontWeight: 600 }}
-          >
-            Hushare
-          </span>
+          <img
+            src="/logo/logo-dark-transparent.png"
+            alt="Hushare"
+            width={618}
+            height={146}
+            style={{ height: "24px", width: "auto" }}
+          />
         </Link>
         <div className="flex items-center gap-5">
           <Link href="/pricing" style={{ color: "#7C5C3E" }} className="hover:underline">
             Pricing
+          </Link>
+          <Link href="/support" style={{ color: "#7C5C3E" }} className="hover:underline">
+            Support
           </Link>
           <Link href="/privacy" style={{ color: "#7C5C3E" }} className="hover:underline">
             Privacy
