@@ -1,9 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import Script from 'next/script'
 import { Send, CheckCircle2, AlertCircle } from 'lucide-react'
 
 type Status = 'idle' | 'sending' | 'sent' | 'error'
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
 
 export default function SupportForm() {
   const [status, setStatus] = useState<Status>('idle')
@@ -23,6 +26,13 @@ export default function SupportForm() {
       return
     }
 
+    const turnstileToken = (data.get('cf-turnstile-response') as string) || ''
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setStatus('error')
+      setErrorMsg('Please wait for the verification to finish before sending')
+      return
+    }
+
     setStatus('sending')
     setErrorMsg('')
 
@@ -35,6 +45,7 @@ export default function SupportForm() {
           email: (data.get('email') as string)?.trim() || '',
           subject: (data.get('subject') as string)?.trim() || '',
           message: (data.get('message') as string)?.trim() || '',
+          turnstileToken,
         }),
       })
 
@@ -45,6 +56,10 @@ export default function SupportForm() {
 
       setStatus('sent')
       form.reset()
+      // Reset the Turnstile widget so a follow-up message gets a fresh token
+      if (typeof window !== 'undefined' && (window as unknown as { turnstile?: { reset: () => void } }).turnstile) {
+        (window as unknown as { turnstile: { reset: () => void } }).turnstile.reset()
+      }
     } catch (err) {
       setStatus('error')
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong')
@@ -178,6 +193,22 @@ export default function SupportForm() {
           style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22', minHeight: '140px' }}
         />
       </div>
+
+      {TURNSTILE_SITE_KEY && (
+        <>
+          <Script
+            src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+            async
+            defer
+            strategy="afterInteractive"
+          />
+          <div
+            className="cf-turnstile mb-4"
+            data-sitekey={TURNSTILE_SITE_KEY}
+            data-theme="light"
+          />
+        </>
+      )}
 
       {status === 'error' && (
         <div

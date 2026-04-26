@@ -17,6 +17,7 @@ type Body = {
   email?: string;
   subject?: string;
   message?: string;
+  turnstileToken?: string;
 };
 
 // RFC 5322 "looks-like-an-email"; rejects whitespace and requires a TLD ≥ 2 chars.
@@ -67,6 +68,38 @@ export async function POST(req: Request) {
   }
   if (!message) {
     return json(400, { error: "Please write a message" });
+  }
+
+  // Turnstile verification: if a secret is configured, the token must verify.
+  // If no secret is set, skip — keeps local/preview deployments working.
+  const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+  if (turnstileSecret) {
+    const token = (body.turnstileToken ?? "").trim();
+    if (!token) {
+      return json(400, { error: "Please complete the verification" });
+    }
+    try {
+      const verify = await fetch(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            secret: turnstileSecret,
+            response: token,
+            remoteip: req.headers.get("cf-connecting-ip") ?? "",
+          }),
+        },
+      );
+      const result = (await verify.json()) as { success: boolean; "error-codes"?: string[] };
+      if (!result.success) {
+        console.warn("[support] Turnstile failed:", result["error-codes"]);
+        return json(403, { error: "Verification failed — please try again" });
+      }
+    } catch (err) {
+      console.error("[support] Turnstile verify request failed:", err);
+      return json(502, { error: "Verification service unavailable" });
+    }
   }
 
   const apiKey = process.env.RESEND_API_KEY;
