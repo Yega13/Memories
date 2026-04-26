@@ -2,16 +2,15 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-// Once hushare.space is verified in Resend AND RESEND_DOMAIN_VERIFIED=true is set,
-// the From address becomes hello@hushare.space and we send to hello@hushare.space
-// (which Cloudflare Email Routing forwards to husharesupport@gmail.com).
-//
-// Until then we send from Resend's shared sender to the gmail directly — that's the
-// only TO address Resend permits in unverified test mode.
 const VERIFIED_FROM = "Hushare Support <support@hushare.space>";
 const VERIFIED_TO = "support@hushare.space";
 const FALLBACK_FROM = "Hushare Support <onboarding@resend.dev>";
 const FALLBACK_TO = "husharesupport@gmail.com";
+
+const ALLOWED_ORIGINS = new Set([
+  "https://hushare.space",
+  "https://www.hushare.space",
+]);
 
 type Body = {
   name?: string;
@@ -20,7 +19,10 @@ type Body = {
   message?: string;
 };
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// RFC 5322 "looks-like-an-email"; rejects whitespace and requires a TLD ≥ 2 chars.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
 
 function escapeHtml(str: string): string {
   return str
@@ -31,37 +33,46 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+// Strip control chars and collapse whitespace — defends against header-injection
+// in single-line fields (subject, name) and keeps Resend's API happy.
+function sanitizeLine(str: string): string {
+  return str.replace(/[\x00-\x1F\x7F]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function json(status: number, body: unknown) {
+  return NextResponse.json(body, { status, headers: NO_STORE_HEADERS });
+}
+
 export async function POST(req: Request) {
+  // Block cross-site abuse: only our own pages can POST here.
+  const origin = req.headers.get("origin");
+  if (origin && !ALLOWED_ORIGINS.has(origin)) {
+    return json(403, { error: "Forbidden" });
+  }
+
   let body: Body;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return json(400, { error: "Invalid request body" });
   }
 
-  const name = (body.name ?? "").trim().slice(0, 80);
+  const name = sanitizeLine((body.name ?? "")).slice(0, 80);
   const email = (body.email ?? "").trim().slice(0, 120);
-  const subject = (body.subject ?? "").trim().slice(0, 120);
+  const subject = sanitizeLine((body.subject ?? "")).slice(0, 120);
   const message = (body.message ?? "").trim().slice(0, 4000);
 
   if (!email || !EMAIL_RE.test(email)) {
-    return NextResponse.json({ error: "Please enter a valid email" }, { status: 400 });
+    return json(400, { error: "Please enter a valid email" });
   }
   if (!message) {
-    return NextResponse.json({ error: "Please write a message" }, { status: 400 });
+    return json(400, { error: "Please write a message" });
   }
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.error("[support] RESEND_API_KEY not set — message dropped:", {
-      from: email,
-      subject,
-      length: message.length,
-    });
-    return NextResponse.json(
-      { error: "Our message system isn't configured yet" },
-      { status: 503 },
-    );
+    console.error("[support] RESEND_API_KEY not set — message dropped");
+    return json(503, { error: "Our message system isn't configured yet" });
   }
 
   const domainVerified = process.env.RESEND_DOMAIN_VERIFIED === "true";
@@ -70,6 +81,20 @@ export async function POST(req: Request) {
 
   const safeName = name || "(no name)";
   const subjectLine = subject || "Hushare support — new message";
+
+  const text = [
+    "New support message",
+    "",
+    `From: ${safeName} <${email}>`,
+    `Subject: ${subjectLine}`,
+    "",
+    "----",
+    message,
+    "----",
+    "",
+    `Reply directly to this email to respond to ${safeName}.`,
+  ].join("\n");
+
   const html = `
     <div style="font-family: -apple-system, system-ui, sans-serif; color: #254F22; max-width: 560px; margin: 0 auto; padding: 24px;">
       <h2 style="margin: 0 0 16px; font-size: 18px;">New support message</h2>
@@ -95,34 +120,19 @@ export async function POST(req: Request) {
         reply_to: email,
         subject: `[Support] ${subjectLine}`,
         html,
+        text,
       }),
     });
 
     if (!res.ok) {
       const errBody = await res.text();
-      console.error(
-        "[support] Resend error:",
-        res.status,
-        errBody,
-        "domainVerified=",
-        domainVerified,
-        "from=",
-        fromAddress,
-        "to=",
-        toAddress,
-      );
-      return NextResponse.json(
-        { error: "Our mail service rejected the message" },
-        { status: 502 },
-      );
+      console.error("[support] Resend error:", res.status, errBody);
+      return json(502, { error: "Our mail service rejected the message" });
     }
 
-    return NextResponse.json({ ok: true });
+    return json(200, { ok: true });
   } catch (err) {
     console.error("[support] fetch failed:", err);
-    return NextResponse.json(
-      { error: "Network error reaching our mail service" },
-      { status: 502 },
-    );
+    return json(502, { error: "Network error reaching our mail service" });
   }
 }
