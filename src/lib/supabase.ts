@@ -1,9 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Browser-side singleton. Auth cookies are managed automatically by @supabase/ssr.
+// For server-side reads (Server Components, Route Handlers), import from
+// '@/lib/supabase/server' instead — it picks up cookies via next/headers.
+export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 
 export type Album = {
   id: string
