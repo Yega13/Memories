@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
+import AccountNavLink from "@/components/AccountNavLink";
 
 export const runtime = "nodejs";
 
@@ -76,8 +77,8 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$40 / year — save 2 months",
     promo: "First month $1.99",
-    cta: "Notify me at launch",
-    href: "mailto:hello@hushare.space?subject=Hushare%20Pro%20waitlist",
+    cta: "Sign in to join the waitlist",
+    href: "/login?next=/account",
     highlight: true,
     features: [
       "Everything in Free, plus —",
@@ -86,6 +87,7 @@ const tiers: Tier[] = [
       "No 12-month inactivity expiry — albums live forever",
       "HD video uploads (MP4, MOV)",
       "Larger file sizes — up to 200 MB per upload",
+      "Free Hushare account to manage your subscription",
     ],
   },
   {
@@ -95,8 +97,8 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$100 / year — save 2 months",
     promo: "First month $7",
-    cta: "Notify me at launch",
-    href: "mailto:hello@hushare.space?subject=Hushare%20Studio%20waitlist",
+    cta: "Sign in to join the waitlist",
+    href: "/login?next=/account",
     highlight: false,
     features: [
       "Everything in Pro, plus —",
@@ -104,11 +106,20 @@ const tiers: Tier[] = [
       "Custom branding (logo, colours, cover image)",
       "Client-ready download links",
       "Priority support — replies within 24 hrs",
+      "Free Hushare account to manage your subscription",
     ],
   },
 ];
 
 const billingFaq = [
+  {
+    q: "Do I need a Hushare account for Pro or Studio?",
+    a: "Yes — paid plans need a free Hushare account so we can attach your subscription to a stable identity (and so you can manage or cancel it anytime). Sign in with your email at the top of any page; no password needed, just a magic link. Your account is free forever; only Pro and Studio cost money.",
+  },
+  {
+    q: "Why does Free not need an account?",
+    a: "Free albums are designed for the moment — share a link, everyone adds photos, done. We do not want sign-up to be a barrier for one-off events. Pro and Studio need an account because subscriptions need to belong to someone.",
+  },
   {
     q: "What happens to my free albums if I cancel Pro or Studio?",
     a: "Nothing changes for guests. Your albums revert to Free behaviour — the password and custom URL are removed, the album becomes accessible by its original random link, and the 12-month inactivity rule applies again.",
@@ -280,13 +291,16 @@ export default function PricingPage() {
             style={{ height: "28px", width: "auto" }}
           />
         </Link>
-        <Link
-          href="/"
-          className="text-sm font-medium hover:underline"
-          style={{ color: "#7C5C3E" }}
-        >
-          ← Back to home
-        </Link>
+        <div className="flex items-center gap-4 sm:gap-5">
+          <AccountNavLink />
+          <Link
+            href="/"
+            className="text-sm font-medium hover:underline"
+            style={{ color: "#7C5C3E" }}
+          >
+            ← Back to home
+          </Link>
+        </div>
       </nav>
 
       {/* Hero */}
@@ -475,7 +489,8 @@ export default function PricingPage() {
           className="text-center text-xs mt-6 italic"
           style={{ color: "#8B6F4E", fontFamily: "var(--font-serif)" }}
         >
-          Prices in USD. Pro & Studio billed monthly; cancel anytime from your account.
+          Prices in USD. Pro & Studio require a free Hushare account — sign in once and we&apos;ll
+          notify you when paid plans launch. Cancel anytime from your account.
         </p>
       </section>
 

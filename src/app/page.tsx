@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { generateSlug, generateOwnerToken } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
+import AccountNavLink from '@/components/AccountNavLink'
 
 const NATURE_IMG = 'https://live.staticflickr.com/8731/17080622367_6c7109db98_h.jpg'
 
@@ -55,6 +56,7 @@ export default function Home() {
           <a href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Support
           </a>
+          <AccountNavLink />
           <span className="hidden md:inline-block text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
             Free during beta
           </span>

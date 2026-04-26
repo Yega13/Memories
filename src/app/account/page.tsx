@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
@@ -45,6 +46,33 @@ export default async function AccountPage() {
           <p className="text-base font-medium break-all" style={{ color: '#254F22' }}>
             {user.email}
           </p>
+        </section>
+
+        <section
+          className="rounded-2xl p-6 mb-6"
+          style={{
+            background: '#FBF4E4',
+            border: '1px solid rgba(196,166,120,0.35)',
+          }}
+        >
+          <p
+            className="text-xs uppercase mb-2"
+            style={{ color: '#8B6F4E', letterSpacing: '0.18em', fontWeight: 600 }}
+          >
+            Pro &amp; Studio waitlist
+          </p>
+          <p className="text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>
+            You&apos;re on the list. Pro and Studio plans are launching soon — we&apos;ll email
+            you at <strong className="break-all">{user.email}</strong> the moment they go live,
+            with the launch pricing locked in for your first year.
+          </p>
+          <Link
+            href="/pricing"
+            className="inline-block mt-4 text-sm font-semibold hover:underline"
+            style={{ color: '#254F22' }}
+          >
+            See what&apos;s coming →
+          </Link>
         </section>
 
         <SignOutButton />
