@@ -6,7 +6,8 @@ import { Send, CheckCircle2, AlertCircle } from 'lucide-react'
 
 type Status = 'idle' | 'sending' | 'sent' | 'error'
 
-const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ''
+// Public Cloudflare Turnstile site key — visible in every page's HTML by design.
+const TURNSTILE_SITE_KEY = '0x4AAAAAADDt-DJyOH-4lnVV'
 
 export default function SupportForm() {
   const [status, setStatus] = useState<Status>('idle')
