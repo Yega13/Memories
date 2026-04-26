@@ -8,8 +8,8 @@ export const runtime = "nodejs";
 //
 // Until then we send from Resend's shared sender to the gmail directly — that's the
 // only TO address Resend permits in unverified test mode.
-const VERIFIED_FROM = "Hushare Support <hello@hushare.space>";
-const VERIFIED_TO = "hello@hushare.space";
+const VERIFIED_FROM = "Hushare Support <support@hushare.space>";
+const VERIFIED_TO = "support@hushare.space";
 const FALLBACK_FROM = "Hushare Support <onboarding@resend.dev>";
 const FALLBACK_TO = "husharesupport@gmail.com";
 
