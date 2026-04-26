@@ -77,8 +77,8 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$40 / year — save 2 months",
     promo: "First month $1.99",
-    cta: "Sign in to join the waitlist",
-    href: "/login?next=/account",
+    cta: "Notify me at launch",
+    href: "mailto:hello@hushare.space?subject=Hushare%20Pro%20waitlist",
     highlight: true,
     features: [
       "Everything in Free, plus —",
@@ -87,7 +87,7 @@ const tiers: Tier[] = [
       "No 12-month inactivity expiry — albums live forever",
       "HD video uploads (MP4, MOV)",
       "Larger file sizes — up to 200 MB per upload",
-      "Free Hushare account to manage your subscription",
+      "Account dashboard to manage your subscription",
     ],
   },
   {
@@ -97,8 +97,8 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$100 / year — save 2 months",
     promo: "First month $7",
-    cta: "Sign in to join the waitlist",
-    href: "/login?next=/account",
+    cta: "Notify me at launch",
+    href: "mailto:hello@hushare.space?subject=Hushare%20Studio%20waitlist",
     highlight: false,
     features: [
       "Everything in Pro, plus —",
@@ -106,7 +106,7 @@ const tiers: Tier[] = [
       "Custom branding (logo, colours, cover image)",
       "Client-ready download links",
       "Priority support — replies within 24 hrs",
-      "Free Hushare account to manage your subscription",
+      "Account dashboard to manage your subscription",
     ],
   },
 ];
@@ -489,8 +489,7 @@ export default function PricingPage() {
           className="text-center text-xs mt-6 italic"
           style={{ color: "#8B6F4E", fontFamily: "var(--font-serif)" }}
         >
-          Prices in USD. Pro & Studio require a free Hushare account — sign in once and we&apos;ll
-          notify you when paid plans launch. Cancel anytime from your account.
+          Prices in USD. Pro &amp; Studio billed monthly; cancel anytime from your account dashboard.
         </p>
       </section>
 

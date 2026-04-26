@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { canAccessAccount } from '@/lib/auth'
 import LoginForm from './LoginForm'
 
 export const runtime = 'nodejs'
@@ -17,16 +18,21 @@ type Props = {
 
 export default async function LoginPage({ searchParams }: Props) {
   const { next } = await searchParams
-  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/account'
+  const requestedNext = next && next.startsWith('/') && !next.startsWith('//') ? next : null
 
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Already signed in — skip the form, send them where they intended to go.
+  // Already signed in. Send admins/subscribers to /account; everyone else
+  // back to where they came from (or homepage). Don't bounce non-admins to
+  // /account — that page would 403 them and look broken.
   if (user) {
-    redirect(safeNext)
+    if (canAccessAccount(user)) {
+      redirect(requestedNext ?? '/account')
+    }
+    redirect(requestedNext && requestedNext !== '/account' ? requestedNext : '/')
   }
 
   return (

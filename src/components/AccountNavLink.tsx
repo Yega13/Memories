@@ -2,24 +2,44 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { canAccessAccount } from '@/lib/auth'
 
-type AuthState = 'loading' | 'signed-out' | 'signed-in'
+type AuthState =
+  | { kind: 'loading' }
+  | { kind: 'signed-out' }
+  | { kind: 'signed-in'; canAccess: boolean }
+
+const linkClass = 'text-sm font-medium hover:underline'
+const linkStyle = { color: '#254F22' } as const
 
 export default function AccountNavLink() {
-  const [state, setState] = useState<AuthState>('loading')
+  const router = useRouter()
+  const [state, setState] = useState<AuthState>({ kind: 'loading' })
+  const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
     let mounted = true
 
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return
-      setState(data.session ? 'signed-in' : 'signed-out')
+      const user = data.session?.user
+      setState(
+        user
+          ? { kind: 'signed-in', canAccess: canAccessAccount(user) }
+          : { kind: 'signed-out' },
+      )
     })
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return
-      setState(session ? 'signed-in' : 'signed-out')
+      const user = session?.user
+      setState(
+        user
+          ? { kind: 'signed-in', canAccess: canAccessAccount(user) }
+          : { kind: 'signed-out' },
+      )
     })
 
     return () => {
@@ -28,30 +48,49 @@ export default function AccountNavLink() {
     }
   }, [])
 
-  // Render a stable-width placeholder during loading so the nav doesn't reflow.
-  if (state === 'loading') {
-    return <span className="text-sm font-medium" aria-hidden="true" style={{ color: 'transparent' }}>Sign in</span>
+  async function handleSignOut() {
+    if (signingOut) return
+    setSigningOut(true)
+    await supabase.auth.signOut()
+    router.refresh()
   }
 
-  if (state === 'signed-in') {
+  // Stable-width placeholder during loading so the nav doesn't reflow.
+  if (state.kind === 'loading') {
     return (
-      <Link
-        href="/account"
-        className="text-sm font-medium hover:underline"
-        style={{ color: '#254F22' }}
-      >
-        Your account
+      <span className={linkClass} aria-hidden="true" style={{ color: 'transparent' }}>
+        Sign in
+      </span>
+    )
+  }
+
+  if (state.kind === 'signed-out') {
+    return (
+      <Link href="/login" className={linkClass} style={linkStyle}>
+        Sign in
       </Link>
     )
   }
 
+  if (state.canAccess) {
+    return (
+      <Link href="/account" className={linkClass} style={linkStyle}>
+        Account
+      </Link>
+    )
+  }
+
+  // Signed in but no Account access (no subscription, not admin). Show
+  // sign-out so the user isn't stranded — they have nowhere else to go.
   return (
-    <Link
-      href="/login"
-      className="text-sm font-medium hover:underline"
-      style={{ color: '#254F22' }}
+    <button
+      type="button"
+      onClick={handleSignOut}
+      disabled={signingOut}
+      className={`${linkClass} disabled:opacity-50`}
+      style={linkStyle}
     >
-      Sign in
-    </Link>
+      {signingOut ? 'Signing out...' : 'Sign out'}
+    </button>
   )
 }
