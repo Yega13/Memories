@@ -70,7 +70,7 @@ export async function verifyWebhookSignature(
   if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false
 
   const base64Secret = secret.replace(/^polar_whs_/, '').replace(/^whsec_/, '')
-  let keyMaterial: Uint8Array
+  let keyMaterial: Uint8Array<ArrayBuffer>
   try {
     keyMaterial = Uint8Array.from(atob(base64Secret), (c) => c.charCodeAt(0))
   } catch {
