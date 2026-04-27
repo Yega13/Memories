@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import AccountNavLink from "@/components/AccountNavLink";
+import CheckoutResumer from "@/components/CheckoutResumer";
 
 export const runtime = "nodejs";
 
@@ -285,6 +286,8 @@ export default function PricingPage() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
+      <CheckoutResumer />
 
       {/* Nav */}
       <nav

@@ -18,3 +18,9 @@ POLAR_PRODUCT_PRO_MONTHLY = "1afab126-3496-48d4-af31-705405791c38"
 POLAR_PRODUCT_PRO_YEARLY = "4b2373b1-638f-4db2-97fc-8b66c5a5f0e3"
 POLAR_PRODUCT_STUDIO_MONTHLY = "bf0869d4-0217-44fc-82f4-8717a79efe6e"
 POLAR_PRODUCT_STUDIO_YEARLY = "463d2cb3-cf3c-4230-939e-397525c35ac8"
+
+# First-month discounts (live mode). Auto-applied in /api/checkout when the
+# customer picks a monthly plan. Both are "Once" duration in Polar so they
+# only hit the first invoice.
+POLAR_DISCOUNT_PRO_FIRST_MONTH = "b8cea209-11e8-4691-88fd-0b448d829330"
+POLAR_DISCOUNT_STUDIO_FIRST_MONTH = "8fb830fd-4cab-42c2-a4cc-e58b2930bc97"

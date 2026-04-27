@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { isAccountAdmin } from '@/lib/auth'
 
 type AuthState =
   | { kind: 'loading' }
@@ -20,30 +19,39 @@ export default function AccountNavLink() {
   const [signingOut, setSigningOut] = useState(false)
 
   useEffect(() => {
-    let mounted = true
+    let cancelled = false
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return
-      const user = data.session?.user
-      setState(
-        user
-          ? { kind: 'signed-in', canAccess: isAccountAdmin(user) }
-          : { kind: 'signed-out' },
-      )
-    })
+    async function refresh() {
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (cancelled) return
+      if (!sessionData.session?.user) {
+        setState({ kind: 'signed-out' })
+        return
+      }
+      // Server-side check covers admin OR active subscriber. Client-side we
+      // don't have DB access, so defer to /api/me.
+      try {
+        const res = await fetch('/api/me', { cache: 'no-store' })
+        if (cancelled) return
+        if (res.ok) {
+          const me = (await res.json()) as { canAccessAccount: boolean }
+          setState({ kind: 'signed-in', canAccess: me.canAccessAccount })
+        } else {
+          setState({ kind: 'signed-in', canAccess: false })
+        }
+      } catch {
+        if (!cancelled) setState({ kind: 'signed-in', canAccess: false })
+      }
+    }
 
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return
-      const user = session?.user
-      setState(
-        user
-          ? { kind: 'signed-in', canAccess: isAccountAdmin(user) }
-          : { kind: 'signed-out' },
-      )
+    refresh()
+
+    const { data: subscription } = supabase.auth.onAuthStateChange(() => {
+      refresh()
     })
 
     return () => {
-      mounted = false
+      cancelled = true
       subscription.subscription.unsubscribe()
     }
   }, [])

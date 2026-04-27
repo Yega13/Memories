@@ -21,6 +21,7 @@ export type CheckoutInput = {
   successUrl: string
   customerEmail: string
   metadata: { userId: string; tier: 'pro' | 'studio'; cycle: 'monthly' | 'yearly' }
+  discountId?: string
 }
 
 export type CheckoutResult = {
@@ -29,18 +30,21 @@ export type CheckoutResult = {
 }
 
 export async function createCheckout(input: CheckoutInput): Promise<CheckoutResult> {
+  const body: Record<string, unknown> = {
+    products: [input.productId],
+    success_url: input.successUrl,
+    customer_email: input.customerEmail,
+    metadata: input.metadata,
+  }
+  if (input.discountId) body.discount_id = input.discountId
+
   const res = await fetch(`${apiBase()}/v1/checkouts/`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey()}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      products: [input.productId],
-      success_url: input.successUrl,
-      customer_email: input.customerEmail,
-      metadata: input.metadata,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!res.ok) {
@@ -50,6 +54,27 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutResu
 
   const data = (await res.json()) as { id: string; url: string }
   return { id: data.id, url: data.url }
+}
+
+// Creates a one-time customer-portal session for an existing Polar customer.
+// Returned URL is signed and short-lived; redirect the user straight to it.
+export async function createCustomerSession(customerId: string): Promise<string> {
+  const res = await fetch(`${apiBase()}/v1/customer-sessions/`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ customer_id: customerId }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Polar customer session creation failed: ${res.status} ${text}`)
+  }
+
+  const data = (await res.json()) as { customer_portal_url: string }
+  return data.customer_portal_url
 }
 
 // Standard Webhooks (https://www.standardwebhooks.com) signature verification.

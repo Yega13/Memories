@@ -132,6 +132,15 @@ export default async function AccountPage() {
                 </div>
               )}
             </dl>
+            <form action="/api/portal" method="POST" className="mt-5">
+              <button
+                type="submit"
+                className="w-full font-semibold rounded-xl py-2.5 text-sm transition hover:opacity-90"
+                style={{ background: '#254F22', color: '#FDFAF5' }}
+              >
+                Manage subscription
+              </button>
+            </form>
           </section>
         ) : (
           <section

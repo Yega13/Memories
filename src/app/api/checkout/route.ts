@@ -72,6 +72,15 @@ export async function POST(req: Request) {
 
   const successUrl = new URL('/account?welcome=1', req.url).toString()
 
+  // First-month discount auto-applied for monthly plans. Yearly plans don't
+  // get a promo (the annual discount is already baked into the headline price).
+  const discountId =
+    productId === process.env.POLAR_PRODUCT_PRO_MONTHLY
+      ? process.env.POLAR_DISCOUNT_PRO_FIRST_MONTH
+      : productId === process.env.POLAR_PRODUCT_STUDIO_MONTHLY
+        ? process.env.POLAR_DISCOUNT_STUDIO_FIRST_MONTH
+        : undefined
+
   let checkout
   try {
     checkout = await createCheckout({
@@ -79,6 +88,7 @@ export async function POST(req: Request) {
       successUrl,
       customerEmail: user.email,
       metadata: { userId: user.id, tier: tierMatch.tier, cycle: tierMatch.cycle },
+      discountId,
     })
   } catch (err) {
     console.error('[checkout] Polar createCheckout failed:', err)
