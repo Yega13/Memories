@@ -1,8 +1,7 @@
-// Account-access policy.
+// Identity-only helpers. Safe to import from anywhere (client or server).
 //
-// Today: only admins (founders) can access /account. Once Polar billing ships,
-// active Pro/Studio subscribers will join them — extend `canAccessAccount`
-// with a subscription check at that point.
+// The full account-access check (admin OR active subscriber) lives in
+// `@/lib/access` because it queries the DB and is server-only.
 
 const ADMIN_EMAILS = new Set<string>([
   'yeganyansuren13@gmail.com',
@@ -14,9 +13,4 @@ export function isAccountAdmin(user: AuthUserLike): boolean {
   const email = user?.email?.toLowerCase()
   if (!email) return false
   return ADMIN_EMAILS.has(email)
-}
-
-export function canAccessAccount(user: AuthUserLike): boolean {
-  // TODO(billing): || isActiveSubscriber(user) once Polar integration lands.
-  return isAccountAdmin(user)
 }

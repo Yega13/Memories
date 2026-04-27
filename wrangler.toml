@@ -11,3 +11,10 @@ binding = "ASSETS"
 NEXT_PUBLIC_SUPABASE_URL = "https://zleajzevvhugkwlqlolt.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsZWFqemV2dmh1Z2t3bHFsb2x0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODgwOTksImV4cCI6MjA5MjI2NDA5OX0.2_vNkn2aLkwiUpQYLuZx_tmXI42QGUNRyUUYuXp_ehw"
 RESEND_DOMAIN_VERIFIED = "true"
+
+# Polar product IDs (live mode). Not secrets — they're identifiers Polar
+# exposes in checkout URLs. Set POLAR_SANDBOX="true" to switch to sandbox-api.polar.sh.
+POLAR_PRODUCT_PRO_MONTHLY = "1afab126-3496-48d4-af31-705405791c38"
+POLAR_PRODUCT_PRO_YEARLY = "4b2373b1-638f-4db2-97fc-8b66c5a5f0e3"
+POLAR_PRODUCT_STUDIO_MONTHLY = "bf0869d4-0217-44fc-82f4-8717a79efe6e"
+POLAR_PRODUCT_STUDIO_YEARLY = "463d2cb3-cf3c-4230-939e-397525c35ac8"

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { canAccessAccount } from '@/lib/auth'
+import { hasAccountAccess } from '@/lib/access'
 
 export const runtime = 'nodejs'
 
@@ -30,7 +30,8 @@ export async function GET(req: Request) {
   // Route by access policy: admins/subscribers go to /account, everyone
   // else goes to wherever they came from (or homepage). This keeps a
   // newly-signed-in free user from landing on a 403 page.
-  const target = canAccessAccount(data.user)
+  const allowed = await hasAccountAccess(data.user)
+  const target = allowed
     ? requestedNext ?? '/account'
     : requestedNext && requestedNext !== '/account' ? requestedNext : '/'
 

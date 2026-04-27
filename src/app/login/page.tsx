@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { canAccessAccount } from '@/lib/auth'
+import { hasAccountAccess } from '@/lib/access'
 import LoginForm from './LoginForm'
 
 export const runtime = 'nodejs'
@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: Props) {
   // back to where they came from (or homepage). Don't bounce non-admins to
   // /account — that page would 403 them and look broken.
   if (user) {
-    if (canAccessAccount(user)) {
+    if (await hasAccountAccess(user)) {
       redirect(requestedNext ?? '/account')
     }
     redirect(requestedNext && requestedNext !== '/account' ? requestedNext : '/')

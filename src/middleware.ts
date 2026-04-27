@@ -32,7 +32,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Skip Next.js internals and static assets — auth cookies don't need to
-  // refresh on every image fetch.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Skip Next.js internals, static assets, and webhook endpoints.
+  // Webhooks are server-to-server with no auth cookies, and we want the
+  // raw request body untouched for signature verification.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }

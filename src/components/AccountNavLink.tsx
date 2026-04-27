@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { canAccessAccount } from '@/lib/auth'
+import { isAccountAdmin } from '@/lib/auth'
 
 type AuthState =
   | { kind: 'loading' }
@@ -27,7 +27,7 @@ export default function AccountNavLink() {
       const user = data.session?.user
       setState(
         user
-          ? { kind: 'signed-in', canAccess: canAccessAccount(user) }
+          ? { kind: 'signed-in', canAccess: isAccountAdmin(user) }
           : { kind: 'signed-out' },
       )
     })
@@ -37,7 +37,7 @@ export default function AccountNavLink() {
       const user = session?.user
       setState(
         user
-          ? { kind: 'signed-in', canAccess: canAccessAccount(user) }
+          ? { kind: 'signed-in', canAccess: isAccountAdmin(user) }
           : { kind: 'signed-out' },
       )
     })
