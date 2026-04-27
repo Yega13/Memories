@@ -1,26 +1,39 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase, type Photo } from '@/lib/supabase'
+import { type Photo } from '@/lib/supabase'
 import { Download, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
 
 type Props = {
   photos: Photo[]
   isOwner: boolean
+  slug: string
+  ownerToken: string | null
   onPhotoDeleted: (id: string) => void
 }
 
-export default function PhotoGrid({ photos, isOwner, onPhotoDeleted }: Props) {
+export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDeleted }: Props) {
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   async function deletePhoto(photo: Photo) {
+    if (!ownerToken) return
     setDeleting(photo.id)
-    await supabase.storage.from('Photos').remove([photo.storage_path])
-    await supabase.from('photos').delete().eq('id', photo.id)
-    onPhotoDeleted(photo.id)
+
+    const res = await fetch('/api/album/photo/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, owner_token: ownerToken, photo_id: photo.id }),
+    })
+
+    if (res.ok) {
+      onPhotoDeleted(photo.id)
+      if (lightbox !== null) setLightbox(null)
+    }
+    // On failure we leave the photo visible — better than silently lying.
+    // A future improvement: surface a toast or inline error.
+
     setDeleting(null)
-    if (lightbox !== null) setLightbox(null)
   }
 
   function downloadPhoto(photo: Photo) {

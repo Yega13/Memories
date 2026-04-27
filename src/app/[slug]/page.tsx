@@ -37,7 +37,7 @@ export default function AlbumPage() {
   const fetchAlbum = useCallback(async () => {
     const { data, error } = await supabase
       .from('albums')
-      .select('*')
+      .select('id, slug, title, description, is_pro, created_at')
       .eq('slug', slug)
       .single()
 
@@ -48,7 +48,23 @@ export default function AlbumPage() {
     }
 
     setAlbum(data)
-    setIsOwner(!!ownerToken && ownerToken === data.owner_token)
+
+    // Ownership is verified server-side so the owner_token never reaches
+    // the browser. The endpoint returns just a boolean.
+    if (ownerToken) {
+      try {
+        const res = await fetch('/api/album/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, owner_token: ownerToken }),
+        })
+        const result = (await res.json()) as { isOwner?: boolean }
+        setIsOwner(!!result.isOwner)
+      } catch {
+        setIsOwner(false)
+      }
+    }
+
     await fetchPhotos(data.id)
     setLoading(false)
   }, [slug, ownerToken])
@@ -112,6 +128,8 @@ export default function AlbumPage() {
         <PhotoGrid
           photos={photos}
           isOwner={isOwner}
+          slug={album.slug}
+          ownerToken={ownerToken}
           onPhotoDeleted={handlePhotoDeleted}
         />
       </div>
