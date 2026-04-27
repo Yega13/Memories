@@ -77,8 +77,12 @@ export async function createCustomerSession(customerId: string): Promise<string>
   return data.customer_portal_url
 }
 
-// Standard Webhooks (https://www.standardwebhooks.com) signature verification.
-// Polar prefixes the secret with `polar_whs_`; the suffix is the base64 key.
+// Standard-Webhooks-style signature verification, with a Polar-specific
+// twist: Polar's HMAC key is the raw UTF-8 bytes of the FULL prefixed
+// secret string (e.g. "polar_whs_xyz..."), NOT the base64-decoded suffix
+// that the Standard Webhooks reference implementation uses. Verified
+// empirically 2026-04-27 by trying both interpretations against a real
+// delivery — only the full-string interpretation matched.
 export async function verifyWebhookSignature(
   rawBody: string,
   headers: Headers,
@@ -88,53 +92,27 @@ export async function verifyWebhookSignature(
   const timestamp = headers.get('webhook-timestamp')
   const signatureHeader = headers.get('webhook-signature')
 
-  if (!id || !timestamp || !signatureHeader) {
-    console.warn('[polar/verify] missing-headers', {
-      hasId: !!id,
-      hasTimestamp: !!timestamp,
-      hasSignature: !!signatureHeader,
-    })
-    return false
-  }
+  if (!id || !timestamp || !signatureHeader) return false
 
   // Reject signatures more than 1 hour old to limit replay window. Tight
-  // enough to defeat replay attacks in practice; loose enough to tolerate
-  // legitimate Polar delivery delays under load and dashboard Resends used
-  // for debugging (which keep the original webhook-timestamp).
+  // enough to defeat replay in practice; loose enough to tolerate Polar
+  // delivery delays under load and dashboard Resends used for debugging
+  // (which keep the original webhook-timestamp).
   const ts = Number(timestamp)
-  const ageSec = Math.round(Date.now() / 1000 - ts)
-  if (!Number.isFinite(ts) || Math.abs(ageSec) > 3600) {
-    console.warn('[polar/verify] timestamp-out-of-window', { ts, ageSec })
-    return false
-  }
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 3600) return false
 
-  const suffix = secret.replace(/^polar_whs_/, '').replace(/^whsec_/, '')
-
-  // Build candidate keys. Standard Webhooks says base64-decoded suffix, but
-  // some implementations use the raw-byte suffix or the full prefixed string.
-  // Try all and accept whichever matches; log which one won so we can lock
-  // it down once we know the truth.
-  const keyAttempts: { name: string; bytes: Uint8Array<ArrayBuffer> }[] = []
-
-  try {
-    const decoded = Uint8Array.from(atob(suffix), (c) => c.charCodeAt(0))
-    keyAttempts.push({ name: 'base64-suffix', bytes: decoded })
-  } catch {
-    // base64 decode failed — fall through with the other interpretations.
-  }
-  keyAttempts.push({ name: 'utf8-suffix', bytes: new TextEncoder().encode(suffix) })
-  keyAttempts.push({ name: 'utf8-full', bytes: new TextEncoder().encode(secret) })
-
-  if (keyAttempts.length === 0) {
-    console.warn('[polar/verify] no-usable-key', {
-      secretLength: secret.length,
-      suffixLength: suffix.length,
-      secretPrefix: secret.slice(0, 10),
-    })
-    return false
-  }
+  const keyMaterial = new TextEncoder().encode(secret)
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyMaterial,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
 
   const signedContent = new TextEncoder().encode(`${id}.${timestamp}.${rawBody}`)
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, signedContent)
+  const expected = btoa(String.fromCharCode(...new Uint8Array(sig)))
 
   // The header may be a space-separated list of "v1,<sig>" entries.
   const candidates = signatureHeader
@@ -143,39 +121,7 @@ export async function verifyWebhookSignature(
     .filter(Boolean)
     .map((s) => (s.startsWith('v1,') ? s.slice(3) : s))
 
-  const expectedByAttempt: Record<string, string> = {}
-  for (const attempt of keyAttempts) {
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      attempt.bytes,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign'],
-    )
-    const sig = await crypto.subtle.sign('HMAC', cryptoKey, signedContent)
-    const expected = btoa(String.fromCharCode(...new Uint8Array(sig)))
-    expectedByAttempt[attempt.name] = expected
-    if (candidates.some((candidate) => timingSafeEqual(candidate, expected))) {
-      if (attempt.name !== 'base64-suffix') {
-        console.warn('[polar/verify] matched via fallback interpretation', {
-          interpretation: attempt.name,
-        })
-      }
-      return true
-    }
-  }
-
-  console.warn('[polar/verify] hmac-mismatch (all interpretations failed)', {
-    secretPrefix: secret.slice(0, 10),
-    suffixLength: suffix.length,
-    candidatesCount: candidates.length,
-    candidatePreviews: candidates.map((c) => c.slice(0, 12)),
-    expectedPreviews: Object.fromEntries(
-      Object.entries(expectedByAttempt).map(([k, v]) => [k, v.slice(0, 12)]),
-    ),
-    signedContentLen: signedContent.length,
-  })
-  return false
+  return candidates.some((candidate) => timingSafeEqual(candidate, expected))
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
