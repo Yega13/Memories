@@ -109,7 +109,7 @@ const tiers: Tier[] = [
     price: "$10",
     cadence: "per month",
     annual: "$100 / year — save 2 months",
-    promo: "First month $7",
+    promo: "First month $6.99",
     cta: "Get Studio",
     monthlyProductId: POLAR_STUDIO_MONTHLY,
     yearlyProductId: POLAR_STUDIO_YEARLY,
@@ -152,7 +152,7 @@ const billingFaq = [
   },
   {
     q: "Is there a first-month discount?",
-    a: "Yes — Pro is $1.99 for the first month, then $4/month after. Studio is $7 for the first month, then $10/month. The discount applies once per account, on monthly plans, and renews at the standard rate from month two.",
+    a: "Yes — Pro is $1.99 for the first month, then $4/month after. Studio is $6.99 for the first month, then $10/month. The discount applies once per account, on monthly plans, and renews at the standard rate from month two.",
   },
   {
     q: "Which currencies do you accept?",
