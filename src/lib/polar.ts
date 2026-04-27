@@ -88,20 +88,36 @@ export async function verifyWebhookSignature(
   const timestamp = headers.get('webhook-timestamp')
   const signatureHeader = headers.get('webhook-signature')
 
-  if (!id || !timestamp || !signatureHeader) return false
+  if (!id || !timestamp || !signatureHeader) {
+    console.warn('[polar/verify] missing-headers', {
+      hasId: !!id,
+      hasTimestamp: !!timestamp,
+      hasSignature: !!signatureHeader,
+    })
+    return false
+  }
 
   // Reject signatures more than 1 hour old to limit replay window. Tight
   // enough to defeat replay attacks in practice; loose enough to tolerate
   // legitimate Polar delivery delays under load and dashboard Resends used
   // for debugging (which keep the original webhook-timestamp).
   const ts = Number(timestamp)
-  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 3600) return false
+  const ageSec = Math.round(Date.now() / 1000 - ts)
+  if (!Number.isFinite(ts) || Math.abs(ageSec) > 3600) {
+    console.warn('[polar/verify] timestamp-out-of-window', { ts, ageSec })
+    return false
+  }
 
   const base64Secret = secret.replace(/^polar_whs_/, '').replace(/^whsec_/, '')
   let keyMaterial: Uint8Array<ArrayBuffer>
   try {
     keyMaterial = Uint8Array.from(atob(base64Secret), (c) => c.charCodeAt(0))
   } catch {
+    console.warn('[polar/verify] invalid-base64-secret', {
+      secretLength: secret.length,
+      base64Length: base64Secret.length,
+      secretPrefix: secret.slice(0, 10),
+    })
     return false
   }
 
@@ -124,7 +140,19 @@ export async function verifyWebhookSignature(
     .filter(Boolean)
     .map((s) => (s.startsWith('v1,') ? s.slice(3) : s))
 
-  return candidates.some((candidate) => timingSafeEqual(candidate, expected))
+  const matched = candidates.some((candidate) => timingSafeEqual(candidate, expected))
+  if (!matched) {
+    console.warn('[polar/verify] hmac-mismatch', {
+      secretPrefix: secret.slice(0, 10),
+      base64Length: base64Secret.length,
+      keyBytes: keyMaterial.length,
+      candidatesCount: candidates.length,
+      expectedPreview: expected.slice(0, 12),
+      candidatePreviews: candidates.map((c) => c.slice(0, 12)),
+      signedContentLen: signedContent.length,
+    })
+  }
+  return matched
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
