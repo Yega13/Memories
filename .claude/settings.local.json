@@ -14,7 +14,8 @@
       "Bash(npx tsc *)",
       "Bash(echo \"exit=$?\")",
       "Bash(unzip -l \"Hushare-strikingly-logo-2026-04-25.zip\")",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(git fetch *)"
     ]
   }
 }

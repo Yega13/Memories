@@ -90,9 +90,12 @@ export async function verifyWebhookSignature(
 
   if (!id || !timestamp || !signatureHeader) return false
 
-  // Reject signatures more than 5 minutes old to limit replay window.
+  // Reject signatures more than 1 hour old to limit replay window. Tight
+  // enough to defeat replay attacks in practice; loose enough to tolerate
+  // legitimate Polar delivery delays under load and dashboard Resends used
+  // for debugging (which keep the original webhook-timestamp).
   const ts = Number(timestamp)
-  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 3600) return false
 
   const base64Secret = secret.replace(/^polar_whs_/, '').replace(/^whsec_/, '')
   let keyMaterial: Uint8Array<ArrayBuffer>

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { hasAccountAccess } from '@/lib/access'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import SignOutButton from './SignOutButton'
+import SubscriptionPolling from './SubscriptionPolling'
 
 export const runtime = 'nodejs'
 
@@ -13,7 +14,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-export default async function AccountPage() {
+type Props = {
+  searchParams: Promise<{ welcome?: string }>
+}
+
+export default async function AccountPage({ searchParams }: Props) {
+  const { welcome } = await searchParams
   const supabase = await createClient()
   const {
     data: { user },
@@ -25,6 +31,13 @@ export default async function AccountPage() {
 
   // Gate: admins and active Pro/Studio subscribers only.
   if (!(await hasAccountAccess(user))) {
+    // Customers freshly redirected from Polar checkout (?welcome=1) might
+    // arrive before our webhook has had a chance to upsert their row.
+    // Show a polling state instead of a bare 403 — the row almost always
+    // arrives within a few seconds.
+    if (welcome === '1') {
+      return <SubscriptionPolling email={user.email ?? ''} />
+    }
     return (
       <main
         className="min-h-screen flex items-center justify-center px-4 py-16"
