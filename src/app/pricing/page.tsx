@@ -48,10 +48,22 @@ type Tier = {
   annual?: string;
   promo?: string;
   cta: string;
-  href: string;
+  // Free tier uses `href` for a normal Link; paid tiers use product IDs to
+  // POST a checkout form to /api/checkout. Exactly one path applies per tier.
+  href?: string;
+  monthlyProductId?: string;
+  yearlyProductId?: string;
   highlight: boolean;
   features: string[];
 };
+
+// Polar product IDs (live mode). These are the same values committed in
+// wrangler.toml [vars]; hardcoded here so the pricing page can stay
+// statically rendered without forcing dynamic env lookups on every request.
+const POLAR_PRO_MONTHLY = "1afab126-3496-48d4-af31-705405791c38";
+const POLAR_PRO_YEARLY = "4b2373b1-638f-4db2-97fc-8b66c5a5f0e3";
+const POLAR_STUDIO_MONTHLY = "bf0869d4-0217-44fc-82f4-8717a79efe6e";
+const POLAR_STUDIO_YEARLY = "463d2cb3-cf3c-4230-939e-397525c35ac8";
 
 const tiers: Tier[] = [
   {
@@ -77,8 +89,9 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$40 / year — save 2 months",
     promo: "First month $1.99",
-    cta: "Notify me at launch",
-    href: "mailto:hello@hushare.space?subject=Hushare%20Pro%20waitlist",
+    cta: "Get Pro",
+    monthlyProductId: POLAR_PRO_MONTHLY,
+    yearlyProductId: POLAR_PRO_YEARLY,
     highlight: true,
     features: [
       "Everything in Free, plus —",
@@ -97,8 +110,9 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$100 / year — save 2 months",
     promo: "First month $7",
-    cta: "Notify me at launch",
-    href: "mailto:hello@hushare.space?subject=Hushare%20Studio%20waitlist",
+    cta: "Get Studio",
+    monthlyProductId: POLAR_STUDIO_MONTHLY,
+    yearlyProductId: POLAR_STUDIO_YEARLY,
     highlight: false,
     features: [
       "Everything in Pro, plus —",
@@ -404,7 +418,23 @@ export default function PricingPage() {
                 </span>
               </div>
 
-              {t.annual && (
+              {t.annual && (t.yearlyProductId ? (
+                <form action="/api/checkout" method="POST" className="mt-1">
+                  <input type="hidden" name="productId" value={t.yearlyProductId} />
+                  <button
+                    type="submit"
+                    className="text-xs hover:underline cursor-pointer text-left"
+                    style={{
+                      color: t.highlight ? "rgba(253,250,245,0.85)" : "#8B6F4E",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                    }}
+                  >
+                    or <span style={{ fontWeight: 600 }}>{t.annual}</span> →
+                  </button>
+                </form>
+              ) : (
                 <p
                   className="text-xs mt-1"
                   style={{
@@ -413,7 +443,7 @@ export default function PricingPage() {
                 >
                   or <span style={{ fontWeight: 600 }}>{t.annual}</span>
                 </p>
-              )}
+              ))}
 
               {t.promo && (
                 <p
@@ -471,16 +501,33 @@ export default function PricingPage() {
                 })}
               </ul>
 
-              <Link
-                href={t.href}
-                className="w-full inline-flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90"
-                style={{
-                  background: t.highlight ? "#FDFAF5" : "#254F22",
-                  color: t.highlight ? "#254F22" : "#FDFAF5",
-                }}
-              >
-                {t.cta} <ArrowRight className="w-4 h-4" />
-              </Link>
+              {t.monthlyProductId ? (
+                <form action="/api/checkout" method="POST" className="w-full">
+                  <input type="hidden" name="productId" value={t.monthlyProductId} />
+                  <button
+                    type="submit"
+                    className="w-full inline-flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 cursor-pointer"
+                    style={{
+                      background: t.highlight ? "#FDFAF5" : "#254F22",
+                      color: t.highlight ? "#254F22" : "#FDFAF5",
+                      border: "none",
+                    }}
+                  >
+                    {t.cta} <ArrowRight className="w-4 h-4" />
+                  </button>
+                </form>
+              ) : (
+                <Link
+                  href={t.href ?? "/"}
+                  className="w-full inline-flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90"
+                  style={{
+                    background: t.highlight ? "#FDFAF5" : "#254F22",
+                    color: t.highlight ? "#254F22" : "#FDFAF5",
+                  }}
+                >
+                  {t.cta} <ArrowRight className="w-4 h-4" />
+                </Link>
+              )}
             </article>
           ))}
         </div>
