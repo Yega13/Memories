@@ -94,14 +94,10 @@ export const metadata: Metadata = {
       "msvalidate.01": "22AB3EC00DB3D5ECE126BEDD09A3DD8E",
     },
   },
-  icons: {
-    icon: [
-      { url: "/logo/logo-favicon.png", type: "image/png", sizes: "64x64" },
-      { url: "/favicon.ico", sizes: "any" },
-    ],
-    shortcut: "/logo/logo-favicon.png",
-    apple: "/logo/logo-icon.png",
-  },
+  // Icons come from the App Router file convention:
+  //   src/app/icon.png        → favicon
+  //   src/app/apple-icon.png  → apple touch icon
+  // Next emits the <link> tags automatically; do not also set metadata.icons.
   referrer: "origin-when-cross-origin",
   formatDetection: {
     email: false,
@@ -290,7 +286,7 @@ const jsonLd = {
           name: "What photo formats and sizes are supported?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "JPG, PNG, HEIC, and WebP images up to 25 MB each. Short video clips (MP4, MOV) are planned for a future release. There is no cap on the number of photos per free album during beta.",
+            text: "JPG, PNG, HEIC, and WebP images up to 25 MB each, and MP4, MOV, or WebM video clips up to 100 MB. There is no cap on the number of items per free album during beta.",
           },
         },
       ],

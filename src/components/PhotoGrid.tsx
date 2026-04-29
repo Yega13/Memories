@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { type Photo } from '@/lib/supabase'
-import { Download, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { formatDuration } from '@/lib/media'
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Play } from 'lucide-react'
 
 type Props = {
   photos: Photo[]
@@ -39,7 +40,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
   function downloadPhoto(photo: Photo) {
     const a = document.createElement('a')
     a.href = photo.url
-    a.download = photo.caption || 'photo'
+    a.download = photo.caption || (photo.media_type === 'video' ? 'video' : 'photo')
     a.target = '_blank'
     a.click()
   }
@@ -57,39 +58,85 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
   if (photos.length === 0) {
     return (
       <div className="text-center py-20" style={{ color: '#A89880' }}>
-        <p className="text-lg">No photos yet.</p>
-        <p className="text-sm mt-1">Be the first to upload one!</p>
+        <p className="text-lg">Nothing here yet.</p>
+        <p className="text-sm mt-1">Be the first to upload a photo or video!</p>
       </div>
     )
   }
 
+  const current = lightbox !== null ? photos[lightbox] : null
+
   return (
     <>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {photos.map((photo, index) => (
-          <div
-            key={photo.id}
-            className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
-            style={{ background: '#EDE7DB' }}
-            onClick={() => setLightbox(index)}
-          >
-            <img src={photo.url} alt={photo.caption || ''} className="w-full h-full object-cover transition group-hover:scale-105" />
-            <div className="absolute inset-0 transition" style={{ background: 'rgba(0,0,0,0)' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.2)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0)')}
-            />
-            {(photo.caption || photo.author_name) && (
-              <div className="absolute bottom-0 left-0 right-0 p-2 translate-y-full group-hover:translate-y-0 transition"
-                style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.85), transparent)' }}>
-                {photo.caption && <p className="text-xs font-medium truncate" style={{ color: '#FDFAF5' }}>{photo.caption}</p>}
-                {photo.author_name && <p className="text-xs truncate" style={{ color: '#C5D9C2' }}>by {photo.author_name}</p>}
-              </div>
-            )}
-          </div>
-        ))}
+        {photos.map((photo, index) => {
+          const isVideo = photo.media_type === 'video'
+          const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
+          return (
+            <div
+              key={photo.id}
+              className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
+              style={{ background: '#EDE7DB' }}
+              onClick={() => setLightbox(index)}
+            >
+              {thumbSrc ? (
+                <img
+                  src={thumbSrc}
+                  alt={photo.caption || ''}
+                  className="w-full h-full object-cover transition group-hover:scale-105"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center" style={{ background: '#1A2B1A' }}>
+                  <Play className="w-8 h-8" style={{ color: '#C5D9C2' }} />
+                </div>
+              )}
+
+              {isVideo && (
+                <>
+                  <span
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                  >
+                    <span
+                      className="rounded-full flex items-center justify-center transition group-hover:scale-110"
+                      style={{
+                        width: 44,
+                        height: 44,
+                        background: 'rgba(0,0,0,0.55)',
+                        backdropFilter: 'blur(4px)',
+                        WebkitBackdropFilter: 'blur(4px)',
+                      }}
+                    >
+                      <Play className="w-5 h-5" style={{ color: '#FDFAF5', marginLeft: 2 }} fill="#FDFAF5" />
+                    </span>
+                  </span>
+                  {photo.duration_seconds ? (
+                    <span
+                      className="absolute top-2 right-2 text-[10px] font-medium px-1.5 py-0.5 rounded"
+                      style={{ background: 'rgba(0,0,0,0.65)', color: '#FDFAF5' }}
+                    >
+                      {formatDuration(photo.duration_seconds)}
+                    </span>
+                  ) : null}
+                </>
+              )}
+
+              <div className="absolute inset-0 transition" style={{ background: 'rgba(0,0,0,0)' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.18)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0)')}
+              />
+              {(photo.caption || photo.author_name) && (
+                <div className="absolute bottom-0 left-0 right-0 p-2 translate-y-full group-hover:translate-y-0 transition"
+                  style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.85), transparent)' }}>
+                  {photo.caption && <p className="text-xs font-medium truncate" style={{ color: '#FDFAF5' }}>{photo.caption}</p>}
+                  {photo.author_name && <p className="text-xs truncate" style={{ color: '#C5D9C2' }}>by {photo.author_name}</p>}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
-      {lightbox !== null && (
+      {current && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(37,79,34,0.96)' }} onClick={() => setLightbox(null)}>
           <button className="absolute top-4 right-4 transition hover:opacity-70" style={{ color: '#C5D9C2' }} onClick={() => setLightbox(null)}>
             <X className="w-6 h-6" />
@@ -102,26 +149,43 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
           </button>
 
           <div className="max-w-4xl max-h-[80vh] mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
-            <img src={photos[lightbox].url} alt={photos[lightbox].caption || ''} className="max-h-[70vh] max-w-full object-contain rounded-xl" />
+            {current.media_type === 'video' ? (
+              <video
+                key={current.id}
+                src={current.url}
+                poster={current.poster_url || undefined}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[70vh] max-w-full rounded-xl"
+                style={{ background: '#000' }}
+              />
+            ) : (
+              <img
+                src={current.url}
+                alt={current.caption || ''}
+                className="max-h-[70vh] max-w-full object-contain rounded-xl"
+              />
+            )}
 
             <div className="flex items-center gap-4">
-              {(photos[lightbox].caption || photos[lightbox].author_name) && (
+              {(current.caption || current.author_name) && (
                 <div className="text-center">
-                  {photos[lightbox].caption && <p className="font-medium" style={{ color: '#FDFAF5' }}>{photos[lightbox].caption}</p>}
-                  {photos[lightbox].author_name && <p className="text-sm" style={{ color: '#C5D9C2' }}>by {photos[lightbox].author_name}</p>}
+                  {current.caption && <p className="font-medium" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
+                  {current.author_name && <p className="text-sm" style={{ color: '#C5D9C2' }}>by {current.author_name}</p>}
                 </div>
               )}
-              <button onClick={() => downloadPhoto(photos[lightbox])} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
+              <button onClick={() => downloadPhoto(current)} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
                 <Download className="w-5 h-5" />
               </button>
               {isOwner && (
-                <button onClick={() => deletePhoto(photos[lightbox])} disabled={deleting === photos[lightbox].id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
+                <button onClick={() => deletePhoto(current)} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
                   <Trash2 className="w-5 h-5" />
                 </button>
               )}
             </div>
 
-            <p className="text-sm" style={{ color: '#8AB585' }}>{lightbox + 1} / {photos.length}</p>
+            <p className="text-sm" style={{ color: '#8AB585' }}>{(lightbox ?? 0) + 1} / {photos.length}</p>
           </div>
         </div>
       )}

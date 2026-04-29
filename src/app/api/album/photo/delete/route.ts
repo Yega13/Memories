@@ -45,9 +45,9 @@ export async function POST(req: Request) {
   // an owner of one album from deleting photos in another.
   const { data: photo, error: photoError } = await admin
     .from('photos')
-    .select('id, album_id, storage_path')
+    .select('id, album_id, storage_path, poster_path')
     .eq('id', photoId)
-    .maybeSingle<{ id: string; album_id: string; storage_path: string }>()
+    .maybeSingle<{ id: string; album_id: string; storage_path: string; poster_path: string | null }>()
 
   if (photoError || !photo) {
     return NextResponse.json({ error: 'Photo not found' }, { status: 404, headers: NO_STORE })
@@ -59,7 +59,9 @@ export async function POST(req: Request) {
   // 3. Delete from storage first, then DB. If storage fails we still try the
   // DB delete — an orphan storage object is recoverable; an orphan DB row is
   // a UI bug. Both errors are logged for observability.
-  const { error: storageError } = await admin.storage.from('Photos').remove([photo.storage_path])
+  const storagePaths = [photo.storage_path]
+  if (photo.poster_path) storagePaths.push(photo.poster_path)
+  const { error: storageError } = await admin.storage.from('Photos').remove(storagePaths)
   if (storageError) {
     console.error('[photo/delete] storage remove failed:', storageError.message)
   }

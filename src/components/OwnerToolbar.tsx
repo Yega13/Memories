@@ -61,10 +61,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, bgColor, onBgC
       photos.map(async (photo, i) => {
         const res = await fetch(photo.url)
         const blob = await res.blob()
-        const ext = photo.url.split('.').pop()?.split('?')[0] || 'jpg'
+        const pathExt = photo.storage_path.split('.').pop()?.toLowerCase()
+        const urlExt = photo.url.split('.').pop()?.split('?')[0]?.toLowerCase()
+        const ext = pathExt || urlExt || (photo.media_type === 'video' ? 'mp4' : 'jpg')
+        const prefix = photo.media_type === 'video' ? 'video' : 'photo'
         const name = photo.caption
           ? `${i + 1}-${photo.caption.replace(/[^a-z0-9]/gi, '_')}.${ext}`
-          : `photo-${i + 1}.${ext}`
+          : `${prefix}-${i + 1}.${ext}`
         folder.file(name, blob)
       })
     )

@@ -22,6 +22,11 @@ export type Album = {
   created_at: string
 }
 
+export type MediaType = 'image' | 'video'
+
+// "Photo" is a historical name — the row also represents videos now.
+// `media_type` discriminates: images use `url` directly; videos display
+// `poster_url` as a thumbnail and `url` as the playable source.
 export type Photo = {
   id: string
   album_id: string
@@ -30,4 +35,8 @@ export type Photo = {
   caption: string | null
   author_name: string | null
   created_at: string
+  media_type: MediaType
+  poster_path: string | null
+  poster_url: string | null
+  duration_seconds: number | null
 }

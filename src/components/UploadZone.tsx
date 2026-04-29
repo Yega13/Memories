@@ -2,22 +2,32 @@
 
 import { useState, useRef } from 'react'
 import { supabase, type Album } from '@/lib/supabase'
-import { Upload, X } from 'lucide-react'
+import {
+  detectKind,
+  extensionFor,
+  generateVideoPoster,
+  MAX_IMAGE_BYTES,
+  MAX_VIDEO_BYTES,
+  type MediaKind,
+} from '@/lib/media'
+import { formatFileSize } from '@/lib/utils'
+import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
 type Props = {
   album: Album
   onPhotoAdded: () => void
 }
 
-type PendingPhoto = {
+type PendingItem = {
   file: File
   preview: string
+  kind: MediaKind
   caption: string
   author: string
 }
 
 export default function UploadZone({ album, onPhotoAdded }: Props) {
-  const [pending, setPending] = useState<PendingPhoto[]>([])
+  const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [dragOver, setDragOver] = useState(false)
@@ -25,16 +35,42 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
   function addFiles(files: FileList | null) {
     if (!files) return
-    const newPending: PendingPhoto[] = []
+    const next: PendingItem[] = []
+    const rejected: string[] = []
+
     Array.from(files).forEach((file) => {
-      if (!file.type.startsWith('image/')) return
-      newPending.push({ file, preview: URL.createObjectURL(file), caption: '', author: '' })
+      const kind = detectKind(file)
+      if (!kind) {
+        rejected.push(`${file.name}: unsupported file type`)
+        return
+      }
+      const cap = kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
+      if (file.size > cap) {
+        rejected.push(
+          `${file.name}: ${formatFileSize(file.size)} exceeds ${formatFileSize(cap)} limit`,
+        )
+        return
+      }
+      next.push({
+        file,
+        preview: URL.createObjectURL(file),
+        kind,
+        caption: '',
+        author: '',
+      })
     })
-    setPending((prev) => [...prev, ...newPending])
+
+    if (rejected.length) setUploadError(rejected.join(' · '))
+    else setUploadError('')
+    setPending((prev) => [...prev, ...next])
   }
 
   function removeFile(index: number) {
-    setPending((prev) => prev.filter((_, i) => i !== index))
+    setPending((prev) => {
+      const target = prev[index]
+      if (target) URL.revokeObjectURL(target.preview)
+      return prev.filter((_, i) => i !== index)
+    })
   }
 
   async function uploadAll() {
@@ -43,12 +79,13 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     setUploadError('')
 
     for (const item of pending) {
-      const ext = item.file.name.split('.').pop()
-      const path = `${album.id}/${Date.now()}-${Math.random().toString(36).substring(2)}.${ext}`
+      const ext = extensionFor(item.file, item.kind)
+      const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
+      const path = `${album.id}/${baseId}.${ext}`
 
       const { error: storageError } = await supabase.storage
         .from('Photos')
-        .upload(path, item.file, { contentType: item.file.type })
+        .upload(path, item.file, { contentType: item.file.type || undefined })
 
       if (storageError) {
         console.error('Storage error:', storageError)
@@ -59,12 +96,40 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
       const { data: urlData } = supabase.storage.from('Photos').getPublicUrl(path)
 
+      let posterPath: string | null = null
+      let posterUrl: string | null = null
+      let durationSeconds: number | null = null
+
+      if (item.kind === 'video') {
+        const poster = await generateVideoPoster(item.file)
+        if (poster) {
+          posterPath = `${album.id}/${baseId}.poster.jpg`
+          const { error: posterError } = await supabase.storage
+            .from('Photos')
+            .upload(posterPath, poster.blob, { contentType: 'image/jpeg' })
+
+          if (posterError) {
+            // A missing poster is a soft failure — the video still plays,
+            // it just won't have a thumbnail. Log and continue.
+            console.warn('Poster upload failed:', posterError.message)
+            posterPath = null
+          } else {
+            posterUrl = supabase.storage.from('Photos').getPublicUrl(posterPath).data.publicUrl
+          }
+          durationSeconds = poster.durationSeconds || null
+        }
+      }
+
       const { error: dbError } = await supabase.from('photos').insert({
         album_id: album.id,
         storage_path: path,
         url: urlData.publicUrl,
         caption: item.caption.trim() || null,
         author_name: item.author.trim() || null,
+        media_type: item.kind,
+        poster_path: posterPath,
+        poster_url: posterUrl,
+        duration_seconds: durationSeconds,
       })
 
       if (dbError) {
@@ -75,6 +140,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       }
     }
 
+    pending.forEach((p) => URL.revokeObjectURL(p.preview))
     setPending([])
     setUploading(false)
     onPhotoAdded()
@@ -95,17 +161,44 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       >
         <Upload className="w-8 h-8 mx-auto mb-3" style={{ color: '#A89880' }} />
         <p className="font-medium" style={{ color: '#254F22' }}>
-          Drop photos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
+          Drop photos or videos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
         </p>
-        <p className="text-xs mt-1" style={{ color: '#A89880' }}>JPG, PNG, GIF, WebP, HEIC supported</p>
-        <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
+        <p className="text-xs mt-1" style={{ color: '#A89880' }}>
+          JPG, PNG, GIF, WebP, HEIC up to 25 MB · MP4, MOV, WebM up to 100 MB
+        </p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          onChange={(e) => addFiles(e.target.files)}
+        />
       </div>
 
       {pending.length > 0 && (
         <div className="mt-4 space-y-3">
           {pending.map((item, i) => (
             <div key={i} className="rounded-xl p-3 flex gap-3" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
-              <img src={item.preview} alt="" className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
+              <div className="relative w-16 h-16 flex-shrink-0">
+                {item.kind === 'video' ? (
+                  <video
+                    src={item.preview}
+                    className="w-16 h-16 object-cover rounded-lg"
+                    muted
+                    playsInline
+                    preload="metadata"
+                  />
+                ) : (
+                  <img src={item.preview} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                )}
+                <span
+                  className="absolute bottom-0.5 right-0.5 rounded-full px-1.5 py-0.5 flex items-center gap-0.5"
+                  style={{ background: 'rgba(37,79,34,0.85)', color: '#FDFAF5', fontSize: 9 }}
+                >
+                  {item.kind === 'video' ? <Film className="w-2.5 h-2.5" /> : <ImageIcon className="w-2.5 h-2.5" />}
+                </span>
+              </div>
               <div className="flex-1 min-w-0 space-y-2">
                 <input
                   type="text"
@@ -143,7 +236,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
             className="w-full font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: '#254F22', color: '#FDFAF5' }}
           >
-            {uploading ? 'Uploading...' : `Upload ${pending.length} photo${pending.length !== 1 ? 's' : ''}`}
+            {uploading ? 'Uploading...' : `Upload ${pending.length} item${pending.length !== 1 ? 's' : ''}`}
           </button>
         </div>
       )}
