@@ -23,14 +23,18 @@ export type Album = {
 }
 
 export type MediaType = 'image' | 'video'
+export type StorageBackend = 'supabase' | 'r2'
 
 // "Photo" is a historical name — the row also represents videos now.
 // `media_type` discriminates: images use `url` directly; videos display
 // `poster_url` as a thumbnail and `url` as the playable source.
+// `storage_backend` indicates where the main file lives. Posters always
+// share the backend of their video (currently r2).
 export type Photo = {
   id: string
   album_id: string
   storage_path: string
+  storage_backend: StorageBackend
   url: string
   caption: string | null
   author_name: string | null

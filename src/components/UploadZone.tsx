@@ -13,6 +13,28 @@ import {
 import { formatFileSize } from '@/lib/utils'
 import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
+type R2UploadResult = { storage_path: string; url: string }
+
+async function uploadToR2(
+  file: File | Blob,
+  albumId: string,
+  filename: string,
+  kind: 'video' | 'poster',
+): Promise<R2UploadResult> {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('albumId', albumId)
+  form.append('filename', filename)
+  form.append('kind', kind)
+
+  const res = await fetch('/api/upload/r2', { method: 'POST', body: form })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `R2 upload returned ${res.status}`)
+  }
+  return res.json() as Promise<R2UploadResult>
+}
+
 type Props = {
   album: Album
   onPhotoAdded: () => void
@@ -81,20 +103,43 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     for (const item of pending) {
       const ext = extensionFor(item.file, item.kind)
       const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
-      const path = `${album.id}/${baseId}.${ext}`
+      const filename = `${baseId}.${ext}`
 
-      const { error: storageError } = await supabase.storage
-        .from('Photos')
-        .upload(path, item.file, { contentType: item.file.type || undefined })
+      let storagePath: string
+      let publicUrl: string
+      let storageBackend: 'supabase' | 'r2'
 
-      if (storageError) {
-        console.error('Storage error:', storageError)
-        setUploadError(`Upload failed: ${storageError.message}`)
-        setUploading(false)
-        return
+      if (item.kind === 'video') {
+        // Videos go to R2 — Supabase free tier caps files at 50 MB and
+        // charges egress; R2 is unlimited at our scale and free egress.
+        try {
+          const res = await uploadToR2(item.file, album.id, filename, 'video')
+          storagePath = res.storage_path
+          publicUrl = res.url
+          storageBackend = 'r2'
+        } catch (e) {
+          console.error('R2 video upload failed:', e)
+          setUploadError(`Upload failed: ${(e as Error).message}`)
+          setUploading(false)
+          return
+        }
+      } else {
+        const path = `${album.id}/${filename}`
+        const { error: storageError } = await supabase.storage
+          .from('Photos')
+          .upload(path, item.file, { contentType: item.file.type || undefined })
+
+        if (storageError) {
+          console.error('Storage error:', storageError)
+          setUploadError(`Upload failed: ${storageError.message}`)
+          setUploading(false)
+          return
+        }
+
+        storagePath = path
+        publicUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
+        storageBackend = 'supabase'
       }
-
-      const { data: urlData } = supabase.storage.from('Photos').getPublicUrl(path)
 
       let posterPath: string | null = null
       let posterUrl: string | null = null
@@ -103,18 +148,16 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       if (item.kind === 'video') {
         const poster = await generateVideoPoster(item.file)
         if (poster) {
-          posterPath = `${album.id}/${baseId}.poster.jpg`
-          const { error: posterError } = await supabase.storage
-            .from('Photos')
-            .upload(posterPath, poster.blob, { contentType: 'image/jpeg' })
-
-          if (posterError) {
+          const posterFilename = `${baseId}.poster.jpg`
+          const posterFile = new File([poster.blob], posterFilename, { type: 'image/jpeg' })
+          try {
+            const res = await uploadToR2(posterFile, album.id, posterFilename, 'poster')
+            posterPath = res.storage_path
+            posterUrl = res.url
+          } catch (e) {
             // A missing poster is a soft failure — the video still plays,
             // it just won't have a thumbnail. Log and continue.
-            console.warn('Poster upload failed:', posterError.message)
-            posterPath = null
-          } else {
-            posterUrl = supabase.storage.from('Photos').getPublicUrl(posterPath).data.publicUrl
+            console.warn('Poster upload failed:', e)
           }
           durationSeconds = poster.durationSeconds || null
         }
@@ -122,8 +165,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
       const { error: dbError } = await supabase.from('photos').insert({
         album_id: album.id,
-        storage_path: path,
-        url: urlData.publicUrl,
+        storage_path: storagePath,
+        storage_backend: storageBackend,
+        url: publicUrl,
         caption: item.caption.trim() || null,
         author_name: item.author.trim() || null,
         media_type: item.kind,

@@ -7,10 +7,18 @@ compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 directory = ".open-next/assets"
 binding = "ASSETS"
 
+# Cloudflare R2 bucket for videos. Public via the custom domain set in
+# the bucket's "Custom Domains" panel. The binding lets the worker write
+# objects without API tokens.
+[[r2_buckets]]
+binding = "R2_VIDEOS"
+bucket_name = "hushare-videos"
+
 [vars]
 NEXT_PUBLIC_SUPABASE_URL = "https://zleajzevvhugkwlqlolt.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsZWFqemV2dmh1Z2t3bHFsb2x0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODgwOTksImV4cCI6MjA5MjI2NDA5OX0.2_vNkn2aLkwiUpQYLuZx_tmXI42QGUNRyUUYuXp_ehw"
 RESEND_DOMAIN_VERIFIED = "true"
+R2_PUBLIC_HOST = "videos.hushare.space"
 
 # Polar product IDs (live mode). Not secrets — they're identifiers Polar
 # exposes in checkout URLs. Set POLAR_SANDBOX="true" to switch to sandbox-api.polar.sh.
