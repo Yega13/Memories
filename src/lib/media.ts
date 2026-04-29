@@ -4,7 +4,9 @@
 export type MediaKind = 'image' | 'video'
 
 export const MAX_IMAGE_BYTES = 25 * 1024 * 1024 // 25 MB — matches FAQ copy
-export const MAX_VIDEO_BYTES = 100 * 1024 * 1024 // 100 MB — beta cap
+// Capped by Supabase free-plan project ceiling (50 MB). Raise once we move
+// to a paid Supabase tier (and bump the bucket "File size limit" to match).
+export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 const VIDEO_MIME_PREFIXES = ['video/']
 const VIDEO_EXT_FALLBACK = /\.(mp4|mov|m4v|webm|ogg)$/i

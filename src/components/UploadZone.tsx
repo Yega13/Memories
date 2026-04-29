@@ -164,7 +164,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           Drop photos or videos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
         </p>
         <p className="text-xs mt-1" style={{ color: '#A89880' }}>
-          JPG, PNG, GIF, WebP, HEIC up to 25 MB · MP4, MOV, WebM up to 100 MB
+          JPG, PNG, GIF, WebP, HEIC up to 25 MB · MP4, MOV, WebM up to 50 MB
         </p>
         <input
           ref={inputRef}

@@ -457,7 +457,7 @@ export default function Home() {
               q: 'What photo formats and sizes are supported?',
               a: (
                 <>
-                  JPG, PNG, HEIC, and WebP images up to <strong className="font-semibold" style={{ color: '#254F22' }}>25 MB</strong> each, and MP4, MOV, or WebM video clips up to <strong className="font-semibold" style={{ color: '#254F22' }}>100 MB</strong>. There is no cap on the number of items per free album during beta.
+                  JPG, PNG, HEIC, and WebP images up to <strong className="font-semibold" style={{ color: '#254F22' }}>25 MB</strong> each, and MP4, MOV, or WebM video clips up to <strong className="font-semibold" style={{ color: '#254F22' }}>50 MB</strong>. There is no cap on the number of items per free album during beta.
                 </>
               ),
             },

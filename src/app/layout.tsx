@@ -286,7 +286,7 @@ const jsonLd = {
           name: "What photo formats and sizes are supported?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "JPG, PNG, HEIC, and WebP images up to 25 MB each, and MP4, MOV, or WebM video clips up to 100 MB. There is no cap on the number of items per free album during beta.",
+            text: "JPG, PNG, HEIC, and WebP images up to 25 MB each, and MP4, MOV, or WebM video clips up to 50 MB. There is no cap on the number of items per free album during beta.",
           },
         },
       ],
