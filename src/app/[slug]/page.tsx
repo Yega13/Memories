@@ -37,7 +37,7 @@ export default function AlbumPage() {
   const fetchAlbum = useCallback(async () => {
     const { data, error } = await supabase
       .from('albums')
-      .select('id, slug, title, description, is_pro, created_at')
+      .select('id, slug, title, description, created_at')
       .eq('slug', slug)
       .single()
 

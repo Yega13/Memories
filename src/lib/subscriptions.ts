@@ -47,3 +47,36 @@ export async function isActiveSubscriber(user: { id?: string } | null | undefine
   if (!user?.id) return false
   return (await getActiveSubscription(user.id)) !== null
 }
+
+export type Tier = 'free' | 'pro' | 'studio'
+
+// Tier rank: every feature gate compares numerically so we don't have to
+// hand-roll OR-chains like (tier === 'pro' || tier === 'studio') everywhere.
+const TIER_RANK: Record<Tier, number> = { free: 0, pro: 1, studio: 2 }
+
+// Resolve the live tier for a user. Anonymous (no userId) is always 'free'.
+// A Studio sub returns 'studio'; an in-period Pro sub returns 'pro'; an
+// expired or absent sub returns 'free'. Always read this fresh — never cache
+// across requests.
+export async function getUserTier(userId: string | null | undefined): Promise<Tier> {
+  if (!userId) return 'free'
+  const sub = await getActiveSubscription(userId)
+  if (!sub) return 'free'
+  return sub.tier
+}
+
+// Gate helper for API routes. Returns null if the user has at least `min`,
+// otherwise returns the actual tier so the caller can decide between 401
+// (no user) and 403 (wrong tier).
+//
+// Typical use:
+//   const gate = await requireTier(userId, 'studio')
+//   if (gate) return NextResponse.json({ error: `Studio plan required` }, { status: 403 })
+export async function requireTier(
+  userId: string | null | undefined,
+  min: Tier,
+): Promise<{ have: Tier } | null> {
+  const have = await getUserTier(userId)
+  if (TIER_RANK[have] >= TIER_RANK[min]) return null
+  return { have }
+}

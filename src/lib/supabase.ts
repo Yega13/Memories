@@ -11,6 +11,11 @@ export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 // Album type. `owner_token` and `password_hash` are sensitive and never
 // returned to anon clients (column-level GRANT excludes them in PostgREST).
 // They're declared optional so server-side code can still type the full row.
+//
+// Tier-gated features (custom URLs, password protection, etc.) are NOT stored
+// on this row. They're resolved live from the album owner's subscription via
+// `getUserTier()` in `@/lib/subscriptions`. Never trust a per-row "is_pro"
+// boolean — it goes stale the moment a sub is canceled or upgraded.
 export type Album = {
   id: string
   slug: string
@@ -18,7 +23,6 @@ export type Album = {
   title: string
   description: string | null
   password_hash?: string | null
-  is_pro: boolean
   created_at: string
 }
 
