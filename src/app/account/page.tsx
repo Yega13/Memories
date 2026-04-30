@@ -1,10 +1,36 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { hasAccountAccess } from '@/lib/access'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
+
+// Sticky page nav — matches /pricing, /support, /privacy. Logo links home.
+function AccountNav() {
+  return (
+    <nav
+      className="sticky top-0 z-50 flex items-center px-5 sm:px-8 py-4"
+      style={{
+        background: 'rgba(253, 250, 245, 0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: '1px solid rgba(221, 213, 197, 0.5)',
+      }}
+    >
+      <Link href="/" className="flex items-center transition hover:opacity-70" aria-label="Hushare home">
+        <img
+          src="/logo/logo-dark-transparent.png"
+          alt="Hushare"
+          width={618}
+          height={146}
+          style={{ height: '28px', width: 'auto' }}
+        />
+      </Link>
+    </nav>
+  )
+}
 
 export const runtime = 'nodejs'
 
@@ -39,38 +65,38 @@ export default async function AccountPage({ searchParams }: Props) {
       return <SubscriptionPolling email={user.email ?? ''} />
     }
     return (
-      <main
-        className="min-h-screen flex items-center justify-center px-4 py-16"
-        style={{ background: '#FDFAF5' }}
-      >
-        <div
-          className="max-w-md w-full rounded-2xl p-8 text-center"
-          style={{
-            background: '#FFFFFF',
-            border: '1px solid #DDD5C5',
-            boxShadow: '0 4px 32px rgba(37,79,34,0.10)',
-          }}
-        >
-          <p
-            className="text-xs uppercase mb-3"
-            style={{ color: '#8B6F4E', letterSpacing: '0.18em', fontWeight: 600 }}
+      <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
+        <AccountNav />
+        <main className="flex items-center justify-center px-4 py-16">
+          <div
+            className="max-w-md w-full rounded-2xl p-8 text-center"
+            style={{
+              background: '#FFFFFF',
+              border: '1px solid #DDD5C5',
+              boxShadow: '0 4px 32px rgba(37,79,34,0.10)',
+            }}
           >
-            403 — Forbidden
-          </p>
-          <h1
-            className="text-2xl font-bold mb-3"
-            style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
-          >
-            No account dashboard yet
-          </h1>
-          <p className="text-sm leading-relaxed mb-5" style={{ color: '#5C4A3C' }}>
-            The account dashboard is reserved for Hushare Pro and Studio subscribers.
-            You&apos;re signed in as <strong className="break-all">{user.email}</strong>,
-            but you don&apos;t have an active subscription.
-          </p>
-          <SignOutButton />
-        </div>
-      </main>
+            <p
+              className="text-xs uppercase mb-3"
+              style={{ color: '#8B6F4E', letterSpacing: '0.18em', fontWeight: 600 }}
+            >
+              403 — Forbidden
+            </p>
+            <h1
+              className="text-2xl font-bold mb-3"
+              style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
+            >
+              No account dashboard yet
+            </h1>
+            <p className="text-sm leading-relaxed mb-5" style={{ color: '#5C4A3C' }}>
+              The account dashboard is reserved for Hushare Pro and Studio subscribers.
+              You&apos;re signed in as <strong className="break-all">{user.email}</strong>,
+              but you don&apos;t have an active subscription.
+            </p>
+            <SignOutButton />
+          </div>
+        </main>
+      </div>
     )
   }
 
@@ -89,8 +115,10 @@ export default async function AccountPage({ searchParams }: Props) {
     : null
 
   return (
-    <main className="min-h-screen px-4 py-16" style={{ background: '#FDFAF5' }}>
-      <div className="max-w-md mx-auto">
+    <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
+      <AccountNav />
+      <main className="px-4 py-16">
+        <div className="max-w-md mx-auto">
         <h1
           className="text-3xl font-bold mb-6"
           style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
@@ -170,7 +198,8 @@ export default async function AccountPage({ searchParams }: Props) {
         )}
 
         <SignOutButton />
-      </div>
-    </main>
+        </div>
+      </main>
+    </div>
   )
 }
