@@ -16,7 +16,8 @@
       "Bash(unzip -l \"Hushare-strikingly-logo-2026-04-25.zip\")",
       "Bash(npx next *)",
       "Bash(git fetch *)",
-      "Bash(npx --no-install tsc --noEmit)"
+      "Bash(npx --no-install tsc --noEmit)",
+      "Bash(git log *)"
     ]
   }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { type Photo } from '@/lib/supabase'
 import { formatDuration } from '@/lib/media'
 import { Download, Trash2, X, ChevronLeft, ChevronRight, Play } from 'lucide-react'
@@ -45,15 +45,28 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
     a.click()
   }
 
-  function prev() {
-    if (lightbox === null) return
-    setLightbox(lightbox === 0 ? photos.length - 1 : lightbox - 1)
-  }
+  const prev = useCallback(() => {
+    setLightbox((cur) => (cur === null ? null : cur === 0 ? photos.length - 1 : cur - 1))
+  }, [photos.length])
 
-  function next() {
+  const next = useCallback(() => {
+    setLightbox((cur) => (cur === null ? null : cur === photos.length - 1 ? 0 : cur + 1))
+  }, [photos.length])
+
+  // Keyboard navigation while the lightbox is open. Skip if focus is in a
+  // form field so arrow keys still work for editing inputs elsewhere.
+  useEffect(() => {
     if (lightbox === null) return
-    setLightbox(lightbox === photos.length - 1 ? 0 : lightbox + 1)
-  }
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prev() }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); next() }
+      else if (e.key === 'Escape') { e.preventDefault(); setLightbox(null) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightbox, prev, next])
 
   if (photos.length === 0) {
     return (
@@ -137,18 +150,34 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
       </div>
 
       {current && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(37,79,34,0.96)' }} onClick={() => setLightbox(null)}>
-          <button className="absolute top-4 right-4 transition hover:opacity-70" style={{ color: '#C5D9C2' }} onClick={() => setLightbox(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setLightbox(null)}>
+          {/* Blurred backdrop: the current item's still image, scaled and blurred,
+              then dimmed with a translucent veil for contrast. For videos we use
+              the poster (falls back to nothing if missing). */}
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url(${current.media_type === 'video' ? (current.poster_url || '') : current.url})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: 'blur(32px) saturate(1.1)',
+              transform: 'scale(1.15)',
+            }}
+          />
+          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(15, 20, 15, 0.65)' }} />
+
+          <button className="absolute top-4 right-4 z-10 transition hover:opacity-70" style={{ color: '#FDFAF5' }} onClick={() => setLightbox(null)}>
             <X className="w-6 h-6" />
           </button>
-          <button className="absolute left-4 transition hover:opacity-70 p-2" style={{ color: '#C5D9C2' }} onClick={(e) => { e.stopPropagation(); prev() }}>
+          <button className="absolute left-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); prev() }}>
             <ChevronLeft className="w-8 h-8" />
           </button>
-          <button className="absolute right-4 transition hover:opacity-70 p-2" style={{ color: '#C5D9C2' }} onClick={(e) => { e.stopPropagation(); next() }}>
+          <button className="absolute right-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); next() }}>
             <ChevronRight className="w-8 h-8" />
           </button>
 
-          <div className="max-w-4xl max-h-[80vh] mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
+          <div className="relative z-10 max-w-4xl max-h-[80vh] mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
             {current.media_type === 'video' ? (
               <video
                 key={current.id}
