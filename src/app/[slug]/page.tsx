@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { supabase, type Album, type Photo } from '@/lib/supabase'
+import type { Tier } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
 import UploadZone from '@/components/UploadZone'
 import PhotoGrid from '@/components/PhotoGrid'
@@ -22,6 +23,7 @@ export default function AlbumPage() {
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
+  const [userTier, setUserTier] = useState<Tier>('free')
   const [bgColor, setBgColorState] = useState<string>(DEFAULT_BG)
 
   useEffect(() => {
@@ -35,13 +37,19 @@ export default function AlbumPage() {
   }
 
   const fetchAlbum = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('albums')
-      .select('id, slug, title, description, created_at')
-      .eq('slug', slug)
-      .single()
-
-    if (error || !data) {
+    // Server-side resolver handles both random slugs and custom slugs, and
+    // hides custom slugs whose owner has lapsed. Either way the response
+    // shape is { album } or 404.
+    const res = await fetch(`/api/album/resolve?slug=${encodeURIComponent(slug)}`, {
+      cache: 'no-store',
+    })
+    if (!res.ok) {
+      setNotFound(true)
+      setLoading(false)
+      return
+    }
+    const { album: data } = (await res.json()) as { album: Album | null }
+    if (!data) {
       setNotFound(true)
       setLoading(false)
       return
@@ -53,13 +61,26 @@ export default function AlbumPage() {
     // the browser. The endpoint returns just a boolean.
     if (ownerToken) {
       try {
-        const res = await fetch('/api/album/auth', {
+        const authRes = await fetch('/api/album/auth', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug, owner_token: ownerToken }),
+          body: JSON.stringify({ slug: data.slug, owner_token: ownerToken }),
         })
-        const result = (await res.json()) as { isOwner?: boolean }
+        const result = (await authRes.json()) as { isOwner?: boolean }
         setIsOwner(!!result.isOwner)
+
+        // Fetch the signed-in user's tier so the owner toolbar can show
+        // paid-tier UI. Anonymous owners return 'free' here.
+        if (result.isOwner) {
+          try {
+            const tierRes = await fetch('/api/me/tier', { cache: 'no-store' })
+            const tierJson = (await tierRes.json()) as { tier?: Tier }
+            if (tierJson.tier) setUserTier(tierJson.tier)
+          } catch {
+            // Network blip — keep defaulting to 'free' so we don't show
+            // gated UI by accident.
+          }
+        }
       } catch {
         setIsOwner(false)
       }
@@ -118,8 +139,10 @@ export default function AlbumPage() {
           album={album}
           photos={photos}
           ownerToken={ownerToken!}
+          userTier={userTier}
           bgColor={bgColor}
           onBgColorChange={setBgColor}
+          onAlbumUpdated={(patch) => setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))}
         />
       )}
 

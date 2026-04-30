@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
-import { Copy, QrCode, Download, Check, Settings, X } from 'lucide-react'
+import type { Tier } from '@/lib/subscriptions'
+import { Copy, QrCode, Download, Check, Settings, X, Link2 } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 
@@ -10,8 +11,10 @@ type Props = {
   album: Album
   photos: Photo[]
   ownerToken: string
+  userTier: Tier
   bgColor: string
   onBgColorChange: (color: string) => void
+  onAlbumUpdated: (patch: Partial<Album>) => void
 }
 
 const PRESETS = [
@@ -25,15 +28,26 @@ const PRESETS = [
   { label: 'Forest', value: '#1A2B1A' },
 ]
 
-export default function OwnerToolbar({ album, photos, ownerToken, bgColor, onBgColorChange }: Props) {
+export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgColor, onBgColorChange, onAlbumUpdated }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
   const [showQr, setShowQr] = useState(false)
   const [zipping, setZipping] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showCustomUrl, setShowCustomUrl] = useState(false)
+  const [customUrlInput, setCustomUrlInput] = useState(album.custom_slug ?? '')
+  const [customUrlSaving, setCustomUrlSaving] = useState(false)
+  const [customUrlError, setCustomUrlError] = useState('')
+  const [customUrlSaved, setCustomUrlSaved] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
+  const customUrlRef = useRef<HTMLDivElement>(null)
 
-  const shareUrl = `${window.location.origin}/${album.slug}`
+  // Prefer the custom slug for the share link if one is set — that's the
+  // whole point of paying for it. The owner link always uses the random
+  // slug so the owner_token + slug pair stays stable across renames.
+  const publicSlug = album.custom_slug ?? album.slug
+  const shareUrl = `${window.location.origin}/${publicSlug}`
   const ownerUrl = `${window.location.origin}/${album.slug}?owner=${ownerToken}`
+  const canCustomize = userTier === 'pro' || userTier === 'studio'
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -44,6 +58,53 @@ export default function OwnerToolbar({ album, photos, ownerToken, bgColor, onBgC
     if (showSettings) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showSettings])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (customUrlRef.current && !customUrlRef.current.contains(e.target as Node)) {
+        setShowCustomUrl(false)
+        setCustomUrlError('')
+        setCustomUrlSaved(false)
+      }
+    }
+    if (showCustomUrl) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showCustomUrl])
+
+  // Keep the input in sync if the album's custom_slug changes externally
+  // (e.g. another owner-link tab clears it). Only resets when popover closed.
+  useEffect(() => {
+    if (!showCustomUrl) setCustomUrlInput(album.custom_slug ?? '')
+  }, [album.custom_slug, showCustomUrl])
+
+  async function saveCustomUrl(action: 'set' | 'clear') {
+    setCustomUrlSaving(true)
+    setCustomUrlError('')
+    setCustomUrlSaved(false)
+    try {
+      const res = await fetch('/api/album/custom-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: album.slug,
+          owner_token: ownerToken,
+          custom_slug: action === 'clear' ? null : customUrlInput.trim().toLowerCase(),
+        }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string; custom_slug?: string | null }
+      if (!res.ok) {
+        setCustomUrlError(body.error ?? `Save failed (${res.status})`)
+        return
+      }
+      onAlbumUpdated({ custom_slug: body.custom_slug ?? null })
+      setCustomUrlSaved(true)
+      if (action === 'clear') setCustomUrlInput('')
+    } catch (e) {
+      setCustomUrlError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setCustomUrlSaving(false)
+    }
+  }
 
   async function copy(type: 'share' | 'owner') {
     await navigator.clipboard.writeText(type === 'share' ? shareUrl : ownerUrl)
@@ -119,7 +180,91 @@ export default function OwnerToolbar({ album, photos, ownerToken, bgColor, onBgC
           {zipping ? 'Zipping...' : `Download all (${photos.length})`}
         </button>
 
-        <div className="relative ml-auto" ref={settingsRef}>
+        <div className="relative ml-auto" ref={customUrlRef}>
+          <button
+            style={{
+              ...btnBase,
+              background: canCustomize ? '#FFFFFF' : '#F5F0E8',
+              color: canCustomize ? '#254F22' : '#A89880',
+              cursor: canCustomize ? 'pointer' : 'not-allowed',
+            }}
+            onClick={() => canCustomize && setShowCustomUrl((s) => !s)}
+            title={canCustomize ? 'Set a custom URL for this album' : 'Available on Pro and Studio plans'}
+            disabled={!canCustomize}
+          >
+            <Link2 className="w-4 h-4" style={{ color: canCustomize ? '#7C5C3E' : '#A89880' }} />
+            {album.custom_slug ? `/${album.custom_slug}` : 'Custom URL'}
+            {!canCustomize && (
+              <span className="ml-1 text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>
+                Pro
+              </span>
+            )}
+          </button>
+
+          {showCustomUrl && canCustomize && (
+            <div
+              className="absolute right-0 top-full mt-2 z-50 rounded-2xl shadow-xl"
+              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 320, padding: '16px' }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Custom URL</span>
+                <button onClick={() => setShowCustomUrl(false)} style={{ color: '#A89880', cursor: 'pointer' }}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
+                Pick a friendly path for this album. Letters, numbers, and hyphens — 3 to 40 characters.
+              </p>
+              <div className="flex items-stretch rounded-lg overflow-hidden" style={{ border: '1px solid #DDD5C5', background: '#FDFAF5' }}>
+                <span className="text-xs flex items-center px-2 select-none" style={{ color: '#A89880' }}>
+                  hushare.space/
+                </span>
+                <input
+                  type="text"
+                  value={customUrlInput}
+                  onChange={(e) => setCustomUrlInput(e.target.value)}
+                  placeholder="anna-and-david"
+                  maxLength={40}
+                  className="flex-1 text-sm px-2 py-2 focus:outline-none"
+                  style={{ background: 'transparent', color: '#254F22' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !customUrlSaving && customUrlInput.trim()) saveCustomUrl('set')
+                  }}
+                />
+              </div>
+
+              {customUrlError && (
+                <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{customUrlError}</p>
+              )}
+              {customUrlSaved && !customUrlError && (
+                <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>
+              )}
+
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => saveCustomUrl('set')}
+                  disabled={customUrlSaving || !customUrlInput.trim()}
+                  className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: '#254F22', color: '#FDFAF5' }}
+                >
+                  {customUrlSaving ? 'Saving…' : 'Save'}
+                </button>
+                {album.custom_slug && (
+                  <button
+                    onClick={() => saveCustomUrl('clear')}
+                    disabled={customUrlSaving}
+                    className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
+                    style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="relative" ref={settingsRef}>
           <button
             style={{ ...btnBase, padding: '6px 10px' }}
             onClick={() => setShowSettings(s => !s)}

@@ -19,6 +19,7 @@ export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 export type Album = {
   id: string
   slug: string
+  custom_slug: string | null
   owner_token?: string
   title: string
   description: string | null
