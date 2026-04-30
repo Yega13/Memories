@@ -145,7 +145,7 @@ const billingFaq = [
   },
   {
     q: "How do you handle refunds?",
-    a: "We refund any unused full month, no questions asked. Email hello@hushare.space and we'll process it within two business days.",
+    a: "We refund any unused full month, no questions asked. Email support@hushare.space and we'll process it within two business days.",
   },
   {
     q: "Do you offer annual pricing?",
@@ -310,13 +310,6 @@ export default function PricingPage() {
         </Link>
         <div className="flex items-center gap-4 sm:gap-5">
           <AccountNavLink />
-          <Link
-            href="/"
-            className="text-sm font-medium hover:underline"
-            style={{ color: "#7C5C3E" }}
-          >
-            ← Back to home
-          </Link>
         </div>
       </nav>
 
@@ -670,14 +663,14 @@ export default function PricingPage() {
         >
           Other questions? Write to{" "}
           <a
-            href="mailto:hello@hushare.space"
+            href="mailto:support@hushare.space"
             style={{
               color: "#254F22",
               textDecoration: "underline",
               textDecorationStyle: "dotted",
             }}
           >
-            hello@hushare.space
+            support@hushare.space
           </a>
         </p>
       </section>

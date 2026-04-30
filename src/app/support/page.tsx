@@ -6,7 +6,7 @@ import SupportForm from "./SupportForm";
 export const runtime = "nodejs";
 
 const SITE_URL = "https://hushare.space";
-const SUPPORT_EMAIL = "hello@hushare.space";
+const SUPPORT_EMAIL = "support@hushare.space";
 
 const PAGE_TITLE = "Support";
 const PAGE_DESCRIPTION =
@@ -124,13 +124,6 @@ export default function SupportPage() {
             height={146}
             style={{ height: "28px", width: "auto" }}
           />
-        </Link>
-        <Link
-          href="/"
-          className="text-sm font-medium hover:underline"
-          style={{ color: "#7C5C3E" }}
-        >
-          ← Back to home
         </Link>
       </nav>
 

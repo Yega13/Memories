@@ -516,8 +516,8 @@ export default function Home() {
           style={{ color: '#8B6F4E', fontFamily: 'var(--font-serif)' }}
         >
           Still curious? Write to us at{' '}
-          <a href="mailto:hello@hushare.space" style={{ color: '#254F22', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
-            hello@hushare.space
+          <a href="mailto:support@hushare.space" style={{ color: '#254F22', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
+            support@hushare.space
           </a>
         </p>
       </section>

@@ -224,8 +224,8 @@ export default function SupportForm() {
               <p className="font-semibold mb-0.5">Couldn't send your message</p>
               <p>
                 {errorMsg}. You can also email us directly at{' '}
-                <a href="mailto:hello@hushare.space" className="underline" style={{ color: '#7A2A1F' }}>
-                  hello@hushare.space
+                <a href="mailto:support@hushare.space" className="underline" style={{ color: '#7A2A1F' }}>
+                  support@hushare.space
                 </a>
                 .
               </p>

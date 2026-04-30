@@ -140,13 +140,6 @@ export default function PrivacyPage() {
             style={{ height: "28px", width: "auto" }}
           />
         </Link>
-        <Link
-          href="/"
-          className="text-sm font-medium hover:underline"
-          style={{ color: "#7C5C3E" }}
-        >
-          ← Back to home
-        </Link>
       </nav>
 
       <article className="max-w-3xl mx-auto px-6 py-16">
@@ -300,14 +293,14 @@ export default function PrivacyPage() {
           <p className="mt-3">
             To exercise any of these rights, email{" "}
             <a
-              href="mailto:hello@hushare.space"
+              href="mailto:support@hushare.space"
               style={{
                 color: "#254F22",
                 textDecoration: "underline",
                 textDecorationStyle: "dotted",
               }}
             >
-              hello@hushare.space
+              support@hushare.space
             </a>{" "}
             from the address you used to contact us — or, if you never gave
             us one, include your album name and approximate creation date.
@@ -360,14 +353,14 @@ export default function PrivacyPage() {
             Questions, requests, complaints — all of it comes to one
             address:{" "}
             <a
-              href="mailto:hello@hushare.space"
+              href="mailto:support@hushare.space"
               style={{
                 color: "#254F22",
                 textDecoration: "underline",
                 textDecorationStyle: "dotted",
               }}
             >
-              hello@hushare.space
+              support@hushare.space
             </a>
             . A human replies.
           </p>
