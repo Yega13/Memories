@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Check, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, QrCode, Settings, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, QrCode, Settings, X } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -16,6 +16,8 @@ type Props = {
   userTier: Tier
   onAlbumUpdated: (patch: Partial<Album>) => void
 }
+
+type SettingsSection = 'customization' | 'files' | 'customUrl' | 'password' | 'collection'
 
 const PRESETS = [
   { label: 'Cream', value: '#FDFAF5' },
@@ -35,6 +37,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
   const [showShare, setShowShare] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number } | null>(null)
 
@@ -90,8 +93,21 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       setPasswordSaved(false)
       setPasswordInput('')
       setCollectionError('')
+      setOpenSection(null)
     }
   }, [album.custom_slug, showSettings])
+
+  function toggleSection(section: SettingsSection) {
+    setOpenSection((current) => {
+      const next = current === section ? null : section
+      if (section === 'password') {
+        setPasswordInput('')
+        setPasswordError('')
+        setPasswordSaved(false)
+      }
+      return next
+    })
+  }
 
   async function copy(type: 'share' | 'owner') {
     await navigator.clipboard.writeText(type === 'share' ? shareUrl : ownerUrl)
@@ -290,6 +306,19 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     color: '#254F22',
   }
 
+  const accordionButton: React.CSSProperties = {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    padding: '12px 0',
+    cursor: 'pointer',
+    color: '#254F22',
+    background: 'transparent',
+    border: 0,
+    textAlign: 'left',
+  }
+
   return (
     <div style={{ background: '#F5F0E8', borderBottom: '1px solid #DDD5C5' }}>
       <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
@@ -371,7 +400,15 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
           <button
             style={{ ...btnBase, padding: '6px 10px' }}
             onClick={() => {
-              setShowSettings((s) => !s)
+              setShowSettings((s) => {
+                const next = !s
+                if (next) {
+                  setPasswordInput('')
+                  setPasswordError('')
+                  setPasswordSaved(false)
+                }
+                return next
+              })
               setShowShare(false)
             }}
             title="Settings"
@@ -392,249 +429,295 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 </button>
               </div>
 
-              <section className="pb-4 mb-4" style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <p className="mb-3" style={sectionTitle}>Customization</p>
-
-                <p className="text-xs font-medium mb-2" style={{ color: '#7C5C3E' }}>Color patterns</p>
-                <div className="grid grid-cols-8 gap-2 mb-4">
-                  {PRESETS.map((preset) => (
-                    <button
-                      key={preset.value}
-                      title={preset.label}
-                      onClick={() => saveBackground(preset.value)}
-                      disabled={backgroundSaving}
-                      style={{
-                        width: '100%',
-                        aspectRatio: '1',
-                        borderRadius: 10,
-                        background: preset.value,
-                        border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
-                        cursor: backgroundSaving ? 'wait' : 'pointer',
-                        position: 'relative',
-                      }}
-                    >
-                      {bgChoice === preset.value && (
-                        <span className="absolute inset-0 flex items-center justify-center">
-                          <Check className="w-4 h-4" style={{ color: isDark ? '#FFFFFF' : '#254F22' }} />
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                <p className="text-xs font-medium mb-2" style={{ color: '#7C5C3E' }}>Stock photos</p>
-                <div className="grid grid-cols-5 gap-2 mb-3">
-                  {FEATURED_STOCK_BACKGROUNDS.map((preset) => (
-                    <button
-                      key={preset.value}
-                      title={preset.label}
-                      onClick={() => chooseBackground(preset.value)}
-                      disabled={backgroundSaving}
-                      className="relative overflow-hidden"
-                      style={{
-                        width: '100%',
-                        aspectRatio: '1',
-                        borderRadius: 10,
-                        backgroundImage: `url(${preset.src})`,
-                        backgroundPosition: 'center',
-                        backgroundSize: 'cover',
-                        border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
-                        cursor: backgroundSaving ? 'wait' : 'pointer',
-                      }}
-                    >
-                      {bgChoice === preset.value && (
-                        <span className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(37,79,34,0.25)' }}>
-                          <Check className="w-4 h-4" style={{ color: '#FFFFFF' }} />
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
-                  style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22', cursor: 'pointer' }}
-                  onClick={() => setShowBackgroundLibrary(true)}
-                >
-                  <Images className="h-4 w-4" />
-                  See all stock photos
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Custom color</label>
-                  <input
-                    type="color"
-                    value={currentColor}
-                    onChange={(e) => saveBackground(e.target.value)}
-                    style={{ width: 36, height: 28, borderRadius: 8, border: '1.5px solid #DDD5C5', cursor: 'pointer', padding: 2 }}
+              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+                <button type="button" style={accordionButton} onClick={() => toggleSection('customization')}>
+                  <Images className="w-4 h-4" style={{ color: '#7C5C3E' }} />
+                  <span style={sectionTitle}>Customization</span>
+                  <ChevronDown
+                    className="ml-auto w-4 h-4 transition-transform"
+                    style={{ color: '#A89880', transform: openSection === 'customization' ? 'rotate(180deg)' : 'rotate(0deg)' }}
                   />
-                  <span className="text-xs font-mono" style={{ color: '#A89880' }}>{currentColor}</span>
-                  <button
-                    className="ml-auto text-xs"
-                    style={{ color: '#A89880', cursor: 'pointer' }}
-                    onClick={() => saveBackground(null)}
-                  >
-                    Reset
-                  </button>
-                </div>
-                {backgroundError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{backgroundError}</p>}
-              </section>
-
-              <section className="pb-4 mb-4" style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <p className="mb-3" style={sectionTitle}>Files</p>
-                <button
-                  className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: '#254F22', color: '#FDFAF5' }}
-                  onClick={downloadZip}
-                  disabled={zipping || photos.length === 0}
-                >
-                  <Download className="w-4 h-4" />
-                  {zipping ? 'Zipping...' : `Download all (${photos.length})`}
                 </button>
+
+                {openSection === 'customization' && (
+                  <div className="pb-4">
+                    <p className="text-xs font-medium mb-2" style={{ color: '#7C5C3E' }}>Color patterns</p>
+                    <div className="grid grid-cols-8 gap-2 mb-4">
+                      {PRESETS.map((preset) => (
+                        <button
+                          key={preset.value}
+                          title={preset.label}
+                          onClick={() => saveBackground(preset.value)}
+                          disabled={backgroundSaving}
+                          style={{
+                            width: '100%',
+                            aspectRatio: '1',
+                            borderRadius: 10,
+                            background: preset.value,
+                            border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
+                            cursor: backgroundSaving ? 'wait' : 'pointer',
+                            position: 'relative',
+                          }}
+                        >
+                          {bgChoice === preset.value && (
+                            <span className="absolute inset-0 flex items-center justify-center">
+                              <Check className="w-4 h-4" style={{ color: isDark ? '#FFFFFF' : '#254F22' }} />
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    <p className="text-xs font-medium mb-2" style={{ color: '#7C5C3E' }}>Stock photos</p>
+                    <div className="grid grid-cols-5 gap-2 mb-3">
+                      {FEATURED_STOCK_BACKGROUNDS.map((preset) => (
+                        <button
+                          key={preset.value}
+                          title={preset.label}
+                          onClick={() => chooseBackground(preset.value)}
+                          disabled={backgroundSaving}
+                          className="relative overflow-hidden"
+                          style={{
+                            width: '100%',
+                            aspectRatio: '1',
+                            borderRadius: 10,
+                            backgroundImage: `url(${preset.src})`,
+                            backgroundPosition: 'center',
+                            backgroundSize: 'cover',
+                            border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
+                            cursor: backgroundSaving ? 'wait' : 'pointer',
+                          }}
+                        >
+                          {bgChoice === preset.value && (
+                            <span className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(37,79,34,0.25)' }}>
+                              <Check className="w-4 h-4" style={{ color: '#FFFFFF' }} />
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
+                      style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22', cursor: 'pointer' }}
+                      onClick={() => setShowBackgroundLibrary(true)}
+                    >
+                      <Images className="h-4 w-4" />
+                      See all stock photos
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Custom color</label>
+                      <input
+                        type="color"
+                        value={currentColor}
+                        onChange={(e) => saveBackground(e.target.value)}
+                        style={{ width: 36, height: 28, borderRadius: 8, border: '1.5px solid #DDD5C5', cursor: 'pointer', padding: 2 }}
+                      />
+                      <span className="text-xs font-mono" style={{ color: '#A89880' }}>{currentColor}</span>
+                      <button
+                        className="ml-auto text-xs"
+                        style={{ color: '#A89880', cursor: 'pointer' }}
+                        onClick={() => saveBackground(null)}
+                      >
+                        Reset
+                      </button>
+                    </div>
+                    {backgroundError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{backgroundError}</p>}
+                  </div>
+                )}
               </section>
 
-              <section className="pb-4 mb-4" style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <div className="flex items-center gap-2 mb-2">
+              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+                <button type="button" style={accordionButton} onClick={() => toggleSection('files')}>
+                  <Download className="w-4 h-4" style={{ color: '#7C5C3E' }} />
+                  <span style={sectionTitle}>Files</span>
+                  <ChevronDown
+                    className="ml-auto w-4 h-4 transition-transform"
+                    style={{ color: '#A89880', transform: openSection === 'files' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {openSection === 'files' && (
+                  <div className="pb-4">
+                    <button
+                      className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: '#254F22', color: '#FDFAF5' }}
+                      onClick={downloadZip}
+                      disabled={zipping || photos.length === 0}
+                    >
+                      <Download className="w-4 h-4" />
+                      {zipping ? 'Zipping...' : `Download all (${photos.length})`}
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+                <button type="button" style={accordionButton} onClick={() => toggleSection('customUrl')}>
                   <Link2 className="w-4 h-4" style={{ color: canCustomize ? '#7C5C3E' : '#A89880' }} />
-                  <p style={sectionTitle}>Custom URL</p>
+                  <span style={sectionTitle}>Custom URL</span>
                   {!canCustomize && <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>Pro</span>}
-                </div>
-                <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
-                  Pick a friendly path for this album. Letters, numbers, and hyphens, 3 to 40 characters.
-                </p>
-                <div className="flex items-stretch rounded-lg overflow-hidden" style={{ border: '1px solid #DDD5C5', background: '#FDFAF5', opacity: canCustomize ? 1 : 0.55 }}>
-                  <span className="text-xs flex items-center px-2 select-none" style={{ color: '#A89880' }}>hushare.space/</span>
-                  <input
-                    type="text"
-                    value={customUrlInput}
-                    onChange={(e) => setCustomUrlInput(e.target.value)}
-                    placeholder="anna-and-david"
-                    maxLength={40}
-                    disabled={!canCustomize}
-                    className="flex-1 text-sm px-2 py-2 focus:outline-none disabled:cursor-not-allowed"
-                    style={{ background: 'transparent', color: '#254F22' }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && canCustomize && !customUrlSaving && customUrlInput.trim()) saveCustomUrl('set')
-                    }}
+                  <ChevronDown
+                    className={canCustomize ? 'ml-auto w-4 h-4 transition-transform' : 'w-4 h-4 transition-transform'}
+                    style={{ color: '#A89880', transform: openSection === 'customUrl' ? 'rotate(180deg)' : 'rotate(0deg)' }}
                   />
-                </div>
-                {customUrlError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{customUrlError}</p>}
-                {customUrlSaved && !customUrlError && <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>}
-                <div className="flex items-center gap-2 mt-3">
-                  <button
-                    onClick={() => saveCustomUrl('set')}
-                    disabled={!canCustomize || customUrlSaving || !customUrlInput.trim()}
-                    className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ background: '#254F22', color: '#FDFAF5' }}
-                  >
-                    {customUrlSaving ? 'Saving...' : 'Save'}
-                  </button>
-                  {album.custom_slug && (
-                    <button
-                      onClick={() => saveCustomUrl('clear')}
-                      disabled={!canCustomize || customUrlSaving}
-                      className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
-                      style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
+                </button>
+                {openSection === 'customUrl' && (
+                  <div className="pb-4">
+                    <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
+                      Pick a friendly path for this album. Letters, numbers, and hyphens, 3 to 40 characters.
+                    </p>
+                    <div className="flex items-stretch rounded-lg overflow-hidden" style={{ border: '1px solid #DDD5C5', background: '#FDFAF5', opacity: canCustomize ? 1 : 0.55 }}>
+                      <span className="text-xs flex items-center px-2 select-none" style={{ color: '#A89880' }}>hushare.space/</span>
+                      <input
+                        type="text"
+                        value={customUrlInput}
+                        onChange={(e) => setCustomUrlInput(e.target.value)}
+                        placeholder="anna-and-david"
+                        maxLength={40}
+                        disabled={!canCustomize}
+                        className="flex-1 text-sm px-2 py-2 focus:outline-none disabled:cursor-not-allowed"
+                        style={{ background: 'transparent', color: '#254F22' }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && canCustomize && !customUrlSaving && customUrlInput.trim()) saveCustomUrl('set')
+                        }}
+                      />
+                    </div>
+                    {customUrlError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{customUrlError}</p>}
+                    {customUrlSaved && !customUrlError && <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>}
+                    <div className="flex items-center gap-2 mt-3">
+                      <button
+                        onClick={() => saveCustomUrl('set')}
+                        disabled={!canCustomize || customUrlSaving || !customUrlInput.trim()}
+                        className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: '#254F22', color: '#FDFAF5' }}
+                      >
+                        {customUrlSaving ? 'Saving...' : 'Save'}
+                      </button>
+                      {album.custom_slug && (
+                        <button
+                          onClick={() => saveCustomUrl('clear')}
+                          disabled={!canCustomize || customUrlSaving}
+                          className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
+                          style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </section>
 
-              <section className="pb-4 mb-4" style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <div className="flex items-center gap-2 mb-2">
+              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+                <button type="button" style={accordionButton} onClick={() => toggleSection('password')}>
                   {album.password_protected ? (
                     <Lock className="w-4 h-4" style={{ color: canCustomize ? '#254F22' : '#A89880' }} />
                   ) : (
                     <LockOpen className="w-4 h-4" style={{ color: canCustomize ? '#7C5C3E' : '#A89880' }} />
                   )}
-                  <p style={sectionTitle}>Password</p>
+                  <span style={sectionTitle}>Password</span>
                   {!canCustomize && <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>Pro</span>}
-                </div>
-                <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
-                  Visitors will need this password to view the album. 4-128 characters.
-                </p>
-                <input
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                  placeholder={album.password_protected ? 'New password' : 'Password'}
-                  maxLength={128}
-                  disabled={!canCustomize}
-                  className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                  style={inputStyle}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && canCustomize && !passwordSaving && passwordInput) savePassword('set')
-                  }}
-                />
-                {passwordError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{passwordError}</p>}
-                {passwordSaved && !passwordError && <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>}
-                <div className="flex items-center gap-2 mt-3">
-                  <button
-                    onClick={() => savePassword('set')}
-                    disabled={!canCustomize || passwordSaving || !passwordInput}
-                    className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ background: '#254F22', color: '#FDFAF5' }}
-                  >
-                    {passwordSaving ? 'Saving...' : 'Save'}
-                  </button>
-                  {album.password_protected && (
-                    <button
-                      onClick={() => savePassword('clear')}
-                      disabled={!canCustomize || passwordSaving}
-                      className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
-                      style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
+                  <ChevronDown
+                    className={canCustomize ? 'ml-auto w-4 h-4 transition-transform' : 'w-4 h-4 transition-transform'}
+                    style={{ color: '#A89880', transform: openSection === 'password' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {openSection === 'password' && (
+                  <div className="pb-4">
+                    <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
+                      Visitors will need this password to view the album. 4-128 characters.
+                    </p>
+                    <input
+                      type="password"
+                      value={passwordInput}
+                      onChange={(e) => setPasswordInput(e.target.value)}
+                      placeholder={album.password_protected ? 'New password' : 'Password'}
+                      maxLength={128}
+                      disabled={!canCustomize}
+                      className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                      style={inputStyle}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && canCustomize && !passwordSaving && passwordInput) savePassword('set')
+                      }}
+                    />
+                    {passwordError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{passwordError}</p>}
+                    {passwordSaved && !passwordError && <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>}
+                    <div className="flex items-center gap-2 mt-3">
+                      <button
+                        onClick={() => savePassword('set')}
+                        disabled={!canCustomize || passwordSaving || !passwordInput}
+                        className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: '#254F22', color: '#FDFAF5' }}
+                      >
+                        {passwordSaving ? 'Saving...' : 'Save'}
+                      </button>
+                      {album.password_protected && (
+                        <button
+                          onClick={() => savePassword('clear')}
+                          disabled={!canCustomize || passwordSaving}
+                          className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
+                          style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section>
-                <div className="flex items-center gap-2 mb-2">
+                <button type="button" style={accordionButton} onClick={() => toggleSection('collection')}>
                   <FolderPlus className="w-4 h-4" style={{ color: canUseCollections ? '#7C5C3E' : '#A89880' }} />
-                  <p style={sectionTitle}>Create collection</p>
+                  <span style={sectionTitle}>Create collection</span>
                   {!canUseCollections && <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>Studio</span>}
-                </div>
-                <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
-                  Create a public grouped page and add this album to it.
-                </p>
-                <input
-                  type="text"
-                  value={collectionName}
-                  onChange={(e) => setCollectionName(e.target.value)}
-                  placeholder="Wedding season 2026"
-                  maxLength={80}
-                  disabled={!canUseCollections}
-                  className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none mb-2 disabled:cursor-not-allowed disabled:opacity-60"
-                  style={inputStyle}
-                />
-                <input
-                  type="text"
-                  value={collectionSlug}
-                  onChange={(e) => setCollectionSlug(e.target.value)}
-                  placeholder="collection-url"
-                  maxLength={40}
-                  disabled={!canUseCollections}
-                  className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                  style={inputStyle}
-                />
-                {collectionError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{collectionError}</p>}
-                {collectionUrl && (
-                  <p className="text-xs mt-2 break-all" style={{ color: '#254F22' }}>
-                    Created: <a href={collectionUrl} className="underline">{collectionUrl}</a>
-                  </p>
-                )}
-                <button
-                  onClick={createCollection}
-                  disabled={!canUseCollections || collectionSaving || !collectionName.trim()}
-                  className="mt-3 w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: '#254F22', color: '#FDFAF5' }}
-                >
-                  {collectionSaving ? 'Creating...' : 'Create collection'}
+                  <ChevronDown
+                    className={canUseCollections ? 'ml-auto w-4 h-4 transition-transform' : 'w-4 h-4 transition-transform'}
+                    style={{ color: '#A89880', transform: openSection === 'collection' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
                 </button>
+                {openSection === 'collection' && (
+                  <div className="pb-1">
+                    <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
+                      Create a public grouped page and add this album to it.
+                    </p>
+                    <input
+                      type="text"
+                      value={collectionName}
+                      onChange={(e) => setCollectionName(e.target.value)}
+                      placeholder="Wedding season 2026"
+                      maxLength={80}
+                      disabled={!canUseCollections}
+                      className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none mb-2 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={inputStyle}
+                    />
+                    <input
+                      type="text"
+                      value={collectionSlug}
+                      onChange={(e) => setCollectionSlug(e.target.value)}
+                      placeholder="collection-url"
+                      maxLength={40}
+                      disabled={!canUseCollections}
+                      className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                      style={inputStyle}
+                    />
+                    {collectionError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{collectionError}</p>}
+                    {collectionUrl && (
+                      <p className="text-xs mt-2 break-all" style={{ color: '#254F22' }}>
+                        Created: <a href={collectionUrl} className="underline">{collectionUrl}</a>
+                      </p>
+                    )}
+                    <button
+                      onClick={createCollection}
+                      disabled={!canUseCollections || collectionSaving || !collectionName.trim()}
+                      className="mt-3 w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: '#254F22', color: '#FDFAF5' }}
+                    >
+                      {collectionSaving ? 'Creating...' : 'Create collection'}
+                    </button>
+                  </div>
+                )}
               </section>
             </div>
           )}
