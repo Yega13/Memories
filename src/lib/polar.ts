@@ -11,8 +11,8 @@ function apiBase(): string {
 }
 
 function apiKey(): string {
-  const key = process.env.POLAR_API_KEY
-  if (!key) throw new Error('POLAR_API_KEY not set')
+  const key = process.env.POLAR_API_KEY ?? process.env.POLAR_ACCESS_TOKEN
+  if (!key) throw new Error('POLAR_API_KEY or POLAR_ACCESS_TOKEN not set')
   return key
 }
 

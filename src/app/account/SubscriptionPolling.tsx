@@ -27,6 +27,7 @@ export default function SubscriptionPolling({ email }: { email: string }) {
         if (res.ok) {
           const me = (await res.json()) as { canAccessAccount: boolean }
           if (me.canAccessAccount) {
+            window.clearInterval(id)
             router.refresh()
             return
           }
@@ -35,6 +36,7 @@ export default function SubscriptionPolling({ email }: { email: string }) {
         // Network blip — try again next tick.
       }
       if (pollsRef.current >= MAX_POLLS && !cancelled) {
+        window.clearInterval(id)
         setGivenUp(true)
       }
     }, POLL_INTERVAL_MS)

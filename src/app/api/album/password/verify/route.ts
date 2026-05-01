@@ -75,14 +75,12 @@ export async function POST(req: Request) {
 
   const ok = await verifyPassword(password, album.password_hash)
 
-  // Log the attempt either way. Fire-and-forget — a failed insert here
-  // shouldn't break login on the happy path.
-  void admin
+  // Log the attempt either way; the rate limiter depends on failed attempts
+  // being persisted before the response returns.
+  const { error: logError } = await admin
     .from('album_password_attempts')
     .insert({ album_id: album.id, ip, succeeded: ok })
-    .then(({ error }) => {
-      if (error) console.error('[password/verify] attempt log failed:', error.message)
-    })
+  if (logError) console.error('[password/verify] attempt log failed:', logError.message)
 
   if (!ok) {
     return NextResponse.json({ error: 'Incorrect password' }, { status: 401, headers: NO_STORE })
