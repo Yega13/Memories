@@ -130,7 +130,7 @@ export default function SupportPage() {
       </nav>
 
       {/* Hero */}
-      <section className="hush-readable pt-12 sm:pt-20 pb-8 text-center">
+      <section className="hush-readable hush-fade-up pt-12 sm:pt-20 pb-8 text-center">
         <p
           className="text-xs sm:text-sm font-medium uppercase mb-4"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
@@ -164,7 +164,7 @@ export default function SupportPage() {
           {helpCards.map(({ icon: Icon, title, body, href, cta }) => (
             <article
               key={title}
-              className="rounded-2xl p-6 flex flex-col"
+              className="hush-hover-lift rounded-2xl p-6 flex flex-col"
               style={{
                 background: "#FFFFFF",
                 border: "1px solid #DDD5C5",
@@ -227,7 +227,9 @@ export default function SupportPage() {
           <div className="flex-1 h-px" style={{ background: "#E8E0D0" }} />
         </div>
 
-        <SupportForm />
+        <div className="hush-reveal">
+          <SupportForm />
+        </div>
 
         <p
           className="text-center text-xs mt-6 italic"

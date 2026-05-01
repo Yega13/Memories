@@ -272,7 +272,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         onDragOver={(e) => { e.preventDefault(); if (!uploading) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
-        className="rounded-2xl p-8 text-center cursor-pointer transition"
+        className="hush-hover-lift rounded-2xl p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
           background: dragOver ? '#E8F5E3' : '#FDFAF5',
@@ -304,7 +304,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       {pending.length > 0 && (
         <div className="mt-4 space-y-3">
           {pending.map((item, i) => (
-            <div key={i} className="rounded-xl p-3 flex gap-3" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
+            <div key={i} className="hush-fade-up rounded-xl p-3 flex gap-3" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
               <div className="relative w-16 h-16 flex-shrink-0">
                 {item.kind === 'video' ? (
                   <video
@@ -398,7 +398,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           <button
             onClick={uploadAll}
             disabled={uploading}
-            className="w-full font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="hush-press w-full font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: '#254F22', color: '#FDFAF5' }}
           >
             {uploading ? 'Uploading...' : `Upload ${pending.length} item${pending.length !== 1 ? 's' : ''}`}

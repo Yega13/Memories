@@ -22,6 +22,63 @@ body {
    nested overflow regions so styling stays consistent. Firefox uses
    scrollbar-* properties; Chromium/WebKit use the ::-webkit-scrollbar tree. */
 @layer utilities {
+  .hush-motion {
+    transition:
+      transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 180ms ease,
+      box-shadow 180ms ease,
+      border-color 180ms ease,
+      background-color 180ms ease;
+  }
+
+  .hush-hover-lift {
+    transition:
+      transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 220ms ease,
+      opacity 180ms ease;
+  }
+
+  .hush-hover-lift:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 42px rgba(37, 79, 34, 0.14);
+  }
+
+  .hush-press {
+    transition:
+      transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 160ms ease,
+      box-shadow 160ms ease;
+  }
+
+  .hush-press:hover {
+    transform: translateY(-1px);
+  }
+
+  .hush-press:active {
+    transform: translateY(1px) scale(0.985);
+  }
+
+  .hush-menu-pop {
+    transform-origin: top right;
+    animation: hush-menu-pop 190ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .hush-modal-pop {
+    animation: hush-modal-pop 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .hush-fade-up {
+    animation: hush-fade-up 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .hush-float-slow {
+    animation: hush-float 7s ease-in-out infinite;
+  }
+
+  .hush-reveal {
+    animation: hush-fade-up 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
   .hush-container {
     width: min(calc(100% - clamp(2rem, 5vw, 9rem)), 1480px);
     margin-inline: auto;
@@ -100,9 +157,76 @@ body {
   }
 }
 
+@supports (animation-timeline: view()) {
+  .hush-reveal {
+    animation: hush-fade-up both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 26%;
+  }
+}
+
 html {
+  scroll-behavior: smooth;
   scrollbar-width: thin;
   scrollbar-color: #254F22 #EDE7DB;
+}
+
+@keyframes hush-menu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes hush-modal-pop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes hush-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hush-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--hush-rotate, 0deg));
+  }
+  50% {
+    transform: translateY(-8px) rotate(var(--hush-rotate, 0deg));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 ::-webkit-scrollbar {

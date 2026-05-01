@@ -94,10 +94,16 @@ export const metadata: Metadata = {
       "msvalidate.01": "22AB3EC00DB3D5ECE126BEDD09A3DD8E",
     },
   },
-  // Icons come from the App Router file convention:
   //   src/app/icon.png        → favicon
   //   src/app/apple-icon.png  → apple touch icon
-  // Next emits the <link> tags automatically; do not also set metadata.icons.
+  icons: {
+    icon: [
+      { url: "/icon.png?v=20260502", type: "image/png", sizes: "64x64" },
+      { url: "/logo/logo-favicon.png?v=20260502", type: "image/png", sizes: "64x64" },
+    ],
+    shortcut: [{ url: "/logo/logo-favicon.png?v=20260502", type: "image/png" }],
+    apple: [{ url: "/apple-icon.png?v=20260502", type: "image/png", sizes: "512x512" }],
+  },
   referrer: "origin-when-cross-origin",
   formatDetection: {
     email: false,
@@ -124,7 +130,7 @@ const jsonLd = {
       "@id": `${SITE_URL}#organization`,
       name: SITE_NAME,
       url: SITE_URL,
-      logo: `${SITE_URL}/favicon.ico`,
+      logo: `${SITE_URL}/logo/logo-favicon.png`,
       foundingLocation: {
         "@type": "Place",
         name: "Yerevan, Armenia",

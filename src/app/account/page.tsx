@@ -128,7 +128,7 @@ export default async function AccountPage({ searchParams }: Props) {
       <main className="px-4 py-10 sm:py-14">
         <div className="hush-container">
           <section
-            className="rounded-2xl p-6 sm:p-8 mb-6"
+            className="hush-fade-up rounded-2xl p-6 sm:p-8 mb-6"
             style={{
               background: '#FFFFFF',
               border: '1px solid #DDD5C5',
@@ -161,7 +161,7 @@ export default async function AccountPage({ searchParams }: Props) {
 
           <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
             <section
-              className="rounded-2xl p-6"
+              className="hush-hover-lift rounded-2xl p-6"
               style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.08)' }}
             >
               <div className="flex items-start justify-between gap-4 mb-5">
@@ -209,7 +209,7 @@ export default async function AccountPage({ searchParams }: Props) {
             </section>
 
             <section
-              className="rounded-2xl p-6"
+              className="hush-hover-lift rounded-2xl p-6"
               style={{ background: '#FBF4E4', border: '1px solid rgba(196,166,120,0.35)' }}
             >
               <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#8B6F4E' }}>What to keep handy</p>
@@ -235,7 +235,7 @@ export default async function AccountPage({ searchParams }: Props) {
               ['Protect important links', 'Use passwords and custom URLs on Pro and Studio albums.'],
               [isStudio ? 'Build Collections' : 'Upgrade for Collections', isStudio ? 'Create public /c/... pages that group related albums.' : 'Collections are available on Studio.'],
             ].map(([title, copy]) => (
-              <div key={title} className="rounded-2xl p-5" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
+              <div key={title} className="hush-hover-lift rounded-2xl p-5" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
                 <h3 className="font-semibold mb-2" style={{ color: '#254F22' }}>{title}</h3>
                 <p className="text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>{copy}</p>
               </div>

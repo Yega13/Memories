@@ -144,7 +144,7 @@ export default function PrivacyPage() {
         </Link>
       </nav>
 
-      <article className="hush-readable py-16">
+      <article className="hush-readable hush-fade-up py-16">
         <p
           className="text-sm font-medium uppercase mb-5"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}

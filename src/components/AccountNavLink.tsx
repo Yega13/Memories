@@ -10,7 +10,7 @@ type AuthState =
   | { kind: 'signed-out' }
   | { kind: 'signed-in'; canAccess: boolean }
 
-const linkClass = 'text-sm font-medium hover:underline'
+const linkClass = 'hush-press text-sm font-medium hover:underline'
 const linkStyle = { color: '#254F22' } as const
 
 export default function AccountNavLink() {

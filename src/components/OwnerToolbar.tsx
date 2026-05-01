@@ -364,6 +364,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       <div className="hush-container py-3 flex flex-wrap items-center gap-3">
         <div className="relative" ref={shareRef}>
           <button
+            className="hush-press"
             style={btnBase}
             onClick={() => {
               setShowShare((s) => !s)
@@ -376,7 +377,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
 
           {showShare && (
             <div
-              className="absolute left-0 top-full mt-2 z-50 rounded-2xl shadow-xl"
+              className="hush-menu-pop absolute left-0 top-full mt-2 z-50 rounded-2xl shadow-xl"
               style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 320, padding: 16 }}
             >
               <div className="flex items-center justify-between mb-3">
@@ -387,7 +388,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
               </div>
 
               <button
-                className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:opacity-90"
+                className="hush-hover-lift w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:opacity-90"
                 style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', cursor: 'pointer' }}
                 onClick={() => copy('share')}
               >
@@ -399,7 +400,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
               </button>
 
               <button
-                className="w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 mt-2 text-left transition hover:opacity-90"
+                className="hush-hover-lift w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 mt-2 text-left transition hover:opacity-90"
                 style={{ background: '#E8F0FB', border: '1px solid #B8CCEE', cursor: 'pointer' }}
                 onClick={() => copy('owner')}
               >
@@ -438,6 +439,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
 
         <div className="relative ml-auto" ref={settingsRef}>
           <button
+            className="hush-press"
             style={{ ...btnBase, padding: '6px 10px' }}
             onClick={() => {
               setShowSettings((s) => {
@@ -459,7 +461,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
 
           {showSettings && (
             <div
-              className="absolute right-0 top-full mt-2 z-50 rounded-2xl shadow-xl max-h-[78vh] overflow-y-auto"
+              className="hush-menu-pop absolute right-0 top-full mt-2 z-50 rounded-2xl shadow-xl max-h-[78vh] overflow-y-auto"
               style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 'min(92vw, 420px)', padding: 16 }}
             >
               <div className="flex items-center justify-between mb-4">
@@ -470,7 +472,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
               </div>
 
               <section style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <button type="button" style={accordionButton} onClick={() => toggleSection('customization')}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('customization')}>
                   <Images className="w-4 h-4" style={{ color: '#7C5C3E' }} />
                   <span style={sectionTitle}>Customization</span>
                   <ChevronDown
@@ -550,7 +552,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
 
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       <button
-                        className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="hush-press flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ background: '#254F22', border: '1px solid #254F22', color: '#FDFAF5', cursor: backgroundSaving ? 'wait' : 'pointer' }}
                         onClick={() => backgroundInputRef.current?.click()}
                         disabled={backgroundSaving}
@@ -559,7 +561,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                         {backgroundSaving ? 'Saving...' : 'Add picture'}
                       </button>
                       <button
-                        className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
+                        className="hush-press flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
                         style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22', cursor: 'pointer' }}
                         onClick={() => setShowBackgroundLibrary(true)}
                       >
@@ -591,7 +593,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
               </section>
 
               <section style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <button type="button" style={accordionButton} onClick={() => toggleSection('files')}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('files')}>
                   <Download className="w-4 h-4" style={{ color: '#7C5C3E' }} />
                   <span style={sectionTitle}>Files</span>
                   <ChevronDown
@@ -602,7 +604,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 {openSection === 'files' && (
                   <div className="pb-4">
                     <button
-                      className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ background: '#254F22', color: '#FDFAF5' }}
                       onClick={downloadZip}
                       disabled={zipping || photos.length === 0}
@@ -615,7 +617,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
               </section>
 
               <section style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <button type="button" style={accordionButton} onClick={() => toggleSection('customUrl')}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('customUrl')}>
                   <Link2 className="w-4 h-4" style={{ color: canCustomize ? '#7C5C3E' : '#A89880' }} />
                   <span style={sectionTitle}>Custom URL</span>
                   {!canCustomize && <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>Pro</span>}
@@ -651,7 +653,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       <button
                         onClick={() => saveCustomUrl('set')}
                         disabled={!canCustomize || customUrlSaving || !customUrlInput.trim()}
-                        className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="hush-press flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ background: '#254F22', color: '#FDFAF5' }}
                       >
                         {customUrlSaving ? 'Saving...' : 'Save'}
@@ -660,7 +662,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                         <button
                           onClick={() => saveCustomUrl('clear')}
                           disabled={!canCustomize || customUrlSaving}
-                          className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
+                          className="hush-press text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
                           style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
                         >
                           Clear
@@ -672,7 +674,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
               </section>
 
               <section style={{ borderBottom: '1px solid #E8E0D2' }}>
-                <button type="button" style={accordionButton} onClick={() => toggleSection('password')}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('password')}>
                   {album.password_protected ? (
                     <Lock className="w-4 h-4" style={{ color: canCustomize ? '#254F22' : '#A89880' }} />
                   ) : (
@@ -709,7 +711,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       <button
                         onClick={() => savePassword('set')}
                         disabled={!canCustomize || passwordSaving || !passwordInput}
-                        className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="hush-press flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ background: '#254F22', color: '#FDFAF5' }}
                       >
                         {passwordSaving ? 'Saving...' : 'Save'}
@@ -718,7 +720,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                         <button
                           onClick={() => savePassword('clear')}
                           disabled={!canCustomize || passwordSaving}
-                          className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
+                          className="hush-press text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
                           style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
                         >
                           Remove
@@ -730,7 +732,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
               </section>
 
               <section>
-                <button type="button" style={accordionButton} onClick={() => toggleSection('collection')}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('collection')}>
                   <FolderPlus className="w-4 h-4" style={{ color: canUseCollections ? '#7C5C3E' : '#A89880' }} />
                   <span style={sectionTitle}>Create collection</span>
                   {!canUseCollections && <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>Studio</span>}
@@ -773,7 +775,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                     <button
                       onClick={createCollection}
                       disabled={!canUseCollections || collectionSaving || !collectionName.trim()}
-                      className="mt-3 w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="hush-press mt-3 w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ background: '#254F22', color: '#FDFAF5' }}
                     >
                       {collectionSaving ? 'Creating...' : 'Create collection'}
@@ -795,7 +797,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
           }}
         >
           <div
-            className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl shadow-2xl"
+            className="hush-modal-pop max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl shadow-2xl"
             style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}
           >
             <div
@@ -823,7 +825,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                   type="button"
                   disabled={backgroundSaving}
                   onClick={() => chooseBackground(preset.value, true)}
-                  className="group overflow-hidden rounded-xl text-left transition hover:opacity-95 disabled:cursor-wait"
+                  className="hush-hover-lift group overflow-hidden rounded-xl text-left transition hover:opacity-95 disabled:cursor-wait"
                   style={{
                     border: bgChoice === preset.value ? '2px solid #254F22' : '1px solid #DDD5C5',
                     background: '#FDFAF5',

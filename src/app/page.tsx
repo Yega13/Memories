@@ -110,7 +110,7 @@ export default function Home() {
         />
 
         {/* Hero content grid */}
-        <div className="hush-container relative z-10 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] gap-10 lg:gap-16 2xl:gap-24 items-center lg:min-h-[calc(100vh_-_73px)]">
+        <div className="hush-container hush-fade-up relative z-10 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] gap-10 lg:gap-16 2xl:gap-24 items-center lg:min-h-[calc(100vh_-_73px)]">
 
           {/* Left — text + form */}
           <div>
@@ -134,7 +134,7 @@ export default function Home() {
               Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
             </p>
 
-            <div className="rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '520px' }}>
+            <div className="hush-hover-lift rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '520px' }}>
               <label className="block text-sm font-medium mb-2" style={{ color: '#8B6F4E' }}>
                 Name your album
               </label>
@@ -152,7 +152,7 @@ export default function Home() {
               <button
                 onClick={createAlbum}
                 disabled={loading}
-                className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
+                className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
                 style={{ background: '#254F22', color: '#FDFAF5' }}
               >
                 {loading ? 'Creating your album...' : <>Create Album <ArrowRight className="w-4 h-4" /></>}
@@ -167,7 +167,7 @@ export default function Home() {
           <div className="relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(520px, 42vw, 700px)' }}>
 
             {/* Card 1 — top left */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '6%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '6%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" fill sizes="200px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
@@ -175,7 +175,7 @@ export default function Home() {
             </div>
 
             {/* Card 2 — top right */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '2%', right: '6%', width: 'clamp(180px, 12vw, 250px)', height: 'clamp(220px, 15vw, 310px)', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '3deg', animationDelay: '-1.8s', top: '2%', right: '6%', width: 'clamp(180px, 12vw, 250px)', height: 'clamp(220px, 15vw, 310px)', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" fill sizes="180px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(124,74,45,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Golden hour</span>
@@ -183,7 +183,7 @@ export default function Home() {
             </div>
 
             {/* Card 3 — center, largest */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '30%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
+            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '1deg', animationDelay: '-3.2s', top: '30%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
               <Image src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
@@ -191,7 +191,7 @@ export default function Home() {
             </div>
 
             {/* Card 4 — bottom right */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ bottom: '6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-2deg', animationDelay: '-4.6s', bottom: '6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" fill sizes="190px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
@@ -218,7 +218,7 @@ export default function Home() {
 
       {/* Steps — polaroid filmstrip */}
       <section className="hush-container pb-20 sm:pb-24 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 xl:gap-12 items-start">
+        <div className="hush-reveal grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 xl:gap-12 items-start">
           {[
             {
               rot: -3.5,
@@ -261,7 +261,7 @@ export default function Home() {
             >
               {/* Polaroid */}
               <div
-                className="relative bg-white"
+                className="hush-hover-lift relative bg-white"
                 style={{
                   width: 'clamp(220px, 18vw, 300px)',
                   padding: '14px 14px 56px 14px',
@@ -349,7 +349,7 @@ export default function Home() {
       {/* FAQ — journal-page style */}
       <section className="hush-readable pb-24">
         <div
-          className="rounded-[8px] px-6 py-4 md:px-10 md:py-6"
+          className="hush-reveal rounded-[8px] px-6 py-4 md:px-10 md:py-6"
           style={{
             background: '#FBF4E4',
             border: '1px solid rgba(196,166,120,0.35)',
@@ -503,7 +503,7 @@ export default function Home() {
       {/* Bottom CTA — photo postcard */}
       <section className="hush-container-xl mb-20 relative">
         <div
-          className="relative rounded-[28px] overflow-hidden"
+          className="hush-reveal relative rounded-[28px] overflow-hidden"
           style={{
             minHeight: '440px',
             backgroundImage: 'url(/wedding.jpg)',
@@ -622,7 +622,7 @@ export default function Home() {
 
                 <button
                   onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                  className="mt-7 inline-flex items-center gap-2 font-semibold transition hover:opacity-90"
+                  className="hush-press mt-7 inline-flex items-center gap-2 font-semibold transition hover:opacity-90"
                   style={{
                     background: '#254F22',
                     color: '#FDFAF5',

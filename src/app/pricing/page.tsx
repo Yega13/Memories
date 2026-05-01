@@ -324,7 +324,7 @@ export default function PricingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="hush-readable pt-12 sm:pt-20 pb-10 text-center">
+      <section className="hush-readable hush-fade-up pt-12 sm:pt-20 pb-10 text-center">
         <p
           className="text-xs sm:text-sm font-medium uppercase mb-4"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
@@ -359,7 +359,7 @@ export default function PricingPage() {
             <article
               key={t.name}
               id={t.name.toLowerCase()}
-              className="relative rounded-3xl flex flex-col"
+              className="hush-hover-lift relative rounded-3xl flex flex-col"
               style={{
                 background: t.highlight ? "#254F22" : "#FFFFFF",
                 color: t.highlight ? "#FDFAF5" : "#254F22",
@@ -549,7 +549,7 @@ export default function PricingPage() {
       {/* Why pay section */}
       <section className="hush-readable pb-20">
         <div
-          className="rounded-2xl px-6 py-8 sm:px-10 sm:py-10"
+          className="hush-reveal rounded-2xl px-6 py-8 sm:px-10 sm:py-10"
           style={{
             background: "#FBF4E4",
             border: "1px solid rgba(196,166,120,0.35)",
@@ -608,7 +608,7 @@ export default function PricingPage() {
         </div>
 
         <div
-          className="rounded-[8px] px-6 py-2 sm:px-10 sm:py-4"
+          className="hush-reveal rounded-[8px] px-6 py-2 sm:px-10 sm:py-4"
           style={{
             background: "#FBF4E4",
             border: "1px solid rgba(196,166,120,0.35)",

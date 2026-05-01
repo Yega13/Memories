@@ -79,7 +79,7 @@ export default function SupportForm() {
   if (status === 'sent') {
     return (
       <div
-        className="rounded-2xl p-8 text-center"
+        className="hush-modal-pop rounded-2xl p-8 text-center"
         style={{
           background: '#EAF0E8',
           border: '1px solid #C8D6C2',
@@ -98,7 +98,7 @@ export default function SupportForm() {
         <button
           type="button"
           onClick={() => setStatus('idle')}
-          className="mt-5 text-sm font-semibold hover:underline"
+          className="hush-press mt-5 text-sm font-semibold hover:underline"
           style={{ color: '#254F22' }}
         >
           Send another message
@@ -117,7 +117,7 @@ export default function SupportForm() {
       />
       <form
         onSubmit={onSubmit}
-        className="rounded-2xl p-6 sm:p-8"
+        className="hush-hover-lift rounded-2xl p-6 sm:p-8"
         style={{
           background: '#FFFFFF',
           border: '1px solid #DDD5C5',
@@ -236,7 +236,7 @@ export default function SupportForm() {
         <button
           type="submit"
           disabled={status === 'sending'}
-          className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
+          className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
           style={{ background: '#254F22', color: '#FDFAF5' }}
         >
           {status === 'sending' ? (

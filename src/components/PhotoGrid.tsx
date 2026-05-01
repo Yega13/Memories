@@ -89,7 +89,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
           return (
             <div
               key={photo.id}
-              className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
+              className="hush-hover-lift group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
               style={{ background: '#EDE7DB' }}
               onClick={() => setLightbox(index)}
             >
@@ -194,7 +194,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
             <ChevronRight className="w-8 h-8" />
           </button>
 
-          <div className="relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
+          <div className="hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
             {current.media_type === 'video' ? (
               <video
                 key={current.id}
