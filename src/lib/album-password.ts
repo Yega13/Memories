@@ -18,7 +18,7 @@ const ITERATIONS = 100_000
 const KEY_BITS = 256
 
 export async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const salt: Uint8Array<ArrayBuffer> = crypto.getRandomValues(new Uint8Array(16))
   const hash = await pbkdf2(password, salt, ITERATIONS)
   return `pbkdf2$${ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`
 }
@@ -28,8 +28,8 @@ export async function verifyPassword(password: string, stored: string): Promise<
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
   const iterations = Number.parseInt(parts[1], 10)
   if (!Number.isFinite(iterations) || iterations < 10_000) return false
-  let salt: Uint8Array
-  let expected: Uint8Array
+  let salt: Uint8Array<ArrayBuffer>
+  let expected: Uint8Array<ArrayBuffer>
   try {
     salt = fromBase64(parts[2])
     expected = fromBase64(parts[3])
@@ -59,7 +59,15 @@ export async function deriveAccessToken(passwordHash: string, albumId: string): 
   return toBase64(new Uint8Array(sig))
 }
 
-async function pbkdf2(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+// Note on type signatures: every Uint8Array here is annotated as
+// `Uint8Array<ArrayBuffer>` (rather than the default `Uint8Array<ArrayBufferLike>`).
+// TS 5.7's `BufferSource` rejects the wider `ArrayBufferLike` because it would
+// allow `SharedArrayBuffer`, which Web Crypto refuses at runtime.
+async function pbkdf2(
+  password: string,
+  salt: Uint8Array<ArrayBuffer>,
+  iterations: number,
+): Promise<Uint8Array<ArrayBuffer>> {
   const baseKey = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -75,20 +83,20 @@ async function pbkdf2(password: string, salt: Uint8Array, iterations: number): P
   return new Uint8Array(bits)
 }
 
-function toBase64(bytes: Uint8Array): string {
+function toBase64(bytes: Uint8Array<ArrayBuffer>): string {
   let s = ''
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i])
   return btoa(s)
 }
 
-function fromBase64(s: string): Uint8Array {
+function fromBase64(s: string): Uint8Array<ArrayBuffer> {
   const bin = atob(s)
   const out = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
   return out
 }
 
-function timingSafeEqualBytes(a: Uint8Array, b: Uint8Array): boolean {
+function timingSafeEqualBytes(a: Uint8Array<ArrayBuffer>, b: Uint8Array<ArrayBuffer>): boolean {
   if (a.length !== b.length) return false
   let r = 0
   for (let i = 0; i < a.length; i++) r |= a[i] ^ b[i]

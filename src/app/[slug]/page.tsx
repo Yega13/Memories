@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { supabase, type Album, type Photo } from '@/lib/supabase'
 import type { Tier } from '@/lib/subscriptions'
-import { formatDate } from '@/lib/utils'
 import UploadZone from '@/components/UploadZone'
 import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
@@ -172,9 +172,9 @@ export default function AlbumPage() {
           Album not found
         </h1>
         <p className="opacity-90">This link may be invalid or the album was deleted.</p>
-        <a href="/" className="underline underline-offset-4 hover:opacity-80 transition">
+        <Link href="/" className="underline underline-offset-4 hover:opacity-80 transition">
           Create a new album →
-        </a>
+        </Link>
       </div>
     )
   }

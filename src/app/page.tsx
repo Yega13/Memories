@@ -3,6 +3,7 @@ export const runtime = 'nodejs'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { generateSlug, generateOwnerToken } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
@@ -40,7 +41,7 @@ export default function Home() {
           borderBottom: '1px solid rgba(221, 213, 197, 0.5)',
         }}
       >
-        <a href="/" className="flex items-center" aria-label="Hushare home">
+        <Link href="/" className="flex items-center" aria-label="Hushare home">
           <img
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
@@ -48,14 +49,14 @@ export default function Home() {
             height={146}
             style={{ height: '28px', width: 'auto' }}
           />
-        </a>
+        </Link>
         <div className="flex items-center gap-3 sm:gap-4">
-          <a href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+          <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Pricing
-          </a>
-          <a href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+          </Link>
+          <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Support
-          </a>
+          </Link>
           <AccountNavLink />
           <span className="hidden md:inline-block text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
             Free during beta
@@ -159,7 +160,7 @@ export default function Home() {
                 {loading ? 'Creating your album...' : <>Create Album <ArrowRight className="w-4 h-4" /></>}
               </button>
               <p className="text-xs mt-3 text-center" style={{ color: '#B0A090' }}>
-                You'll receive a private link to manage your album
+                You&apos;ll receive a private link to manage your album
               </p>
             </div>
           </div>
@@ -638,7 +639,7 @@ export default function Home() {
                   className="text-sm leading-relaxed"
                   style={{ color: '#5C4A3C', maxWidth: '24rem' }}
                 >
-                  Free while we're in beta. One link, any number of guests, no
+                  Free while we&apos;re in beta. One link, any number of guests, no
                   app to install. Albums stay until they sit untouched for a year.
                 </p>
 
@@ -676,7 +677,7 @@ export default function Home() {
       </section>
 
       <footer className="px-8 py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
-        <a href="/" className="flex items-center" aria-label="Hushare home">
+        <Link href="/" className="flex items-center" aria-label="Hushare home">
           <img
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
@@ -684,11 +685,11 @@ export default function Home() {
             height={146}
             style={{ height: '24px', width: 'auto' }}
           />
-        </a>
+        </Link>
         <div className="flex items-center gap-5">
-          <a href="/pricing" style={{ color: '#7C5C3E' }} className="hover:underline">Pricing</a>
-          <a href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</a>
-          <a href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</a>
+          <Link href="/pricing" style={{ color: '#7C5C3E' }} className="hover:underline">Pricing</Link>
+          <Link href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</Link>
+          <Link href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</Link>
           <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
         </div>
       </footer>

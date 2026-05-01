@@ -93,7 +93,7 @@ export default function SupportForm() {
           Message sent
         </h3>
         <p className="text-sm" style={{ color: '#5C4A3C' }}>
-          Thanks — we'll reply to your inbox within one business day.
+          Thanks — we&apos;ll reply to your inbox within one business day.
         </p>
         <button
           type="button"
@@ -221,7 +221,7 @@ export default function SupportForm() {
           >
             <AlertCircle className="w-4 h-4 flex-none mt-0.5" style={{ color: '#C0392B' }} />
             <div className="text-sm" style={{ color: '#7A2A1F' }}>
-              <p className="font-semibold mb-0.5">Couldn't send your message</p>
+              <p className="font-semibold mb-0.5">Couldn&apos;t send your message</p>
               <p>
                 {errorMsg}. You can also email us directly at{' '}
                 <a href="mailto:support@hushare.space" className="underline" style={{ color: '#7A2A1F' }}>

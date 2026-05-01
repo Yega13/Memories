@@ -144,7 +144,7 @@ export default function SupportPage() {
             fontWeight: 700,
           }}
         >
-          We're here<br />
+          We&apos;re here<br />
           <em style={{ color: "#7C4A2D" }}>to help</em>
         </h1>
         <p
