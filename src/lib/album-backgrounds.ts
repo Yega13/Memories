@@ -1,23 +1,40 @@
 export type StockAlbumBackground = {
   label: string
-  value: `image:/${string}`
-  src: `/${string}`
+  value: `image:${string}`
+  src: string
+}
+
+function pexelsBackground(photoId: string, label: string): StockAlbumBackground {
+  const src = `https://images.pexels.com/photos/${photoId}/pexels-photo-${photoId}.jpeg?auto=compress&cs=tinysrgb&w=1800`
+  return { label, value: `image:${src}`, src }
 }
 
 export const STOCK_ALBUM_BACKGROUNDS: StockAlbumBackground[] = [
-  { label: 'Wedding', value: 'image:/wedding.jpg', src: '/wedding.jpg' },
-  { label: 'Trail', value: 'image:/card1.jpg', src: '/card1.jpg' },
-  { label: 'Golden', value: 'image:/card2.jpg', src: '/card2.jpg' },
-  { label: 'Lake', value: 'image:/card3.jpg', src: '/card3.jpg' },
-  { label: 'Explorers', value: 'image:/children.avif', src: '/children.avif' },
-  { label: 'Soft linen', value: 'image:/backgrounds/minimal-linen.svg', src: '/backgrounds/minimal-linen.svg' },
-  { label: 'Sage wash', value: 'image:/backgrounds/minimal-sage.svg', src: '/backgrounds/minimal-sage.svg' },
-  { label: 'Quiet sky', value: 'image:/backgrounds/minimal-sky.svg', src: '/backgrounds/minimal-sky.svg' },
-  { label: 'Warm clay', value: 'image:/backgrounds/minimal-clay.svg', src: '/backgrounds/minimal-clay.svg' },
-  { label: 'Paper light', value: 'image:/backgrounds/minimal-paper.svg', src: '/backgrounds/minimal-paper.svg' },
-  { label: 'Rose mist', value: 'image:/backgrounds/minimal-rose.svg', src: '/backgrounds/minimal-rose.svg' },
-  { label: 'Stone calm', value: 'image:/backgrounds/minimal-stone.svg', src: '/backgrounds/minimal-stone.svg' },
-  { label: 'Dawn veil', value: 'image:/backgrounds/minimal-dawn.svg', src: '/backgrounds/minimal-dawn.svg' },
+  pexelsBackground('36391026', 'Bright desk'),
+  pexelsBackground('37199912', 'Quiet celebration'),
+  pexelsBackground('34077030', 'Soft table'),
+  pexelsBackground('37196479', 'Minimal room'),
+  pexelsBackground('36821284', 'Warm detail'),
+  pexelsBackground('37295912', 'Clean morning'),
+  pexelsBackground('36025761', 'Open air'),
+  pexelsBackground('17893018', 'Gentle flowers'),
+  pexelsBackground('37298146', 'Calm light'),
+  pexelsBackground('36546519', 'Neutral corner'),
+  pexelsBackground('29207389', 'Soft landscape'),
+  pexelsBackground('37173058', 'Event detail'),
+  pexelsBackground('37223904', 'Fresh texture'),
+  pexelsBackground('36862789', 'Warm minimal'),
+  pexelsBackground('33443600', 'Quiet wall'),
+  pexelsBackground('20954747', 'Natural light'),
+  pexelsBackground('30502888', 'Soft green'),
+  pexelsBackground('5477719', 'Paper moment'),
+  pexelsBackground('8099498', 'Garden table'),
+  pexelsBackground('8489990', 'Cream texture'),
+  pexelsBackground('7966020', 'Simple flowers'),
+  pexelsBackground('5477682', 'Muted detail'),
+  pexelsBackground('20216572', 'Still morning'),
+  pexelsBackground('32289804', 'Open sky'),
+  pexelsBackground('34256467', 'Soft pattern'),
 ]
 
 export const STOCK_ALBUM_BACKGROUND_VALUES: ReadonlySet<string> = new Set(
