@@ -2,6 +2,7 @@
 
 import { type Album } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
+import Image from 'next/image'
 import Link from 'next/link'
 
 type Props = {
@@ -15,7 +16,7 @@ export default function AlbumHeader({ album, photoCount, isOwner }: Props) {
     <div style={{ borderBottom: '1px solid #DDD5C5', background: '#FDFAF5' }}>
       <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
         <Link href="/" className="flex items-center transition hover:opacity-70" aria-label="Hushare home">
-          <img
+          <Image
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
             width={618}

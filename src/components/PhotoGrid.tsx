@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { type Photo } from '@/lib/supabase'
 import { formatDuration } from '@/lib/media'
+import Image from 'next/image'
 import { Download, Trash2, X, ChevronLeft, ChevronRight, Play } from 'lucide-react'
 
 type Props = {
@@ -93,10 +94,13 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
               onClick={() => setLightbox(index)}
             >
               {thumbSrc ? (
-                <img
+                <Image
                   src={thumbSrc}
                   alt={photo.caption || ''}
-                  className="w-full h-full object-cover transition group-hover:scale-105"
+                  fill
+                  sizes="(min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
+                  className="object-cover transition group-hover:scale-105"
+                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center" style={{ background: '#1A2B1A' }}>
@@ -190,11 +194,16 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
                 style={{ background: '#000' }}
               />
             ) : (
-              <img
-                src={current.url}
-                alt={current.caption || ''}
-                className="max-h-[70vh] max-w-full object-contain rounded-xl"
-              />
+              <div className="relative w-[min(80vw,900px)] h-[70vh]">
+                <Image
+                  src={current.url}
+                  alt={current.caption || ''}
+                  fill
+                  sizes="100vw"
+                  className="object-contain rounded-xl"
+                  unoptimized
+                />
+              </div>
             )}
 
             <div className="flex items-center gap-4">

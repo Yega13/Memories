@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 
 export const runtime = "nodejs";
@@ -132,7 +133,7 @@ export default function PrivacyPage() {
         }}
       >
         <Link href="/" className="flex items-center" aria-label="Hushare home">
-          <img
+          <Image
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
             width={618}
@@ -380,7 +381,7 @@ export default function PrivacyPage() {
         style={{ borderTop: "1px solid #E8E0D0" }}
       >
         <Link href="/" className="flex items-center gap-2">
-          <img
+          <Image
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
             width={618}

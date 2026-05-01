@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { hasAccountAccess } from '@/lib/access'
@@ -20,7 +21,7 @@ function AccountNav() {
       }}
     >
       <Link href="/" className="flex items-center transition hover:opacity-70" aria-label="Hushare home">
-        <img
+        <Image
           src="/logo/logo-dark-transparent.png"
           alt="Hushare"
           width={618}

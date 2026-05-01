@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { generateSlug, generateOwnerToken } from '@/lib/utils'
@@ -41,7 +42,7 @@ export default function Home() {
         }}
       >
         <Link href="/" className="flex items-center" aria-label="Hushare home">
-          <img
+          <Image
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
             width={618}
@@ -169,7 +170,7 @@ export default function Home() {
 
             {/* Card 1 — top left */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '30px', left: '10px', width: '200px', height: '250px', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" className="w-full h-full object-cover" />
+              <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" fill sizes="200px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
               </div>
@@ -177,7 +178,7 @@ export default function Home() {
 
             {/* Card 2 — top right */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '10px', right: '30px', width: '180px', height: '220px', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" className="w-full h-full object-cover" />
+              <Image src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" fill sizes="180px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(124,74,45,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Golden hour</span>
               </div>
@@ -185,7 +186,7 @@ export default function Home() {
 
             {/* Card 3 — center, largest */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '160px', left: '70px', width: '240px', height: '270px', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
-              <img src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" className="w-full h-full object-cover" />
+              <Image src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
               </div>
@@ -193,7 +194,7 @@ export default function Home() {
 
             {/* Card 4 — bottom right */}
             <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ bottom: '30px', right: '20px', width: '190px', height: '190px', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <img src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" className="w-full h-full object-cover" />
+              <Image src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" fill sizes="190px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
               </div>
@@ -577,7 +578,7 @@ export default function Home() {
                     boxShadow: '0 4px 10px rgba(0,0,0,0.12)',
                   }}
                 >
-                  <img
+                  <Image
                     src="/logo/logo-icon-dark-transparent.png"
                     alt=""
                     width={500}
@@ -677,7 +678,7 @@ export default function Home() {
 
       <footer className="px-8 py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
         <Link href="/" className="flex items-center" aria-label="Hushare home">
-          <img
+          <Image
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
             width={618}

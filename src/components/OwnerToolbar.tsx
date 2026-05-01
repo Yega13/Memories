@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
 import type { Tier } from '@/lib/subscriptions'
+import Image from 'next/image'
 import { Copy, QrCode, Download, Check, Settings, X, Link2, Lock, LockOpen } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
@@ -469,7 +470,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCo
       {showQr && (
         <div className="max-w-6xl mx-auto px-4 pb-4">
           <div className="inline-block p-3 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
-            <img src={qrUrl} alt="QR Code" width={150} height={150} />
+            <Image src={qrUrl} alt="QR Code" width={150} height={150} unoptimized />
           </div>
           <p className="text-xs mt-2" style={{ color: '#7C5C3E' }}>Scan to open the album</p>
         </div>

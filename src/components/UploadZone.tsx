@@ -19,6 +19,7 @@ async function uploadToR2(
   albumId: string,
   filename: string,
   kind: 'video' | 'poster',
+  onProgress?: (percent: number) => void,
 ): Promise<R2UploadResult> {
   const form = new FormData()
   form.append('file', file)
@@ -26,12 +27,33 @@ async function uploadToR2(
   form.append('filename', filename)
   form.append('kind', kind)
 
-  const res = await fetch('/api/upload/r2', { method: 'POST', body: form })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(text || `R2 upload returned ${res.status}`)
-  }
-  return res.json() as Promise<R2UploadResult>
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', '/api/upload/r2')
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return
+      onProgress?.(Math.round((event.loaded / event.total) * 100))
+    }
+    xhr.onload = () => {
+      let body: { error?: string; storage_path?: string; url?: string } = {}
+      try {
+        body = JSON.parse(xhr.responseText || '{}')
+      } catch {
+        // Use the status fallback below.
+      }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        reject(new Error(body.error || `R2 upload returned ${xhr.status}`))
+        return
+      }
+      if (!body.storage_path || !body.url) {
+        reject(new Error('R2 upload response was missing file details'))
+        return
+      }
+      resolve({ storage_path: body.storage_path, url: body.url })
+    }
+    xhr.onerror = () => reject(new Error('Network error during R2 upload'))
+    xhr.send(form)
+  })
 }
 
 type Props = {
@@ -47,10 +69,19 @@ type PendingItem = {
   author: string
 }
 
+type UploadStatus = {
+  fileName: string
+  index: number
+  total: number
+  phase: string
+  percent: number
+}
+
 export default function UploadZone({ album, onPhotoAdded }: Props) {
   const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -103,8 +134,21 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     if (pending.length === 0) return
     setUploading(true)
     setUploadError('')
+    setUploadStatus(null)
 
-    for (const item of pending) {
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i]
+      const setCurrentStatus = (phase: string, percent: number) => {
+        setUploadStatus({
+          fileName: item.file.name,
+          index: i + 1,
+          total: pending.length,
+          phase,
+          percent,
+        })
+      }
+
+      setCurrentStatus('Preparing', 5)
       const ext = extensionFor(item.file, item.kind)
       const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
       const filename = `${baseId}.${ext}`
@@ -117,17 +161,21 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         // Videos go to R2 — Supabase free tier caps files at 50 MB and
         // charges egress; R2 is unlimited at our scale and free egress.
         try {
-          const res = await uploadToR2(item.file, album.id, filename, 'video')
+          const res = await uploadToR2(item.file, album.id, filename, 'video', (percent) => {
+            setCurrentStatus('Uploading video', Math.max(8, Math.min(82, Math.round(percent * 0.82))))
+          })
           storagePath = res.storage_path
           publicUrl = res.url
           storageBackend = 'r2'
         } catch (e) {
           console.error('R2 video upload failed:', e)
           setUploadError(`Upload failed: ${(e as Error).message}`)
+          setCurrentStatus('Upload failed', 0)
           setUploading(false)
           return
         }
       } else {
+        setCurrentStatus('Uploading photo', 35)
         const path = `${album.id}/${filename}`
         const { error: storageError } = await supabase.storage
           .from('Photos')
@@ -136,6 +184,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         if (storageError) {
           console.error('Storage error:', storageError)
           setUploadError(`Upload failed: ${storageError.message}`)
+          setCurrentStatus('Upload failed', 0)
           setUploading(false)
           return
         }
@@ -143,6 +192,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         storagePath = path
         publicUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
         storageBackend = 'supabase'
+        setCurrentStatus('Photo uploaded', 82)
       }
 
       let posterPath: string | null = null
@@ -150,12 +200,15 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       let durationSeconds: number | null = null
 
       if (item.kind === 'video') {
+        setCurrentStatus('Creating video thumbnail', 84)
         const poster = await generateVideoPoster(item.file)
         if (poster) {
           const posterFilename = `${baseId}.poster.jpg`
           const posterFile = new File([poster.blob], posterFilename, { type: 'image/jpeg' })
           try {
-            const res = await uploadToR2(posterFile, album.id, posterFilename, 'poster')
+            const res = await uploadToR2(posterFile, album.id, posterFilename, 'poster', (percent) => {
+              setCurrentStatus('Uploading thumbnail', 84 + Math.round(percent * 0.1))
+            })
             posterPath = res.storage_path
             posterUrl = res.url
           } catch (e) {
@@ -167,6 +220,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         }
       }
 
+      setCurrentStatus('Saving to album', 95)
       const { error: dbError } = await supabase.from('photos').insert({
         album_id: album.id,
         storage_path: storagePath,
@@ -183,14 +237,17 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       if (dbError) {
         console.error('DB error:', dbError)
         setUploadError(`Save failed: ${dbError.message}`)
+        setCurrentStatus('Save failed', 0)
         setUploading(false)
         return
       }
+      setCurrentStatus('Done', 100)
     }
 
     pending.forEach((p) => URL.revokeObjectURL(p.preview))
     setPending([])
     setUploading(false)
+    setUploadStatus(null)
     onPhotoAdded()
   }
 
@@ -238,7 +295,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
                     preload="metadata"
                   />
                 ) : (
-                  <img src={item.preview} alt="" className="w-16 h-16 object-cover rounded-lg" />
+                  <div
+                    aria-hidden="true"
+                    className="w-16 h-16 rounded-lg bg-center bg-cover"
+                    style={{ backgroundImage: `url(${item.preview})` }}
+                  />
                 )}
                 <span
                   className="absolute bottom-0.5 right-0.5 rounded-full px-1.5 py-0.5 flex items-center gap-0.5"
@@ -252,8 +313,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
                   type="text"
                   placeholder="Caption (optional)"
                   value={item.caption}
+                  disabled={uploading}
                   onChange={(e) => { const val = e.target.value; setPending((prev) => prev.map((p, idx) => idx === i ? { ...p, caption: val } : p)) }}
-                  className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none transition"
+                  className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none transition disabled:opacity-60"
                   style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                   maxLength={100}
                 />
@@ -261,22 +323,57 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
                   type="text"
                   placeholder="Your name (optional)"
                   value={item.author}
+                  disabled={uploading}
                   onChange={(e) => { const val = e.target.value; setPending((prev) => prev.map((p, idx) => idx === i ? { ...p, author: val } : p)) }}
-                  className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none transition"
+                  className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none transition disabled:opacity-60"
                   style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                   maxLength={40}
                 />
               </div>
-              <button onClick={() => removeFile(i)} className="flex-shrink-0 transition hover:opacity-70" style={{ color: '#C0392B' }}>
+              <button
+                onClick={() => removeFile(i)}
+                disabled={uploading}
+                className="flex-shrink-0 transition hover:opacity-70 disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ color: '#C0392B' }}
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
           ))}
 
           {uploadError && (
-            <p className="text-sm p-3 rounded-lg mb-2" style={{ background: '#FEE2E2', color: '#C0392B' }}>
-              {uploadError}
-            </p>
+            <div className="text-sm p-3 rounded-lg mb-2 flex items-start justify-between gap-3" style={{ background: '#FEE2E2', color: '#C0392B' }}>
+              <p>{uploadError}</p>
+              <button
+                type="button"
+                onClick={() => { setUploadError(''); setUploadStatus(null) }}
+                className="font-semibold hover:underline"
+                style={{ color: '#7A2A1F' }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          {uploadStatus && (
+            <div className="rounded-xl p-3" style={{ background: '#F5F0E8', border: '1px solid #DDD5C5' }}>
+              <div className="flex items-center justify-between gap-3 text-xs mb-2" style={{ color: '#7C5C3E' }}>
+                <span className="truncate">
+                  {uploadStatus.phase} · {uploadStatus.fileName}
+                </span>
+                <span className="flex-none">
+                  {uploadStatus.index}/{uploadStatus.total} · {uploadStatus.percent}%
+                </span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
+                <div
+                  className="h-full transition-all"
+                  style={{
+                    width: `${uploadStatus.percent}%`,
+                    background: uploadStatus.phase.toLowerCase().includes('failed') ? '#C0392B' : '#254F22',
+                  }}
+                />
+              </div>
+            </div>
           )}
           <button
             onClick={uploadAll}
