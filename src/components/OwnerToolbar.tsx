@@ -8,6 +8,7 @@ import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
 import { STOCK_ALBUM_BACKGROUNDS } from '@/lib/album-backgrounds'
 import type { Tier } from '@/lib/subscriptions'
+import { formatFileSize } from '@/lib/utils'
 
 type Props = {
   album: Album
@@ -32,6 +33,8 @@ const PRESETS = [
 
 const FEATURED_STOCK_BACKGROUNDS = STOCK_ALBUM_BACKGROUNDS.slice(0, 5)
 const DEFAULT_BG = '#FDFAF5'
+const MAX_BACKGROUND_BYTES = 10 * 1024 * 1024
+const BACKGROUND_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])
 
 export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAlbumUpdated }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
@@ -63,6 +66,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
 
   const shareRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
+  const backgroundInputRef = useRef<HTMLInputElement>(null)
 
   const publicSlug = album.custom_slug ?? album.slug
   const shareUrl = `${window.location.origin}/${publicSlug}`
@@ -204,6 +208,42 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   async function chooseBackground(choice: string, closeLibrary = false) {
     const saved = await saveBackground(choice)
     if (saved && closeLibrary) setShowBackgroundLibrary(false)
+  }
+
+  async function uploadBackgroundImage(file: File) {
+    setBackgroundError('')
+    if (!BACKGROUND_IMAGE_TYPES.has(file.type)) {
+      setBackgroundError('Use a JPG, PNG, WebP, or AVIF image.')
+      return
+    }
+    if (file.size > MAX_BACKGROUND_BYTES) {
+      setBackgroundError(`Background image must be ${formatFileSize(MAX_BACKGROUND_BYTES)} or smaller.`)
+      return
+    }
+
+    setBackgroundSaving(true)
+    try {
+      const form = new FormData()
+      form.set('slug', album.slug)
+      form.set('owner_token', ownerToken)
+      form.set('file', file)
+
+      const res = await fetch('/api/album/background/upload', {
+        method: 'POST',
+        body: form,
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string; background_theme?: string | null }
+      if (!res.ok || !body.background_theme) {
+        setBackgroundError(body.error ?? `Upload failed (${res.status})`)
+        return
+      }
+      onAlbumUpdated({ background_theme: body.background_theme })
+    } catch (e) {
+      setBackgroundError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setBackgroundSaving(false)
+      if (backgroundInputRef.current) backgroundInputRef.current.value = ''
+    }
   }
 
   async function createCollection() {
@@ -497,14 +537,36 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       ))}
                     </div>
 
-                    <button
-                      className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
-                      style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22', cursor: 'pointer' }}
-                      onClick={() => setShowBackgroundLibrary(true)}
-                    >
-                      <Images className="h-4 w-4" />
-                      See all stock photos
-                    </button>
+                    <input
+                      ref={backgroundInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) uploadBackgroundImage(file)
+                      }}
+                    />
+
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <button
+                        className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: '#254F22', border: '1px solid #254F22', color: '#FDFAF5', cursor: backgroundSaving ? 'wait' : 'pointer' }}
+                        onClick={() => backgroundInputRef.current?.click()}
+                        disabled={backgroundSaving}
+                      >
+                        <Images className="h-4 w-4" />
+                        {backgroundSaving ? 'Saving...' : 'Add picture'}
+                      </button>
+                      <button
+                        className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
+                        style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22', cursor: 'pointer' }}
+                        onClick={() => setShowBackgroundLibrary(true)}
+                      >
+                        <Images className="h-4 w-4" />
+                        See all
+                      </button>
+                    </div>
 
                     <div className="flex items-center gap-2">
                       <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Custom color</label>

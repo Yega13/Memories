@@ -15,4 +15,5 @@ alter table public.albums
     )
     or background_theme ~ '^image:/backgrounds/[a-z0-9-]+[.]svg$'
     or background_theme ~ '^image:https://images[.]pexels[.]com/photos/[0-9]+/pexels-photo-[0-9]+[.](jpeg|jpg)([?].*)?$'
+    or background_theme ~ '^image:https://[a-z0-9-]+[.]supabase[.]co/storage/v1/object/public/Photos/.+$'
   );
