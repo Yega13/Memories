@@ -227,8 +227,8 @@ export default function Home() {
               caption: '"Name it."',
               label: 'First',
               desc: 'Give your album a name. You get a private link you own — no account, no app.',
-              image: '/card1.jpg',
-              alt: 'Forest trail photo representing a newly named Hushare album',
+              image: 'https://i.pinimg.com/736x/86/28/a9/8628a90f3228558f5961af600d479b28.jpg',
+              alt: 'Photo card representing a newly named Hushare album',
             },
             {
               rot: 2.5,
@@ -238,8 +238,8 @@ export default function Home() {
               caption: '"Share it."',
               label: 'Then',
               desc: 'Text it, print a QR for the table, drop it in the group chat. One link, everyone in.',
-              image: '/card2.jpg',
-              alt: 'Golden-hour photo representing a shared Hushare album link',
+              image: 'https://i.pinimg.com/webp70/736x/04/cf/49/04cf4974d0e093ab542a51317dc7abe8.webp',
+              alt: 'Photo card representing a shared Hushare album link',
             },
             {
               rot: -1.5,
@@ -249,8 +249,8 @@ export default function Home() {
               caption: '"Keep it."',
               label: 'As long as you want',
               desc: 'Photos flow in from everyone who came. Free albums stay put — untouched for a year, they quietly retire. Active ones live on.',
-              image: '/card3.jpg',
-              alt: 'Lake photo representing a kept Hushare album',
+              image: 'https://i.pinimg.com/736x/23/97/bc/2397bc85b02c33168976049f3192fe46.jpg',
+              alt: 'Photo card representing a kept Hushare album',
             },
           ].map((step, i) => (
             <div
@@ -286,7 +286,7 @@ export default function Home() {
                   className="relative flex items-center justify-center aspect-square overflow-hidden"
                   style={{ background: '#F5F0E8' }}
                 >
-                  <Image src={step.image} alt={step.alt} fill sizes="240px" className="object-cover" />
+                  <Image src={step.image} alt={step.alt} fill sizes="240px" className="object-cover" unoptimized />
                 </div>
 
                 {/* Handwritten caption in the white margin */}
