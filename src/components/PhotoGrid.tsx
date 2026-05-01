@@ -155,9 +155,8 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
 
       {current && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setLightbox(null)}>
-          {/* Blurred backdrop: the current item's still image, scaled and blurred,
-              then dimmed with a translucent veil for contrast. For videos we use
-              the poster (falls back to nothing if missing). */}
+          {/* Lightly softened backdrop: the current item's still image, dimmed
+              for contrast. For videos we use the poster if one exists. */}
           <div
             aria-hidden
             className="absolute inset-0"
@@ -165,14 +164,28 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
               backgroundImage: `url(${current.media_type === 'video' ? (current.poster_url || '') : current.url})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
-              filter: 'blur(32px) saturate(1.1)',
-              transform: 'scale(1.15)',
+              filter: 'blur(10px) saturate(1.05)',
+              transform: 'scale(1.05)',
             }}
           />
-          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(15, 20, 15, 0.65)' }} />
+          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.50)' }} />
 
-          <button className="absolute top-4 right-4 z-10 transition hover:opacity-70" style={{ color: '#FDFAF5' }} onClick={() => setLightbox(null)}>
-            <X className="w-6 h-6" />
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute top-4 right-4 z-20 flex items-center justify-center rounded-full transition hover:opacity-80"
+            style={{
+              width: 42,
+              height: 42,
+              background: 'rgba(15,20,15,0.68)',
+              border: '1px solid rgba(253,250,245,0.35)',
+              color: '#FDFAF5',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}
+            onClick={(e) => { e.stopPropagation(); setLightbox(null) }}
+          >
+            <X className="w-5 h-5" />
           </button>
           <button className="absolute left-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); prev() }}>
             <ChevronLeft className="w-8 h-8" />

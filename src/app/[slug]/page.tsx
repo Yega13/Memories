@@ -13,6 +13,20 @@ import PasswordGate from '@/components/PasswordGate'
 
 const BG_KEY = 'memories-bg-color'
 const DEFAULT_BG = '#FDFAF5'
+const IMAGE_BG_PREFIX = 'image:'
+
+function albumBackgroundStyle(bg: string): React.CSSProperties {
+  if (bg.startsWith(IMAGE_BG_PREFIX)) {
+    return {
+      backgroundColor: '#1A2B1A',
+      backgroundImage: `linear-gradient(rgba(253,250,245,0.72), rgba(253,250,245,0.72)), url(${bg.slice(IMAGE_BG_PREFIX.length)})`,
+      backgroundAttachment: 'fixed',
+      backgroundPosition: 'center',
+      backgroundSize: 'cover',
+    }
+  }
+  return { background: bg }
+}
 
 export default function AlbumPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -25,7 +39,7 @@ export default function AlbumPage() {
   const [notFound, setNotFound] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [userTier, setUserTier] = useState<Tier>('free')
-  const [bgColor, setBgColorState] = useState<string>(DEFAULT_BG)
+  const [bgChoice, setBgChoiceState] = useState<string>(DEFAULT_BG)
   // Password-gate state. When the resolver says "password_required", we
   // stash the minimal summary it returned (id + title + random slug) and
   // show <PasswordGate> instead of the album.
@@ -33,12 +47,12 @@ export default function AlbumPage() {
 
   useEffect(() => {
     const saved = localStorage.getItem(BG_KEY)
-    if (saved) setBgColorState(saved)
+    if (saved) setBgChoiceState(saved)
   }, [])
 
-  function setBgColor(color: string) {
-    setBgColorState(color)
-    localStorage.setItem(BG_KEY, color)
+  function setBgChoice(choice: string) {
+    setBgChoiceState(choice)
+    localStorage.setItem(BG_KEY, choice)
   }
 
   const fetchAlbum = useCallback(async () => {
@@ -139,7 +153,7 @@ export default function AlbumPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: bgColor }}>
+      <div className="min-h-screen flex items-center justify-center" style={albumBackgroundStyle(bgChoice)}>
         <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '2px solid #DDD5C5', borderTopColor: '#254F22' }} />
       </div>
     )
@@ -180,7 +194,7 @@ export default function AlbumPage() {
   }
 
   return (
-    <main className="min-h-screen" style={{ background: bgColor }}>
+    <main className="min-h-screen" style={albumBackgroundStyle(bgChoice)}>
       <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} />
 
       {isOwner && (
@@ -189,8 +203,8 @@ export default function AlbumPage() {
           photos={photos}
           ownerToken={ownerToken!}
           userTier={userTier}
-          bgColor={bgColor}
-          onBgColorChange={setBgColor}
+          bgChoice={bgChoice}
+          onBgChoiceChange={setBgChoice}
           onAlbumUpdated={(patch) => setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))}
         />
       )}

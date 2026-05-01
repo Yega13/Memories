@@ -13,8 +13,8 @@ type Props = {
   photos: Photo[]
   ownerToken: string
   userTier: Tier
-  bgColor: string
-  onBgColorChange: (color: string) => void
+  bgChoice: string
+  onBgChoiceChange: (choice: string) => void
   onAlbumUpdated: (patch: Partial<Album>) => void
 }
 
@@ -29,7 +29,17 @@ const PRESETS = [
   { label: 'Forest', value: '#1A2B1A' },
 ]
 
-export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgColor, onBgColorChange, onAlbumUpdated }: Props) {
+const STOCK_BACKGROUNDS = [
+  { label: 'Wedding', value: 'image:/wedding.jpg', src: '/wedding.jpg' },
+  { label: 'Trail', value: 'image:/card1.jpg', src: '/card1.jpg' },
+  { label: 'Golden', value: 'image:/card2.jpg', src: '/card2.jpg' },
+  { label: 'Lake', value: 'image:/card3.jpg', src: '/card3.jpg' },
+  { label: 'Explorers', value: 'image:/children.avif', src: '/children.avif' },
+]
+
+const DEFAULT_BG = '#FDFAF5'
+
+export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgChoice, onBgChoiceChange, onAlbumUpdated }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
   const [showQr, setShowQr] = useState(false)
   const [zipping, setZipping] = useState(false)
@@ -204,7 +214,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCo
     color: '#254F22',
   }
 
-  const isDark = bgColor === '#1C2333' || bgColor === '#1A2B1A'
+  const currentColor = bgChoice.startsWith('#') ? bgChoice : DEFAULT_BG
+  const isDark = bgChoice === '#1C2333' || bgChoice === '#1A2B1A' || bgChoice.startsWith('image:')
 
   return (
     <div style={{ background: '#F5F0E8', borderBottom: '1px solid #DDD5C5' }}>
@@ -412,29 +423,32 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCo
               style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 260, padding: '16px' }}
             >
               <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Background color</span>
+                <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Album background</span>
                 <button onClick={() => setShowSettings(false)} style={{ color: '#A89880', cursor: 'pointer' }}>
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
+              <p className="text-[11px] font-semibold uppercase mb-2" style={{ color: '#8B6F4E', letterSpacing: '0.08em' }}>
+                Colors
+              </p>
               <div className="grid grid-cols-4 gap-2 mb-3">
                 {PRESETS.map(preset => (
                   <button
                     key={preset.value}
                     title={preset.label}
-                    onClick={() => onBgColorChange(preset.value)}
+                    onClick={() => onBgChoiceChange(preset.value)}
                     style={{
                       width: '100%',
                       aspectRatio: '1',
                       borderRadius: '10px',
                       background: preset.value,
-                      border: bgColor === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
+                      border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
                       cursor: 'pointer',
                       position: 'relative',
                     }}
                   >
-                    {bgColor === preset.value && (
+                    {bgChoice === preset.value && (
                       <span style={{
                         position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: 14, color: isDark ? '#fff' : '#254F22',
@@ -444,21 +458,62 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCo
                 ))}
               </div>
 
+              <p className="text-[11px] font-semibold uppercase mb-2" style={{ color: '#8B6F4E', letterSpacing: '0.08em' }}>
+                Stock photos
+              </p>
+              <div className="grid grid-cols-5 gap-2 mb-3">
+                {STOCK_BACKGROUNDS.map((preset) => (
+                  <button
+                    key={preset.value}
+                    title={preset.label}
+                    onClick={() => onBgChoiceChange(preset.value)}
+                    className="relative overflow-hidden"
+                    style={{
+                      width: '100%',
+                      aspectRatio: '1',
+                      borderRadius: '10px',
+                      backgroundImage: `url(${preset.src})`,
+                      backgroundPosition: 'center',
+                      backgroundSize: 'cover',
+                      border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {bgChoice === preset.value && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          background: 'rgba(37,79,34,0.25)',
+                          fontSize: 14,
+                        }}
+                      >
+                        ✓
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Custom</label>
                 <input
                   type="color"
-                  value={bgColor}
-                  onChange={e => onBgColorChange(e.target.value)}
+                  value={currentColor}
+                  onChange={e => onBgChoiceChange(e.target.value)}
                   style={{ width: 36, height: 28, borderRadius: 8, border: '1.5px solid #DDD5C5', cursor: 'pointer', padding: 2 }}
                 />
-                <span className="text-xs font-mono" style={{ color: '#A89880' }}>{bgColor}</span>
+                <span className="text-xs font-mono" style={{ color: '#A89880' }}>{currentColor}</span>
               </div>
 
               <button
                 className="mt-3 w-full text-xs"
                 style={{ color: '#A89880', cursor: 'pointer', textAlign: 'center' }}
-                onClick={() => onBgColorChange('#FDFAF5')}
+                onClick={() => onBgChoiceChange('#FDFAF5')}
               >
                 Reset to default
               </button>
