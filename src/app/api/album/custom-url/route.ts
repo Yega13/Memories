@@ -37,8 +37,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Sign in to set a custom URL' }, { status: 401, headers: NO_STORE })
   }
 
-  // 2. Tier — must be Pro or Studio.
-  const gate = await requireTier(user.id, 'pro')
+  // 2. Tier — must be Pro or Studio. Pass the full user so the admin
+  // override in getUserTier kicks in for in-house testing.
+  const gate = await requireTier(user, 'pro')
   if (gate) {
     return NextResponse.json({ error: 'Pro plan required' }, { status: 403, headers: NO_STORE })
   }

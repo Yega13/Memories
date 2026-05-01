@@ -13,6 +13,6 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const tier = await getUserTier(user?.id ?? null)
+  const tier = await getUserTier(user)
   return NextResponse.json({ tier }, { headers: NO_STORE })
 }

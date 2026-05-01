@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getUserTier } from '@/lib/subscriptions'
+import { getUserTierById } from '@/lib/subscriptions'
 
 export const runtime = 'nodejs'
 
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
   }
 
-  const tier = await getUserTier(byCustom.user_id)
+  const tier = await getUserTierById(byCustom.user_id)
   if (tier === 'free') {
     // Owner downgraded — pretend the custom URL doesn't exist. The album is
     // still reachable via its random slug.
