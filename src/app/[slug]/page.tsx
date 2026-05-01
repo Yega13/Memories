@@ -121,11 +121,21 @@ export default function AlbumPage() {
   }
 
   if (notFound || !album) {
+    // Two-tone treatment for the 404 — deep green plate, cream type. Ignores
+    // the user's chosen bgColor on purpose so the not-found state always
+    // looks intentional rather than tinted by a stale localStorage value.
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4" style={{ background: bgColor }}>
-        <h1 className="text-2xl font-bold" style={{ color: '#254F22' }}>Album not found</h1>
-        <p style={{ color: '#7C5C3E' }}>This link may be invalid or the album was deleted.</p>
-        <a href="/" style={{ color: '#1B3A6B' }} className="hover:underline">Create a new album →</a>
+      <div
+        className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center"
+        style={{ background: '#254F22', color: '#FDFAF5' }}
+      >
+        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-serif)' }}>
+          Album not found
+        </h1>
+        <p className="opacity-90">This link may be invalid or the album was deleted.</p>
+        <a href="/" className="underline underline-offset-4 hover:opacity-80 transition">
+          Create a new album →
+        </a>
       </div>
     )
   }
