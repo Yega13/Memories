@@ -142,7 +142,7 @@ const billingFaq = [
   },
   {
     q: "What do Studio Collections do?",
-    a: "Collections group several albums under one public /c/... link. They are built for photographers, planners, and families who need to present or manage related albums together instead of sending many separate links.",
+    a: "Collections are Studio-only pages that group several albums under one public /c/... link. They are built for photographers, planners, and families who need to present or manage related albums together instead of sending many separate links.",
   },
   {
     q: "Can I recover a lost owner link?",
@@ -150,7 +150,7 @@ const billingFaq = [
   },
   {
     q: "Can I try Pro before I pay?",
-    a: "Yes. We give you 14 days to use every Pro feature with no card on file. If you do not start a paid plan after the trial, the album quietly returns to the Free tier — nothing is deleted.",
+    a: "There is no separate no-card trial right now. Monthly plans have a first-month intro price, then renew at the standard rate from month two. You can cancel anytime from your account.",
   },
   {
     q: "How do you handle refunds?",
@@ -166,7 +166,7 @@ const billingFaq = [
   },
   {
     q: "Which currencies do you accept?",
-    a: "USD at launch. EUR, GBP, and AMD prices are planned for late 2026 once we have a billing partner in place.",
+    a: "USD for now. We may add local currency pricing later if demand is strong enough, but the current checkout is USD.",
   },
   {
     q: "Is there a discount for non-profits or weddings?",

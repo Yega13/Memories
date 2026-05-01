@@ -58,9 +58,6 @@ export default function Home() {
             Support
           </Link>
           <AccountNavLink />
-          <span className="hidden md:inline-block text-xs font-medium px-3 py-1 rounded-full" style={{ background: '#EAF0E8', color: '#254F22' }}>
-            Free during beta
-          </span>
         </div>
       </nav>
 
@@ -202,7 +199,7 @@ export default function Home() {
 
             {/* Floating "live" badge */}
             <div className="absolute rounded-2xl px-4 py-3 shadow-xl" style={{ top: '270px', right: '15px', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(221,213,197,0.8)', zIndex: 20, backdropFilter: 'blur(8px)' }}>
-              <p className="text-xs font-semibold" style={{ color: '#254F22' }}>✦ 12 photos added</p>
+              <p className="text-xs font-semibold" style={{ color: '#254F22' }}>12 photos added</p>
               <p className="text-xs" style={{ color: '#8B6F4E' }}>by 5 people</p>
             </div>
           </div>
@@ -225,72 +222,35 @@ export default function Home() {
             {
               rot: -3.5,
               lift: 0,
-              bg: '#F2E9D8',
               tapeColor: 'rgba(196, 152, 96, 0.45)',
               captionColor: '#7C4A2D',
               caption: '"Name it."',
               label: 'First',
               desc: 'Give your album a name. You get a private link you own — no account, no app.',
-              illo: (
-                <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none" stroke="#7C4A2D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 78 L52 44 L62 54 L28 88 L14 92 Z" fill="#FBF4E4" />
-                  <path d="M52 44 L66 30 A6 6 0 0 1 76 40 L62 54" fill="#E8D5B0" />
-                  <path d="M14 92 L18 78" />
-                  <path d="M30 62 L50 42" opacity="0.35" />
-                </svg>
-              ),
+              image: '/card1.jpg',
+              alt: 'Forest trail photo representing a newly named Hushare album',
             },
             {
               rot: 2.5,
               lift: 32,
-              bg: '#E6EEE3',
               tapeColor: 'rgba(120, 150, 110, 0.4)',
               captionColor: '#254F22',
               caption: '"Share it."',
               label: 'Then',
               desc: 'Text it, print a QR for the table, drop it in the group chat. One link, everyone in.',
-              illo: (
-                <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none" stroke="#254F22">
-                  <rect x="18" y="18" width="26" height="26" rx="2" strokeWidth="2.5" />
-                  <rect x="24" y="24" width="6" height="6" fill="#254F22" />
-                  <rect x="32" y="24" width="6" height="6" fill="#254F22" />
-                  <rect x="24" y="32" width="6" height="6" fill="#254F22" />
-                  <rect x="56" y="18" width="26" height="26" rx="2" strokeWidth="2.5" />
-                  <rect x="62" y="24" width="6" height="6" fill="#254F22" />
-                  <rect x="70" y="24" width="6" height="6" fill="#254F22" />
-                  <rect x="70" y="32" width="6" height="6" fill="#254F22" />
-                  <rect x="18" y="56" width="26" height="26" rx="2" strokeWidth="2.5" />
-                  <rect x="24" y="62" width="6" height="6" fill="#254F22" />
-                  <rect x="24" y="70" width="6" height="6" fill="#254F22" />
-                  <rect x="32" y="70" width="6" height="6" fill="#254F22" />
-                  <rect x="56" y="56" width="4" height="4" fill="#254F22" />
-                  <rect x="64" y="56" width="4" height="4" fill="#254F22" />
-                  <rect x="72" y="56" width="4" height="4" fill="#254F22" />
-                  <rect x="56" y="64" width="4" height="4" fill="#254F22" />
-                  <rect x="64" y="72" width="4" height="4" fill="#254F22" />
-                  <rect x="72" y="64" width="4" height="4" fill="#254F22" />
-                  <rect x="72" y="72" width="4" height="4" fill="#254F22" />
-                </svg>
-              ),
+              image: '/card2.jpg',
+              alt: 'Golden-hour photo representing a shared Hushare album link',
             },
             {
               rot: -1.5,
               lift: 12,
-              bg: '#DCE4EE',
               tapeColor: 'rgba(120, 135, 170, 0.4)',
               captionColor: '#1B3A6B',
               caption: '"Keep it."',
               label: 'As long as you want',
               desc: 'Photos flow in from everyone who came. Free albums stay put — untouched for a year, they quietly retire. Active ones live on.',
-              illo: (
-                <svg viewBox="0 0 100 100" className="w-20 h-20" fill="none">
-                  <rect x="14" y="28" width="48" height="48" rx="3" fill="#FBF4E4" stroke="#1B3A6B" strokeWidth="2" transform="rotate(-8 38 52)" />
-                  <rect x="28" y="22" width="48" height="48" rx="3" fill="#EAE2D0" stroke="#1B3A6B" strokeWidth="2" transform="rotate(4 52 46)" />
-                  <rect x="24" y="20" width="48" height="48" rx="3" fill="#FFFFFF" stroke="#1B3A6B" strokeWidth="2" />
-                  <circle cx="38" cy="36" r="4" fill="#1B3A6B" />
-                  <path d="M24 60 L36 48 L48 56 L60 44 L72 56 L72 68 L24 68 Z" fill="#254F22" opacity="0.85" />
-                </svg>
-              ),
+              image: '/card3.jpg',
+              alt: 'Lake photo representing a kept Hushare album',
             },
           ].map((step, i) => (
             <div
@@ -323,10 +283,10 @@ export default function Home() {
 
                 {/* Photo area */}
                 <div
-                  className="flex items-center justify-center aspect-square"
-                  style={{ background: step.bg }}
+                  className="relative flex items-center justify-center aspect-square overflow-hidden"
+                  style={{ background: '#F5F0E8' }}
                 >
-                  {step.illo}
+                  <Image src={step.image} alt={step.alt} fill sizes="240px" className="object-cover" />
                 </div>
 
                 {/* Handwritten caption in the white margin */}
@@ -418,7 +378,7 @@ export default function Home() {
               q: 'Is Hushare really free?',
               a: (
                 <>
-                  Yes — <strong className="font-semibold" style={{ color: '#254F22' }}>free</strong> during beta, with no credit card. When we introduce paid tiers, free albums will remain free; paid tiers will add larger storage caps, HD video, and removal of the 12-month inactivity rule.
+                  Yes. Free albums are free to create, share, upload to, and download from, with no credit card required. Paid tiers add custom URLs, passwords, larger uploads, Studio Collections, and no inactivity retirement.
                 </>
               ),
             },
@@ -434,7 +394,7 @@ export default function Home() {
               q: 'What are Collections?',
               a: (
                 <>
-                  Collections are Studio pages that group several albums under one public link, useful for photographers, event planners, or families managing related albums.
+                  Collections are Studio-only pages that group several albums under one public link, useful for photographers, event planners, or families managing related albums.
                 </>
               ),
             },
@@ -474,7 +434,7 @@ export default function Home() {
               q: 'What photo formats and sizes are supported?',
               a: (
                 <>
-                  JPG, PNG, HEIC, and WebP images up to <strong className="font-semibold" style={{ color: '#254F22' }}>25 MB</strong> each, and MP4, MOV, or WebM video clips up to <strong className="font-semibold" style={{ color: '#254F22' }}>50 MB</strong>. There is no cap on the number of items per free album during beta.
+                  Free albums support JPG, PNG, HEIC, and WebP images up to <strong className="font-semibold" style={{ color: '#254F22' }}>25 MB</strong> each, plus MP4, MOV, or WebM videos up to <strong className="font-semibold" style={{ color: '#254F22' }}>50 MB</strong>. Pro and Studio albums support uploads up to <strong className="font-semibold" style={{ color: '#254F22' }}>200 MB</strong>.
                 </>
               ),
             },
@@ -655,8 +615,8 @@ export default function Home() {
                   className="text-sm leading-relaxed"
                   style={{ color: '#5C4A3C', maxWidth: '24rem' }}
                 >
-                  Free while we&apos;re in beta. One link, any number of guests, no
-                  app to install. Albums stay until they sit untouched for a year.
+                  Start free. One link, any number of guests, no
+                  app to install. Active albums stay available; quiet free albums retire after a year.
                 </p>
 
                 <button

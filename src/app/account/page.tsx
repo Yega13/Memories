@@ -114,91 +114,136 @@ export default async function AccountPage({ searchParams }: Props) {
         day: 'numeric',
       })
     : null
+  const planName = tierLabel ?? 'Studio test access'
+  const isStudio = subscription?.tier === 'studio' || !subscription
+  const planFeatures = isStudio
+    ? ['Studio Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
+    : ['Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
+  const nextLabel = subscription?.cancel_at_period_end ? 'Access ends' : 'Next renewal'
 
   return (
     <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
       <AccountNav />
-      <main className="px-4 py-16">
-        <div className="max-w-md mx-auto">
-        <h1
-          className="text-3xl font-bold mb-6"
-          style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
-        >
-          Account
-        </h1>
-
-        <section
-          className="rounded-2xl p-6 mb-4"
-          style={{
-            background: '#FFFFFF',
-            border: '1px solid #DDD5C5',
-            boxShadow: '0 4px 32px rgba(37,79,34,0.10)',
-          }}
-        >
-          <p className="text-xs mb-1 uppercase tracking-wide" style={{ color: '#8B6F4E' }}>
-            Signed in as
-          </p>
-          <p className="text-base font-medium break-all" style={{ color: '#254F22' }}>
-            {user.email}
-          </p>
-        </section>
-
-        {subscription ? (
+      <main className="px-4 py-10 sm:py-14">
+        <div className="max-w-5xl mx-auto">
           <section
-            className="rounded-2xl p-6 mb-6"
+            className="rounded-2xl p-6 sm:p-8 mb-6"
             style={{
               background: '#FFFFFF',
               border: '1px solid #DDD5C5',
               boxShadow: '0 4px 32px rgba(37,79,34,0.10)',
             }}
           >
-            <p className="text-xs mb-1 uppercase tracking-wide" style={{ color: '#8B6F4E' }}>
-              Subscription
-            </p>
-            <p className="text-base font-medium mb-3" style={{ color: '#254F22' }}>
-              {tierLabel}
-            </p>
-            <dl className="text-sm space-y-1" style={{ color: '#5C4A3C' }}>
-              <div className="flex justify-between">
-                <dt>Status</dt>
-                <dd className="font-medium capitalize">
-                  {subscription.cancel_at_period_end && subscription.status === 'active'
-                    ? 'Active (cancels at period end)'
-                    : subscription.status}
-                </dd>
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs mb-3 uppercase tracking-[0.18em]" style={{ color: '#8B6F4E', fontWeight: 600 }}>
+                  Account
+                </p>
+                <h1
+                  className="text-3xl sm:text-4xl font-bold mb-3"
+                  style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
+                >
+                  Your Hushare workspace
+                </h1>
+                <p className="text-sm break-all" style={{ color: '#5C4A3C' }}>
+                  Signed in as <strong>{user.email}</strong>
+                </p>
               </div>
-              {periodEnd && (
-                <div className="flex justify-between">
-                  <dt>{subscription.cancel_at_period_end ? 'Ends' : 'Renews'}</dt>
-                  <dd className="font-medium">{periodEnd}</dd>
+              <div className="rounded-xl px-4 py-3" style={{ background: '#F5F0E8', border: '1px solid #DDD5C5' }}>
+                <p className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>
+                  Current access
+                </p>
+                <p className="font-semibold" style={{ color: '#254F22' }}>{planName}</p>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
+            <section
+              className="rounded-2xl p-6"
+              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.08)' }}
+            >
+              <div className="flex items-start justify-between gap-4 mb-5">
+                <div>
+                  <p className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>Plan</p>
+                  <h2 className="text-xl font-semibold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>
+                    {planName}
+                  </h2>
                 </div>
+                <span className="rounded-full px-3 py-1 text-xs font-semibold capitalize" style={{ background: '#EAF0E8', color: '#254F22' }}>
+                  {subscription?.status ?? 'admin'}
+                </span>
+              </div>
+
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-5" style={{ color: '#5C4A3C' }}>
+                <div className="rounded-xl p-4" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
+                  <dt className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>Uploads</dt>
+                  <dd className="font-semibold" style={{ color: '#254F22' }}>{subscription ? 'Up to 200 MB' : 'Studio limits enabled'}</dd>
+                </div>
+                <div className="rounded-xl p-4" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
+                  <dt className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>{periodEnd ? nextLabel : 'Billing'}</dt>
+                  <dd className="font-semibold" style={{ color: '#254F22' }}>{periodEnd ?? 'No active paid subscription'}</dd>
+                </div>
+              </dl>
+
+              <div className="flex flex-wrap gap-2">
+                {planFeatures.map((feature) => (
+                  <span key={feature} className="rounded-full px-3 py-1 text-xs" style={{ background: '#F5F0E8', color: '#5C4A3C', border: '1px solid #E8E0D2' }}>
+                    {feature}
+                  </span>
+                ))}
+              </div>
+
+              {subscription && (
+                <form action="/api/portal" method="POST" className="mt-6">
+                  <button
+                    type="submit"
+                    className="w-full font-semibold rounded-xl py-3 text-sm transition hover:opacity-90"
+                    style={{ background: '#254F22', color: '#FDFAF5' }}
+                  >
+                    Manage subscription
+                  </button>
+                </form>
               )}
-            </dl>
-            <form action="/api/portal" method="POST" className="mt-5">
-              <button
-                type="submit"
-                className="w-full font-semibold rounded-xl py-2.5 text-sm transition hover:opacity-90"
+            </section>
+
+            <section
+              className="rounded-2xl p-6"
+              style={{ background: '#FBF4E4', border: '1px solid rgba(196,166,120,0.35)' }}
+            >
+              <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#8B6F4E' }}>What to keep handy</p>
+              <h2 className="text-xl font-semibold mb-3" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>
+                Owner links still matter
+              </h2>
+              <p className="text-sm leading-relaxed mb-5" style={{ color: '#5C4A3C' }}>
+                Album ownership is still proven by the owner link. Save it after creating an album, especially before sharing the public link with guests.
+              </p>
+              <Link
+                href="/"
+                className="inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
                 style={{ background: '#254F22', color: '#FDFAF5' }}
               >
-                Manage subscription
-              </button>
-            </form>
-          </section>
-        ) : (
-          <section
-            className="rounded-2xl p-6 mb-6"
-            style={{
-              background: '#FBF4E4',
-              border: '1px solid rgba(196,166,120,0.35)',
-            }}
-          >
-            <p className="text-sm" style={{ color: '#5C4A3C' }}>
-              Admin access (no active subscription).
-            </p>
-          </section>
-        )}
+                Create a new album
+              </Link>
+            </section>
+          </div>
 
-        <SignOutButton />
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 mb-6">
+            {[
+              ['Customize albums', 'Change album colors and stock backgrounds from each owner toolbar.'],
+              ['Protect important links', 'Use passwords and custom URLs on Pro and Studio albums.'],
+              [isStudio ? 'Build Collections' : 'Upgrade for Collections', isStudio ? 'Create public /c/... pages that group related albums.' : 'Collections are available on Studio.'],
+            ].map(([title, copy]) => (
+              <div key={title} className="rounded-2xl p-5" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
+                <h3 className="font-semibold mb-2" style={{ color: '#254F22' }}>{title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>{copy}</p>
+              </div>
+            ))}
+          </section>
+
+          <div className="max-w-sm">
+            <SignOutButton />
+          </div>
         </div>
       </main>
     </div>

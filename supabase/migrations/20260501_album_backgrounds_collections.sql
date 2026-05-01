@@ -16,6 +16,7 @@ alter table public.albums
       'image:/card3.jpg',
       'image:/children.avif'
     )
+    or background_theme ~ '^image:/backgrounds/[a-z0-9-]+\.svg$'
   );
 
 create table if not exists public.collections (

@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
+import { STOCK_ALBUM_BACKGROUNDS } from '@/lib/album-backgrounds'
 import type { Tier } from '@/lib/subscriptions'
 import Image from 'next/image'
-import { Copy, QrCode, Download, Check, Settings, X, Link2, Lock, LockOpen, FolderPlus } from 'lucide-react'
+import { Copy, QrCode, Download, Check, Settings, X, Link2, Lock, LockOpen, FolderPlus, Images } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 
@@ -27,13 +28,7 @@ const PRESETS = [
   { label: 'Forest', value: '#1A2B1A' },
 ]
 
-const STOCK_BACKGROUNDS = [
-  { label: 'Wedding', value: 'image:/wedding.jpg', src: '/wedding.jpg' },
-  { label: 'Trail', value: 'image:/card1.jpg', src: '/card1.jpg' },
-  { label: 'Golden', value: 'image:/card2.jpg', src: '/card2.jpg' },
-  { label: 'Lake', value: 'image:/card3.jpg', src: '/card3.jpg' },
-  { label: 'Explorers', value: 'image:/children.avif', src: '/children.avif' },
-]
+const FEATURED_STOCK_BACKGROUNDS = STOCK_ALBUM_BACKGROUNDS.slice(0, 5)
 
 const DEFAULT_BG = '#FDFAF5'
 
@@ -61,6 +56,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const [passwordSaved, setPasswordSaved] = useState(false)
   const [backgroundSaving, setBackgroundSaving] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
+  const [showBackgroundLibrary, setShowBackgroundLibrary] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
   const customUrlRef = useRef<HTMLDivElement>(null)
   const passwordRef = useRef<HTMLDivElement>(null)
@@ -186,7 +182,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     }
   }
 
-  async function saveBackground(choice: string | null) {
+  async function saveBackground(choice: string | null): Promise<boolean> {
     setBackgroundSaving(true)
     setBackgroundError('')
     try {
@@ -202,14 +198,21 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       const body = (await res.json().catch(() => ({}))) as { error?: string; background_theme?: string | null }
       if (!res.ok) {
         setBackgroundError(body.error ?? `Save failed (${res.status})`)
-        return
+        return false
       }
       onAlbumUpdated({ background_theme: body.background_theme ?? null })
+      return true
     } catch (e) {
       setBackgroundError(e instanceof Error ? e.message : 'Network error')
+      return false
     } finally {
       setBackgroundSaving(false)
     }
+  }
+
+  async function chooseBackground(choice: string, closeLibrary = false) {
+    const saved = await saveBackground(choice)
+    if (saved && closeLibrary) setShowBackgroundLibrary(false)
   }
 
   async function createCollection() {
@@ -636,11 +639,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 Stock photos
               </p>
               <div className="grid grid-cols-5 gap-2 mb-3">
-                {STOCK_BACKGROUNDS.map((preset) => (
+                {FEATURED_STOCK_BACKGROUNDS.map((preset) => (
                   <button
                     key={preset.value}
                     title={preset.label}
-                    onClick={() => saveBackground(preset.value)}
+                    onClick={() => chooseBackground(preset.value)}
                     disabled={backgroundSaving}
                     className="relative overflow-hidden"
                     style={{
@@ -674,6 +677,15 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 ))}
               </div>
 
+              <button
+                className="mb-3 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
+                style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22', cursor: 'pointer' }}
+                onClick={() => setShowBackgroundLibrary(true)}
+              >
+                <Images className="h-4 w-4" />
+                See all stock photos
+              </button>
+
               <div className="flex items-center gap-2">
                 <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Custom</label>
                 <input
@@ -706,6 +718,77 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
             <Image src={qrUrl} alt="QR Code" width={150} height={150} unoptimized />
           </div>
           <p className="text-xs mt-2" style={{ color: '#7C5C3E' }}>Scan to open the album</p>
+        </div>
+      )}
+
+      {showBackgroundLibrary && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center px-4 py-6"
+          style={{ background: 'rgba(26, 43, 26, 0.46)', backdropFilter: 'blur(8px)' }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowBackgroundLibrary(false)
+          }}
+        >
+          <div
+            className="max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl shadow-2xl"
+            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}
+          >
+            <div
+              className="sticky top-0 z-10 flex items-center justify-between px-5 py-4"
+              style={{ background: '#FFFFFF', borderBottom: '1px solid #E8E0D2' }}
+            >
+              <div>
+                <h2 className="text-base font-semibold" style={{ color: '#254F22' }}>Stock backgrounds</h2>
+                <p className="text-xs" style={{ color: '#7C5C3E' }}>Pick a quiet image for this album.</p>
+              </div>
+              <button
+                onClick={() => setShowBackgroundLibrary(false)}
+                className="rounded-full p-2 transition hover:opacity-80"
+                style={{ color: '#7C5C3E', background: '#F5F0E8', cursor: 'pointer' }}
+                aria-label="Close stock backgrounds"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
+              {STOCK_ALBUM_BACKGROUNDS.map((preset) => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  disabled={backgroundSaving}
+                  onClick={() => chooseBackground(preset.value, true)}
+                  className="group overflow-hidden rounded-xl text-left transition hover:opacity-95 disabled:cursor-wait"
+                  style={{
+                    border: bgChoice === preset.value ? '2px solid #254F22' : '1px solid #DDD5C5',
+                    background: '#FDFAF5',
+                    cursor: backgroundSaving ? 'wait' : 'pointer',
+                  }}
+                >
+                  <span
+                    className="relative block aspect-[4/3] w-full"
+                    style={{
+                      backgroundImage: `url(${preset.src})`,
+                      backgroundPosition: 'center',
+                      backgroundSize: 'cover',
+                    }}
+                  >
+                    {bgChoice === preset.value && (
+                      <span
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ background: 'rgba(37,79,34,0.28)', color: '#FFFFFF' }}
+                      >
+                        <Check className="h-6 w-6" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="block px-3 py-2 text-xs font-semibold" style={{ color: '#254F22' }}>
+                    {preset.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
