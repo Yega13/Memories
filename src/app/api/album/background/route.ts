@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isValidAlbumBackground, normalizeAlbumBackground } from '@/lib/album-background'
+import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
 
@@ -49,11 +50,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, background_theme }, { headers: NO_STORE })
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let r = 0
-  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return r === 0
 }

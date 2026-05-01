@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase, type Album } from '@/lib/supabase'
 import {
   detectKind,
@@ -84,13 +84,25 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const pendingRef = useRef<PendingItem[]>([])
 
   // Caps come from the resolver based on the OWNER's tier — every guest
   // uploading to a Pro album gets the larger cap. Fall back to free
   // defaults if the resolver didn't (or couldn't) populate them.
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
 
+  useEffect(() => {
+    pendingRef.current = pending
+  }, [pending])
+
+  useEffect(() => {
+    return () => {
+      pendingRef.current.forEach((item) => URL.revokeObjectURL(item.preview))
+    }
+  }, [])
+
   function addFiles(files: FileList | null) {
+    if (uploading) return
     if (!files) return
     const next: PendingItem[] = []
     const rejected: string[] = []
@@ -132,17 +144,18 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
   async function uploadAll() {
     if (pending.length === 0) return
+    const queue = [...pending]
     setUploading(true)
     setUploadError('')
     setUploadStatus(null)
 
-    for (let i = 0; i < pending.length; i++) {
-      const item = pending[i]
+    for (let i = 0; i < queue.length; i++) {
+      const item = queue[i]
       const setCurrentStatus = (phase: string, percent: number) => {
         setUploadStatus({
           fileName: item.file.name,
           index: i + 1,
-          total: pending.length,
+          total: queue.length,
           phase,
           percent,
         })
@@ -242,9 +255,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         return
       }
       setCurrentStatus('Done', 100)
+      URL.revokeObjectURL(item.preview)
+      setPending((prev) => prev.filter((candidate) => candidate !== item))
     }
 
-    pending.forEach((p) => URL.revokeObjectURL(p.preview))
     setPending([])
     setUploading(false)
     setUploadStatus(null)
@@ -254,14 +268,16 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   return (
     <div className="my-6">
       <div
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+        onClick={() => { if (!uploading) inputRef.current?.click() }}
+        onDragOver={(e) => { e.preventDefault(); if (!uploading) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
         className="rounded-2xl p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
           background: dragOver ? '#E8F5E3' : '#FDFAF5',
+          opacity: uploading ? 0.65 : 1,
+          cursor: uploading ? 'wait' : 'pointer',
         }}
       >
         <Upload className="w-8 h-8 mx-auto mb-3" style={{ color: '#A89880' }} />
@@ -277,7 +293,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           accept="image/*,video/*"
           multiple
           className="hidden"
-          onChange={(e) => addFiles(e.target.files)}
+          disabled={uploading}
+          onChange={(e) => {
+            addFiles(e.target.files)
+            e.currentTarget.value = ''
+          }}
         />
       </div>
 

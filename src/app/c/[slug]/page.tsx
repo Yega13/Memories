@@ -3,6 +3,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getUserTierById } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
 
 export const runtime = 'nodejs'
@@ -13,6 +14,7 @@ type Props = {
 
 type Collection = {
   id: string
+  user_id: string
   name: string
   description: string | null
   slug: string
@@ -40,11 +42,13 @@ export default async function CollectionPage({ params }: Props) {
   const admin = createAdminClient()
   const { data: collection } = await admin
     .from('collections')
-    .select('id, name, description, slug, created_at')
+    .select('id, user_id, name, description, slug, created_at')
     .eq('slug', slug)
     .maybeSingle<Collection>()
 
   if (!collection) notFound()
+  const tier = await getUserTierById(collection.user_id)
+  if (tier !== 'studio') notFound()
 
   const { data: rows } = await admin
     .from('collection_albums')

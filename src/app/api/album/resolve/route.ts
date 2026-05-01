@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserTierById } from '@/lib/subscriptions'
 import { cookieNameForAlbum, deriveAccessToken } from '@/lib/album-password'
 import { uploadCapsForTier } from '@/lib/media'
+import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
 
@@ -110,7 +111,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     const cookieStore = await cookies()
     const cookie = cookieStore.get(cookieNameForAlbum(album.id))?.value
     const expectedToken = await deriveAccessToken(album.password_hash, album.id)
-    const verified = cookie != null && timingSafeEqualString(cookie, expectedToken)
+    const verified = cookie != null && timingSafeEqual(cookie, expectedToken)
 
     if (!verified) {
       return NextResponse.json(
@@ -138,13 +139,6 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
   return NextResponse.json({ album: safe }, { headers: NO_STORE })
 }
 
-function timingSafeEqualString(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let r = 0
-  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return r === 0
-}
-
 async function ownerTokenMatches(albumId: string, supplied: string): Promise<boolean> {
   const admin = createAdminClient()
   const { data } = await admin
@@ -153,5 +147,5 @@ async function ownerTokenMatches(albumId: string, supplied: string): Promise<boo
     .eq('id', albumId)
     .maybeSingle<{ owner_token: string }>()
   if (!data) return false
-  return timingSafeEqualString(supplied, data.owner_token)
+  return timingSafeEqual(supplied, data.owner_token)
 }

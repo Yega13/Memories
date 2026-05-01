@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { hashPassword, MIN_PASSWORD_LEN, MAX_PASSWORD_LEN } from '@/lib/album-password'
+import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
 
@@ -43,15 +44,18 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: album, error: lookupError } = await admin
     .from('albums')
-    .select('id, owner_token')
+    .select('id, owner_token, user_id')
     .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string }>()
+    .maybeSingle<{ id: string; owner_token: string; user_id: string | null }>()
 
   if (lookupError || !album) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
   if (!timingSafeEqual(token, album.owner_token)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
+  }
+  if (album.user_id && album.user_id !== user.id) {
+    return NextResponse.json({ error: 'This album is bound to another account' }, { status: 403, headers: NO_STORE })
   }
 
   // Clear path.
@@ -94,11 +98,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, password_protected: true }, { headers: NO_STORE })
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let r = 0
-  for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return r === 0
 }

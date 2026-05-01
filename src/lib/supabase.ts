@@ -8,9 +8,9 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholde
 // '@/lib/supabase/server' instead — it picks up cookies via next/headers.
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 
-// Album type. `owner_token` and `password_hash` are sensitive and never
-// returned to anon clients (column-level GRANT excludes them in PostgREST).
-// They're declared optional so server-side code can still type the full row.
+// Album type for browser-facing album data. Sensitive columns such as
+// `owner_token`, `password_hash`, and `user_id` must stay in route-local
+// server types and never be added here.
 //
 // Tier-gated features (custom URLs, password protection, etc.) are NOT stored
 // on this row. They're resolved live from the album owner's subscription via
@@ -20,11 +20,9 @@ export type Album = {
   id: string
   slug: string
   custom_slug: string | null
-  owner_token?: string
   title: string
   description: string | null
   background_theme?: string | null
-  password_hash?: string | null
   // Public boolean projection of password_hash. The hash itself never
   // reaches the browser — this is what the resolver returns so the UI can
   // show "password set / not set" and the share-link copy can warn the
