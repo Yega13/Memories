@@ -14,8 +14,20 @@
 // album listing from casual visitors. Real per-asset privacy needs signed
 // URLs, which is a separate feature.
 
-const ITERATIONS = 100_000
+// PBKDF2-SHA256 iteration count for NEW hashes. OWASP 2024 recommends
+// 600,000 for SHA-256. Old hashes saved with smaller counts still verify
+// because the prefix records the count we used at hash time.
+const ITERATIONS = 600_000
 const KEY_BITS = 256
+// Minimum acceptable iteration count when verifying. Refuse to honour a
+// hash with absurdly low work — protects against a hypothetical future bug
+// where someone wrote a too-cheap value into the column.
+const MIN_VERIFY_ITERATIONS = 50_000
+
+// Minimum password length enforced at write time. Anything shorter has too
+// small a keyspace to survive a determined attacker even with rate limits.
+export const MIN_PASSWORD_LEN = 6
+export const MAX_PASSWORD_LEN = 128
 
 export async function hashPassword(password: string): Promise<string> {
   const salt: Uint8Array<ArrayBuffer> = crypto.getRandomValues(new Uint8Array(16))
@@ -27,7 +39,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const parts = stored.split('$')
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
   const iterations = Number.parseInt(parts[1], 10)
-  if (!Number.isFinite(iterations) || iterations < 10_000) return false
+  if (!Number.isFinite(iterations) || iterations < MIN_VERIFY_ITERATIONS) return false
   let salt: Uint8Array<ArrayBuffer>
   let expected: Uint8Array<ArrayBuffer>
   try {

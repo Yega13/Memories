@@ -1,12 +1,48 @@
 // Browser-only media helpers for the upload flow.
 // Don't import from server code — these touch DOM APIs.
+//
+// BUT the byte-cap helpers below are pure (no DOM) and are imported from
+// server routes too (the R2 upload route enforces caps server-side).
+
+import type { Tier } from '@/lib/subscriptions'
 
 export type MediaKind = 'image' | 'video'
 
-export const MAX_IMAGE_BYTES = 25 * 1024 * 1024 // 25 MB — matches FAQ copy
-// Capped by Supabase free-plan project ceiling (50 MB). Raise once we move
-// to a paid Supabase tier (and bump the bucket "File size limit" to match).
-export const MAX_VIDEO_BYTES = 50 * 1024 * 1024
+const MB = 1024 * 1024
+
+// Free-tier caps. Photo cap matches FAQ copy. Video cap matches the
+// Supabase free-plan project ceiling we used to bump against (videos
+// no longer touch Supabase Storage but the number doubles as a sane
+// default for guests on Free albums).
+export const FREE_IMAGE_BYTES = 25 * MB
+export const FREE_VIDEO_BYTES = 50 * MB
+
+// Pro / Studio caps. The pricing card promises "up to 200 MB per upload".
+// Photos still go through Supabase Storage so this only applies to Free
+// vs Pro headroom IF the Supabase project is on a plan that allows
+// >50 MB uploads. Until then, Supabase's bucket-level cap is the real
+// ceiling for photos. Videos go through R2, which has no such cap.
+export const PRO_IMAGE_BYTES = 200 * MB
+export const PRO_VIDEO_BYTES = 200 * MB
+
+export type UploadCaps = { image: number; video: number }
+
+// The cap belongs to the ALBUM (i.e. its owner's tier), not the uploader.
+// If a Pro user sets up a wedding album, every guest who uploads gets the
+// larger limit because the owner is paying for the album to behave that
+// way. Anonymous albums (no owner_user_id) fall back to free.
+export function uploadCapsForTier(tier: Tier): UploadCaps {
+  if (tier === 'pro' || tier === 'studio') {
+    return { image: PRO_IMAGE_BYTES, video: PRO_VIDEO_BYTES }
+  }
+  return { image: FREE_IMAGE_BYTES, video: FREE_VIDEO_BYTES }
+}
+
+// Default caps when we can't (or don't yet) know the owner's tier — e.g.
+// the resolver hasn't returned yet, or someone imports this module
+// without album context. Free is the safe default; the server side will
+// re-check before honoring any upload anyway.
+export const DEFAULT_UPLOAD_CAPS: UploadCaps = uploadCapsForTier('free')
 
 const VIDEO_MIME_PREFIXES = ['video/']
 const VIDEO_EXT_FALLBACK = /\.(mp4|mov|m4v|webm|ogg)$/i

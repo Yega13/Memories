@@ -6,8 +6,7 @@ import {
   detectKind,
   extensionFor,
   generateVideoPoster,
-  MAX_IMAGE_BYTES,
-  MAX_VIDEO_BYTES,
+  DEFAULT_UPLOAD_CAPS,
   type MediaKind,
 } from '@/lib/media'
 import { formatFileSize } from '@/lib/utils'
@@ -55,6 +54,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Caps come from the resolver based on the OWNER's tier — every guest
+  // uploading to a Pro album gets the larger cap. Fall back to free
+  // defaults if the resolver didn't (or couldn't) populate them.
+  const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
+
   function addFiles(files: FileList | null) {
     if (!files) return
     const next: PendingItem[] = []
@@ -66,7 +70,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         rejected.push(`${file.name}: unsupported file type`)
         return
       }
-      const cap = kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
+      const cap = kind === 'video' ? caps.video : caps.image
       if (file.size > cap) {
         rejected.push(
           `${file.name}: ${formatFileSize(file.size)} exceeds ${formatFileSize(cap)} limit`,
@@ -208,7 +212,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           Drop photos or videos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
         </p>
         <p className="text-xs mt-1" style={{ color: '#A89880' }}>
-          JPG, PNG, GIF, WebP, HEIC up to 25 MB · MP4, MOV, WebM up to 50 MB
+          JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} · MP4, MOV, WebM up to {formatFileSize(caps.video)}
         </p>
         <input
           ref={inputRef}

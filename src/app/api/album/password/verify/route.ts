@@ -12,16 +12,16 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Verify a guest-supplied password for a password-protected album. On
-// success, drops a per-album HttpOnly access cookie that future requests
-// (the resolver) check to short-circuit the gate.
-//
-// Body: { slug, password }
-//
-// Note: we resolve by random slug only here. Custom-slug visitors must hit
-// the resolver first, which redirects-or-renders based on what it knows;
-// this endpoint is only called once the gate UI is on screen, and the gate
-// UI knows the random slug from the resolver response.
+// Rate-limiting policy. Tuned so a typo'ing legit user never hits the wall
+// (10 tries is generous), but a brute-force attempt — even with 600k PBKDF2
+// iterations slowing each guess to ~150ms — gets locked out fast.
+const WINDOW_SECONDS = 5 * 60        // sliding window we count failures in
+const MAX_FAILURES_PER_WINDOW = 10   // ≥ this many failed guesses → lockout
+const LOCKOUT_SECONDS = 5 * 60       // how long the gate stays closed
+
+// Verify a guest-supplied password. Sets an HttpOnly per-album access cookie
+// on success. Rate-limits per album (album_id is the brute-force target;
+// IP rotation by attackers wouldn't help because we don't key on IP).
 export async function POST(req: Request) {
   let body: { slug?: string; password?: string }
   try {
@@ -43,12 +43,47 @@ export async function POST(req: Request) {
     .maybeSingle<{ id: string; password_hash: string | null }>()
 
   // Don't reveal whether the album exists — both bad-password and unknown
-  // slug return the same shape.
+  // slug return the same "Incorrect password" shape.
   if (!album || !album.password_hash) {
     return NextResponse.json({ error: 'Incorrect password' }, { status: 401, headers: NO_STORE })
   }
 
+  // Lockout check BEFORE running PBKDF2 (which is 100+ ms of CPU). If the
+  // album is locked, we want to fail fast and not give the attacker free
+  // hashing work either.
+  const ip = clientIp(req)
+  const since = new Date(Date.now() - WINDOW_SECONDS * 1000).toISOString()
+  const { count: recentFailures } = await admin
+    .from('album_password_attempts')
+    .select('id', { count: 'exact', head: true })
+    .eq('album_id', album.id)
+    .eq('succeeded', false)
+    .gte('created_at', since)
+
+  if (recentFailures != null && recentFailures >= MAX_FAILURES_PER_WINDOW) {
+    return NextResponse.json(
+      {
+        error: 'Too many attempts. Please try again in a few minutes.',
+        retry_after_seconds: LOCKOUT_SECONDS,
+      },
+      {
+        status: 429,
+        headers: { ...NO_STORE, 'Retry-After': String(LOCKOUT_SECONDS) },
+      },
+    )
+  }
+
   const ok = await verifyPassword(password, album.password_hash)
+
+  // Log the attempt either way. Fire-and-forget — a failed insert here
+  // shouldn't break login on the happy path.
+  void admin
+    .from('album_password_attempts')
+    .insert({ album_id: album.id, ip, succeeded: ok })
+    .then(({ error }) => {
+      if (error) console.error('[password/verify] attempt log failed:', error.message)
+    })
+
   if (!ok) {
     return NextResponse.json({ error: 'Incorrect password' }, { status: 401, headers: NO_STORE })
   }
@@ -64,4 +99,15 @@ export async function POST(req: Request) {
   })
 
   return NextResponse.json({ ok: true }, { headers: NO_STORE })
+}
+
+// Cloudflare exposes the real client IP in `cf-connecting-ip`. Fall back to
+// the leftmost x-forwarded-for entry, then to null. Truncated to keep
+// stored values bounded — IP isn't a primary key, just an audit hint.
+function clientIp(req: Request): string | null {
+  const cf = req.headers.get('cf-connecting-ip')
+  if (cf) return cf.slice(0, 64)
+  const xff = req.headers.get('x-forwarded-for')
+  if (xff) return xff.split(',')[0].trim().slice(0, 64)
+  return null
 }

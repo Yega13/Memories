@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserTierById } from '@/lib/subscriptions'
 import { cookieNameForAlbum, deriveAccessToken } from '@/lib/album-password'
+import { uploadCapsForTier } from '@/lib/media'
 
 export const runtime = 'nodejs'
 
@@ -90,14 +91,18 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     ownerToken.length > 0 &&
     (await ownerTokenMatches(album.id, ownerToken))
 
+  // Owner tier drives both the upload cap returned to the client AND the
+  // password-enforcement decision. Compute it once.
+  const ownerTier = await getUserTierById(album.user_id)
+  const upload_caps = uploadCapsForTier(ownerTier)
+
   // Password enforcement is conditional on the OWNER's tier — if they've
   // lapsed below Pro, the password "is removed" (per the FAQ promise) and
   // the album becomes openly viewable again. We still keep the hash on the
   // row so re-upgrading restores it.
   let passwordEnforced = false
-  if (album.password_hash && !ownerMatches) {
-    const ownerTier = await getUserTierById(album.user_id)
-    if (ownerTier !== 'free') passwordEnforced = true
+  if (album.password_hash && !ownerMatches && ownerTier !== 'free') {
+    passwordEnforced = true
   }
 
   if (passwordEnforced && album.password_hash) {
@@ -118,7 +123,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     }
   }
 
-  const safe: PublicAlbum & { password_protected: boolean } = {
+  const safe: PublicAlbum & { password_protected: boolean; upload_caps: typeof upload_caps } = {
     id: album.id,
     slug: album.slug,
     custom_slug: album.custom_slug,
@@ -126,6 +131,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     description: album.description,
     created_at: album.created_at,
     password_protected: !!album.password_hash,
+    upload_caps,
   }
   return NextResponse.json({ album: safe }, { headers: NO_STORE })
 }

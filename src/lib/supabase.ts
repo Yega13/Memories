@@ -29,6 +29,10 @@ export type Album = {
   // show "password set / not set" and the share-link copy can warn the
   // owner that visitors will need the password.
   password_protected?: boolean
+  // Per-album upload caps in bytes, derived from the owner's tier. Set by
+  // the resolver. UI uses these to validate uploads up-front; servers
+  // re-check before honouring an upload.
+  upload_caps?: { image: number; video: number }
   created_at: string
 }
 

@@ -2,14 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
-import { hashPassword } from '@/lib/album-password'
+import { hashPassword, MIN_PASSWORD_LEN, MAX_PASSWORD_LEN } from '@/lib/album-password'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-
-const MIN_PASSWORD_LEN = 4
-const MAX_PASSWORD_LEN = 128
 
 // Set or clear the album password. Requires:
 //   1. Signed-in (we bind albums.user_id like the custom-URL flow does).

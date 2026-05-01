@@ -28,7 +28,16 @@ export default function PasswordGate({ slug, title, onUnlocked }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, password }),
       })
-      const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+      const body = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+        retry_after_seconds?: number
+      }
+      if (res.status === 429) {
+        const minutes = Math.max(1, Math.ceil((body.retry_after_seconds ?? 300) / 60))
+        setError(`Too many attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`)
+        return
+      }
       if (!res.ok || !body.ok) {
         setError(body.error ?? 'Incorrect password')
         return

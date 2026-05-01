@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getUserTierById } from '@/lib/subscriptions'
+import { uploadCapsForTier, PRO_VIDEO_BYTES } from '@/lib/media'
 import type { R2Env } from '@/lib/r2'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// 50 MB upload cap — matches MAX_VIDEO_BYTES on the client. Defence-in-depth:
-// the client also checks, but we never want to trust it.
-const MAX_BYTES = 50 * 1024 * 1024
+// Absolute ceiling regardless of tier — protects against any future bug
+// that raises caps unintentionally. Currently matches the Pro/Studio cap.
+const HARD_MAX_BYTES = PRO_VIDEO_BYTES
 
 const ALLOWED_VIDEO_MIMES = new Set([
   'video/mp4',
@@ -59,8 +62,36 @@ export async function POST(req: Request) {
   if (kind !== 'video' && kind !== 'poster') {
     return NextResponse.json({ error: 'Invalid kind' }, { status: 400, headers: NO_STORE })
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: `File exceeds ${MAX_BYTES} byte limit` }, { status: 413, headers: NO_STORE })
+
+  // Reject anything over the absolute ceiling before we touch the DB.
+  if (file.size > HARD_MAX_BYTES) {
+    return NextResponse.json(
+      { error: `File exceeds ${HARD_MAX_BYTES} byte limit` },
+      { status: 413, headers: NO_STORE },
+    )
+  }
+
+  // Tier-aware per-album cap. The owner's tier dictates the cap for every
+  // uploader on the album. Anonymous albums (no user_id) get the free cap.
+  const admin = createAdminClient()
+  const { data: ownerRow } = await admin
+    .from('albums')
+    .select('user_id')
+    .eq('id', albumId)
+    .maybeSingle<{ user_id: string | null }>()
+  if (!ownerRow) {
+    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  }
+  const ownerTier = await getUserTierById(ownerRow.user_id)
+  const caps = uploadCapsForTier(ownerTier)
+  // Posters are auto-generated thumbnails — they ride alongside videos
+  // and are tiny in practice, so the video cap is the natural ceiling for
+  // both. No separate poster limit needed.
+  if (file.size > caps.video) {
+    return NextResponse.json(
+      { error: `File exceeds the ${caps.video}-byte limit for this album` },
+      { status: 413, headers: NO_STORE },
+    )
   }
 
   const contentType = file.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg')
