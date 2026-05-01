@@ -82,7 +82,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4">
         {photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
@@ -98,7 +98,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
                   src={thumbSrc}
                   alt={photo.caption || ''}
                   fill
-                  sizes="(min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
+                  sizes="(min-width: 1536px) 16vw, (min-width: 1280px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
                   className="object-cover transition group-hover:scale-105"
                   unoptimized
                 />
@@ -194,7 +194,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
             <ChevronRight className="w-8 h-8" />
           </button>
 
-          <div className="relative z-10 max-w-4xl max-h-[80vh] mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
+          <div className="relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
             {current.media_type === 'video' ? (
               <video
                 key={current.id}
@@ -207,7 +207,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
                 style={{ background: '#000' }}
               />
             ) : (
-              <div className="relative w-[min(80vw,900px)] h-[70vh]">
+              <div className="relative w-[min(92vw,1100px)] h-[70vh]">
                 <Image
                   src={current.url}
                   alt={current.caption || ''}

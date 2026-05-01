@@ -124,7 +124,7 @@ export default function PrivacyPage() {
       />
 
       <nav
-        className="sticky top-0 z-50 flex items-center justify-between px-8 py-5"
+        className="hush-nav sticky top-0 z-50 flex items-center justify-between"
         style={{
           background: "rgba(253, 250, 245, 0.85)",
           backdropFilter: "blur(12px)",
@@ -138,12 +138,13 @@ export default function PrivacyPage() {
             alt="Hushare"
             width={618}
             height={146}
-            style={{ height: "28px", width: "auto" }}
+            className="hush-logo"
+            style={{ width: "auto" }}
           />
         </Link>
       </nav>
 
-      <article className="max-w-3xl mx-auto px-6 py-16">
+      <article className="hush-readable py-16">
         <p
           className="text-sm font-medium uppercase mb-5"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
@@ -154,7 +155,7 @@ export default function PrivacyPage() {
           style={{
             ...SERIF,
             ...INK,
-            fontSize: "clamp(2.4rem, 4vw, 3.2rem)",
+            fontSize: "clamp(2.35rem, 4.2vw, 4rem)",
             lineHeight: 1.1,
             fontWeight: 700,
           }}
@@ -377,7 +378,7 @@ export default function PrivacyPage() {
       </article>
 
       <footer
-        className="px-8 py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm"
+        className="hush-footer py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm"
         style={{ borderTop: "1px solid #E8E0D0" }}
       >
         <Link href="/" className="flex items-center gap-2">
@@ -386,10 +387,11 @@ export default function PrivacyPage() {
             alt="Hushare"
             width={618}
             height={146}
-            style={{ height: "24px", width: "auto" }}
+            className="hush-logo"
+            style={{ width: "auto" }}
           />
         </Link>
-        <div className="flex items-center gap-5">
+        <div className="hush-footer-links">
           <Link href="/pricing" style={{ color: "#7C5C3E" }} className="hover:underline">
             Pricing
           </Link>

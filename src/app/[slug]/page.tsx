@@ -195,7 +195,7 @@ export default function AlbumPage() {
         />
       )}
 
-      <div className="max-w-6xl mx-auto px-4 pb-12">
+      <div className="hush-container pb-12">
         <UploadZone album={album} onPhotoAdded={handlePhotoAdded} />
         <PhotoGrid
           photos={photos}

@@ -12,7 +12,7 @@ import SubscriptionPolling from './SubscriptionPolling'
 function AccountNav() {
   return (
     <nav
-      className="sticky top-0 z-50 flex items-center px-5 sm:px-8 py-4"
+      className="hush-nav sticky top-0 z-50 flex items-center"
       style={{
         background: 'rgba(253, 250, 245, 0.85)',
         backdropFilter: 'blur(12px)',
@@ -26,7 +26,8 @@ function AccountNav() {
           alt="Hushare"
           width={618}
           height={146}
-          style={{ height: '28px', width: 'auto' }}
+          className="hush-logo"
+          style={{ width: 'auto' }}
         />
       </Link>
     </nav>
@@ -125,7 +126,7 @@ export default async function AccountPage({ searchParams }: Props) {
     <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
       <AccountNav />
       <main className="px-4 py-10 sm:py-14">
-        <div className="max-w-5xl mx-auto">
+        <div className="hush-container">
           <section
             className="rounded-2xl p-6 sm:p-8 mb-6"
             style={{

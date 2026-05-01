@@ -14,14 +14,15 @@ type Props = {
 export default function AlbumHeader({ album, photoCount, isOwner }: Props) {
   return (
     <div style={{ borderBottom: '1px solid #DDD5C5', background: '#FDFAF5' }}>
-      <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between">
+      <div className="hush-container py-6 flex items-center justify-between">
         <Link href="/" className="flex items-center transition hover:opacity-70" aria-label="Hushare home">
           <Image
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
             width={618}
             height={146}
-            style={{ height: '26px', width: 'auto' }}
+            className="hush-logo"
+            style={{ width: 'auto' }}
           />
         </Link>
 

@@ -21,6 +21,85 @@ body {
 /* Custom scrollbar — Hushare palette. Applied to the root scroller and any
    nested overflow regions so styling stays consistent. Firefox uses
    scrollbar-* properties; Chromium/WebKit use the ::-webkit-scrollbar tree. */
+@layer utilities {
+  .hush-container {
+    width: min(calc(100% - clamp(2rem, 5vw, 9rem)), 1480px);
+    margin-inline: auto;
+  }
+
+  .hush-container-xl {
+    width: min(calc(100% - clamp(2rem, 5vw, 10rem)), 1680px);
+    margin-inline: auto;
+  }
+
+  .hush-readable {
+    width: min(calc(100% - clamp(2rem, 5vw, 6rem)), 880px);
+    margin-inline: auto;
+  }
+
+  .hush-form-width {
+    width: min(calc(100% - clamp(2rem, 5vw, 6rem)), 720px);
+    margin-inline: auto;
+  }
+
+  .hush-nav {
+    padding: clamp(0.85rem, 1.1vw, 1.25rem) clamp(0.875rem, 3.2vw, 5rem);
+    gap: clamp(0.65rem, 1.6vw, 1.5rem);
+  }
+
+  .hush-logo {
+    height: clamp(22px, 1.7vw, 32px) !important;
+    width: auto;
+    max-width: min(44vw, 190px);
+  }
+
+  .hush-nav-links,
+  .hush-footer-links {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: clamp(0.5rem, 1.35vw, 1.25rem);
+  }
+
+  .hush-footer {
+    padding-inline: clamp(1rem, 3.2vw, 5rem);
+  }
+
+  .hush-fluid-card {
+    padding: clamp(1.25rem, 2.2vw, 2.5rem);
+  }
+}
+
+@media (max-width: 420px) {
+  .hush-container,
+  .hush-container-xl,
+  .hush-readable,
+  .hush-form-width {
+    width: min(calc(100% - 1.5rem), 100%);
+  }
+
+  .hush-nav {
+    align-items: flex-start;
+  }
+
+  .hush-nav-links {
+    max-width: 58vw;
+    line-height: 1.1;
+  }
+
+  .hush-nav-links a,
+  .hush-nav-links button,
+  .hush-footer-links a,
+  .hush-footer-links span {
+    font-size: 0.78rem;
+  }
+
+  .hush-footer-links {
+    justify-content: center;
+  }
+}
+
 html {
   scrollbar-width: thin;
   scrollbar-color: #254F22 #EDE7DB;

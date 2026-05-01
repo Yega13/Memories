@@ -33,7 +33,7 @@ export default function Home() {
 
       {/* Sticky Nav */}
       <nav
-        className="sticky top-0 z-50 flex items-center justify-between px-5 sm:px-8 py-4"
+        className="hush-nav sticky top-0 z-50 flex items-center justify-between"
         style={{
           background: 'rgba(253, 250, 245, 0.85)',
           backdropFilter: 'blur(12px)',
@@ -47,10 +47,11 @@ export default function Home() {
             alt="Hushare"
             width={618}
             height={146}
-            style={{ height: '28px', width: 'auto' }}
+            className="hush-logo"
+            style={{ width: 'auto' }}
           />
         </Link>
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="hush-nav-links">
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Pricing
           </Link>
@@ -109,7 +110,7 @@ export default function Home() {
         />
 
         {/* Hero content grid */}
-        <div className="relative z-10 max-w-6xl mx-auto px-5 sm:px-8 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center lg:min-h-[calc(100vh_-_73px)]">
+        <div className="hush-container relative z-10 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] gap-10 lg:gap-16 2xl:gap-24 items-center lg:min-h-[calc(100vh_-_73px)]">
 
           {/* Left — text + form */}
           <div>
@@ -121,7 +122,7 @@ export default function Home() {
             </p>
             <h1
               className="text-[#FDFAF5] lg:text-[#254F22] [text-shadow:0_2px_18px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
-              style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(2rem, 8vw, 4rem)', lineHeight: 1.1, fontWeight: 700, marginBottom: '1.25rem' }}
+              style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(2rem, 7vw, 5.4rem)', lineHeight: 1.05, fontWeight: 700, marginBottom: '1.25rem' }}
             >
               Every moment,<br />
               <em className="text-[#F3E0BC] lg:text-[#7C4A2D]">beautifully kept</em>
@@ -133,7 +134,7 @@ export default function Home() {
               Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
             </p>
 
-            <div className="rounded-2xl p-5 sm:p-6" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)' }}>
+            <div className="rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '520px' }}>
               <label className="block text-sm font-medium mb-2" style={{ color: '#8B6F4E' }}>
                 Name your album
               </label>
@@ -163,10 +164,10 @@ export default function Home() {
           </div>
 
           {/* Right — floating photo cards over the nature image */}
-          <div className="relative hidden lg:flex items-center justify-center" style={{ height: '520px' }}>
+          <div className="relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(520px, 42vw, 700px)' }}>
 
             {/* Card 1 — top left */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '30px', left: '10px', width: '200px', height: '250px', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '6%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" fill sizes="200px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
@@ -174,7 +175,7 @@ export default function Home() {
             </div>
 
             {/* Card 2 — top right */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '10px', right: '30px', width: '180px', height: '220px', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '2%', right: '6%', width: 'clamp(180px, 12vw, 250px)', height: 'clamp(220px, 15vw, 310px)', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" fill sizes="180px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(124,74,45,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Golden hour</span>
@@ -182,7 +183,7 @@ export default function Home() {
             </div>
 
             {/* Card 3 — center, largest */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '160px', left: '70px', width: '240px', height: '270px', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
+            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ top: '30%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
               <Image src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
@@ -190,7 +191,7 @@ export default function Home() {
             </div>
 
             {/* Card 4 — bottom right */}
-            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ bottom: '30px', right: '20px', width: '190px', height: '190px', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div className="absolute rounded-2xl overflow-hidden shadow-2xl" style={{ bottom: '6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" fill sizes="190px" className="object-cover" />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
@@ -198,7 +199,7 @@ export default function Home() {
             </div>
 
             {/* Floating "live" badge */}
-            <div className="absolute rounded-2xl px-4 py-3 shadow-xl" style={{ top: '270px', right: '15px', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(221,213,197,0.8)', zIndex: 20, backdropFilter: 'blur(8px)' }}>
+            <div className="absolute rounded-2xl px-4 py-3 shadow-xl" style={{ top: '52%', right: '3%', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(221,213,197,0.8)', zIndex: 20, backdropFilter: 'blur(8px)' }}>
               <p className="text-xs font-semibold" style={{ color: '#254F22' }}>12 photos added</p>
               <p className="text-xs" style={{ color: '#8B6F4E' }}>by 5 people</p>
             </div>
@@ -207,7 +208,7 @@ export default function Home() {
       </div>
 
       {/* Divider */}
-      <div className="max-w-6xl mx-auto px-8 py-12">
+      <div className="hush-container py-12">
         <div className="flex items-center gap-6">
           <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
           <p className="text-sm italic" style={{ color: '#B0A090', fontFamily: 'var(--font-serif)', whiteSpace: 'nowrap' }}>how it works</p>
@@ -216,8 +217,8 @@ export default function Home() {
       </div>
 
       {/* Steps — polaroid filmstrip */}
-      <section className="max-w-5xl mx-auto px-6 pb-20 sm:pb-24 pt-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-6 items-start">
+      <section className="hush-container pb-20 sm:pb-24 pt-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 xl:gap-12 items-start">
           {[
             {
               rot: -3.5,
@@ -262,7 +263,7 @@ export default function Home() {
               <div
                 className="relative bg-white"
                 style={{
-                  width: '240px',
+                  width: 'clamp(220px, 18vw, 300px)',
                   padding: '14px 14px 56px 14px',
                   transform: `rotate(${step.rot}deg)`,
                   boxShadow: '0 18px 44px rgba(37,79,34,0.16), 0 2px 8px rgba(37,79,34,0.08)',
@@ -325,7 +326,7 @@ export default function Home() {
       </section>
 
       {/* FAQ divider */}
-      <div className="max-w-6xl mx-auto px-8 pt-10 pb-12">
+      <div className="hush-container pt-10 pb-12">
         <div className="flex items-center gap-6">
           <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
           <p
@@ -346,7 +347,7 @@ export default function Home() {
       </div>
 
       {/* FAQ — journal-page style */}
-      <section className="max-w-3xl mx-auto px-6 pb-24">
+      <section className="hush-readable pb-24">
         <div
           className="rounded-[8px] px-6 py-4 md:px-10 md:py-6"
           style={{
@@ -500,7 +501,7 @@ export default function Home() {
       </section>
 
       {/* Bottom CTA — photo postcard */}
-      <section className="mx-4 md:mx-8 mb-20 relative">
+      <section className="hush-container-xl mb-20 relative">
         <div
           className="relative rounded-[28px] overflow-hidden"
           style={{
@@ -652,17 +653,18 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="px-8 py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
+      <footer className="hush-footer py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
         <Link href="/" className="flex items-center" aria-label="Hushare home">
           <Image
             src="/logo/logo-dark-transparent.png"
             alt="Hushare"
             width={618}
             height={146}
-            style={{ height: '24px', width: 'auto' }}
+            className="hush-logo"
+            style={{ width: 'auto' }}
           />
         </Link>
-        <div className="flex items-center gap-5">
+        <div className="hush-footer-links">
           <Link href="/pricing" style={{ color: '#7C5C3E' }} className="hover:underline">Pricing</Link>
           <Link href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</Link>
           <Link href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</Link>

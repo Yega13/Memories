@@ -300,7 +300,7 @@ export default function PricingPage() {
 
       {/* Nav */}
       <nav
-        className="sticky top-0 z-50 flex items-center justify-between px-5 sm:px-8 py-5"
+        className="hush-nav sticky top-0 z-50 flex items-center justify-between"
         style={{
           background: "rgba(253, 250, 245, 0.85)",
           backdropFilter: "blur(12px)",
@@ -314,16 +314,17 @@ export default function PricingPage() {
             alt="Hushare"
             width={618}
             height={146}
-            style={{ height: "28px", width: "auto" }}
+            className="hush-logo"
+            style={{ width: "auto" }}
           />
         </Link>
-        <div className="flex items-center gap-4 sm:gap-5">
+        <div className="hush-nav-links">
           <AccountNavLink />
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="max-w-5xl mx-auto px-5 sm:px-8 pt-12 sm:pt-20 pb-10 text-center">
+      <section className="hush-readable pt-12 sm:pt-20 pb-10 text-center">
         <p
           className="text-xs sm:text-sm font-medium uppercase mb-4"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
@@ -334,7 +335,7 @@ export default function PricingPage() {
           style={{
             ...SERIF,
             ...INK,
-            fontSize: "clamp(2.2rem, 6vw, 3.6rem)",
+            fontSize: "clamp(2.2rem, 6vw, 4.4rem)",
             lineHeight: 1.1,
             fontWeight: 700,
           }}
@@ -352,8 +353,8 @@ export default function PricingPage() {
       </section>
 
       {/* Tiers */}
-      <section className="max-w-6xl mx-auto px-5 sm:px-6 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 items-stretch">
+      <section className="hush-container pb-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-5 xl:gap-7 items-stretch">
           {tiers.map((t) => (
             <article
               key={t.name}
@@ -546,7 +547,7 @@ export default function PricingPage() {
       </section>
 
       {/* Why pay section */}
-      <section className="max-w-3xl mx-auto px-6 pb-20">
+      <section className="hush-readable pb-20">
         <div
           className="rounded-2xl px-6 py-8 sm:px-10 sm:py-10"
           style={{
@@ -587,7 +588,7 @@ export default function PricingPage() {
       </section>
 
       {/* Billing FAQ */}
-      <section className="max-w-3xl mx-auto px-6 pb-24">
+      <section className="hush-readable pb-24">
         <div className="flex items-center gap-6 mb-8">
           <div className="flex-1 h-px" style={{ background: "#E8E0D0" }} />
           <p
@@ -685,7 +686,7 @@ export default function PricingPage() {
       </section>
 
       <footer
-        className="px-8 py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm"
+        className="hush-footer py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm"
         style={{ borderTop: "1px solid #E8E0D0" }}
       >
         <Link href="/" className="flex items-center" aria-label="Hushare home">
@@ -694,10 +695,11 @@ export default function PricingPage() {
             alt="Hushare"
             width={618}
             height={146}
-            style={{ height: "24px", width: "auto" }}
+            className="hush-logo"
+            style={{ width: "auto" }}
           />
         </Link>
-        <div className="flex items-center gap-5">
+        <div className="hush-footer-links">
           <Link href="/" style={{ color: "#7C5C3E" }} className="hover:underline">
             Home
           </Link>
