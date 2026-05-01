@@ -11,7 +11,6 @@ import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
 import PasswordGate from '@/components/PasswordGate'
 
-const BG_KEY = 'memories-bg-color'
 const DEFAULT_BG = '#FDFAF5'
 const IMAGE_BG_PREFIX = 'image:'
 
@@ -39,21 +38,10 @@ export default function AlbumPage() {
   const [notFound, setNotFound] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [userTier, setUserTier] = useState<Tier>('free')
-  const [bgChoice, setBgChoiceState] = useState<string>(DEFAULT_BG)
   // Password-gate state. When the resolver says "password_required", we
   // stash the minimal summary it returned (id + title + random slug) and
   // show <PasswordGate> instead of the album.
   const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
-
-  useEffect(() => {
-    const saved = localStorage.getItem(BG_KEY)
-    if (saved) setBgChoiceState(saved)
-  }, [])
-
-  function setBgChoice(choice: string) {
-    setBgChoiceState(choice)
-    localStorage.setItem(BG_KEY, choice)
-  }
 
   const fetchAlbum = useCallback(async () => {
     // Server-side resolver handles both random slugs and custom slugs, and
@@ -153,7 +141,7 @@ export default function AlbumPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={albumBackgroundStyle(bgChoice)}>
+      <div className="min-h-screen flex items-center justify-center" style={albumBackgroundStyle(DEFAULT_BG)}>
         <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '2px solid #DDD5C5', borderTopColor: '#254F22' }} />
       </div>
     )
@@ -194,7 +182,7 @@ export default function AlbumPage() {
   }
 
   return (
-    <main className="min-h-screen" style={albumBackgroundStyle(bgChoice)}>
+    <main className="min-h-screen" style={albumBackgroundStyle(album.background_theme ?? DEFAULT_BG)}>
       <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} />
 
       {isOwner && (
@@ -203,8 +191,6 @@ export default function AlbumPage() {
           photos={photos}
           ownerToken={ownerToken!}
           userTier={userTier}
-          bgChoice={bgChoice}
-          onBgChoiceChange={setBgChoice}
           onAlbumUpdated={(patch) => setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))}
         />
       )}

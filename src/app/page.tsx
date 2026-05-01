@@ -423,6 +423,22 @@ export default function Home() {
               ),
             },
             {
+              q: 'Can I customize how an album looks?',
+              a: (
+                <>
+                  Yes. Owners can choose a background color or one of Hushare&apos;s stock photo backgrounds from album settings. Saved backgrounds are part of the album, so guests see the same look.
+                </>
+              ),
+            },
+            {
+              q: 'What are Collections?',
+              a: (
+                <>
+                  Collections are Studio pages that group several albums under one public link, useful for photographers, event planners, or families managing related albums.
+                </>
+              ),
+            },
+            {
               q: 'Can I use a QR code at a wedding or event?',
               a: (
                 <>

@@ -23,6 +23,7 @@ export type Album = {
   owner_token?: string
   title: string
   description: string | null
+  background_theme?: string | null
   password_hash?: string | null
   // Public boolean projection of password_hash. The hash itself never
   // reaches the browser — this is what the resolver returns so the UI can

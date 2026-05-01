@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
 import type { Tier } from '@/lib/subscriptions'
 import Image from 'next/image'
-import { Copy, QrCode, Download, Check, Settings, X, Link2, Lock, LockOpen } from 'lucide-react'
+import { Copy, QrCode, Download, Check, Settings, X, Link2, Lock, LockOpen, FolderPlus } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 
@@ -13,8 +13,6 @@ type Props = {
   photos: Photo[]
   ownerToken: string
   userTier: Tier
-  bgChoice: string
-  onBgChoiceChange: (choice: string) => void
   onAlbumUpdated: (patch: Partial<Album>) => void
 }
 
@@ -39,10 +37,11 @@ const STOCK_BACKGROUNDS = [
 
 const DEFAULT_BG = '#FDFAF5'
 
-export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgChoice, onBgChoiceChange, onAlbumUpdated }: Props) {
+export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAlbumUpdated }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
   const [showQr, setShowQr] = useState(false)
   const [zipping, setZipping] = useState(false)
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number } | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [showCustomUrl, setShowCustomUrl] = useState(false)
   const [customUrlInput, setCustomUrlInput] = useState(album.custom_slug ?? '')
@@ -50,13 +49,22 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
   const [customUrlError, setCustomUrlError] = useState('')
   const [customUrlSaved, setCustomUrlSaved] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showCollection, setShowCollection] = useState(false)
+  const [collectionName, setCollectionName] = useState('')
+  const [collectionSlug, setCollectionSlug] = useState('')
+  const [collectionSaving, setCollectionSaving] = useState(false)
+  const [collectionError, setCollectionError] = useState('')
+  const [collectionUrl, setCollectionUrl] = useState('')
   const [passwordInput, setPasswordInput] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [passwordSaved, setPasswordSaved] = useState(false)
+  const [backgroundSaving, setBackgroundSaving] = useState(false)
+  const [backgroundError, setBackgroundError] = useState('')
   const settingsRef = useRef<HTMLDivElement>(null)
   const customUrlRef = useRef<HTMLDivElement>(null)
   const passwordRef = useRef<HTMLDivElement>(null)
+  const collectionRef = useRef<HTMLDivElement>(null)
 
   // Prefer the custom slug for the share link if one is set — that's the
   // whole point of paying for it. The owner link always uses the random
@@ -65,6 +73,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
   const shareUrl = `${window.location.origin}/${publicSlug}`
   const ownerUrl = `${window.location.origin}/${album.slug}?owner=${ownerToken}`
   const canCustomize = userTier === 'pro' || userTier === 'studio'
+  const canUseCollections = userTier === 'studio'
+  const bgChoice = album.background_theme ?? DEFAULT_BG
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -106,6 +116,17 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
     if (showPassword) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showPassword])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (collectionRef.current && !collectionRef.current.contains(e.target as Node)) {
+        setShowCollection(false)
+        setCollectionError('')
+      }
+    }
+    if (showCollection) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showCollection])
 
   async function savePassword(action: 'set' | 'clear') {
     setPasswordSaving(true)
@@ -165,6 +186,63 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
     }
   }
 
+  async function saveBackground(choice: string | null) {
+    setBackgroundSaving(true)
+    setBackgroundError('')
+    try {
+      const res = await fetch('/api/album/background', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: album.slug,
+          owner_token: ownerToken,
+          background_theme: choice,
+        }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string; background_theme?: string | null }
+      if (!res.ok) {
+        setBackgroundError(body.error ?? `Save failed (${res.status})`)
+        return
+      }
+      onAlbumUpdated({ background_theme: body.background_theme ?? null })
+    } catch (e) {
+      setBackgroundError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setBackgroundSaving(false)
+    }
+  }
+
+  async function createCollection() {
+    setCollectionSaving(true)
+    setCollectionError('')
+    setCollectionUrl('')
+    try {
+      const res = await fetch('/api/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: album.slug,
+          owner_token: ownerToken,
+          name: collectionName,
+          collection_slug: collectionSlug,
+        }),
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string
+        collection?: { slug: string }
+      }
+      if (!res.ok || !body.collection?.slug) {
+        setCollectionError(body.error ?? `Save failed (${res.status})`)
+        return
+      }
+      setCollectionUrl(`${window.location.origin}/c/${body.collection.slug}`)
+    } catch (e) {
+      setCollectionError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setCollectionSaving(false)
+    }
+  }
+
   async function copy(type: 'share' | 'owner') {
     await navigator.clipboard.writeText(type === 'share' ? shareUrl : ownerUrl)
     setCopied(type)
@@ -174,12 +252,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
   async function downloadZip() {
     if (photos.length === 0) return
     setZipping(true)
+    setZipProgress({ done: 0, total: photos.length, failed: 0 })
     const zip = new JSZip()
     const folder = zip.folder(album.title) || zip
+    let failed = 0
 
-    await Promise.all(
-      photos.map(async (photo, i) => {
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i]
+      try {
         const res = await fetch(photo.url)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const blob = await res.blob()
         const pathExt = photo.storage_path.split('.').pop()?.toLowerCase()
         const urlExt = photo.url.split('.').pop()?.split('?')[0]?.toLowerCase()
@@ -189,12 +271,22 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
           ? `${i + 1}-${photo.caption.replace(/[^a-z0-9]/gi, '_')}.${ext}`
           : `${prefix}-${i + 1}.${ext}`
         folder.file(name, blob)
-      })
-    )
+      } catch (e) {
+        failed += 1
+        console.warn('[downloadZip] failed to fetch item:', photo.id, e)
+      }
+      setZipProgress({ done: i + 1, total: photos.length, failed })
+    }
+
+    if (failed === photos.length) {
+      setZipping(false)
+      return
+    }
 
     const content = await zip.generateAsync({ type: 'blob' })
     saveAs(content, `${album.title}.zip`)
     setZipping(false)
+    setTimeout(() => setZipProgress(null), 2500)
   }
 
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(shareUrl)}`
@@ -239,6 +331,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
           <Download className="w-4 h-4" style={{ color: '#7C5C3E' }} />
           {zipping ? 'Zipping...' : `Download all (${photos.length})`}
         </button>
+
+        {zipProgress && (
+          <div
+            className="basis-full md:basis-auto text-xs rounded-lg px-3 py-2"
+            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
+          >
+            Downloading {zipProgress.done}/{zipProgress.total}
+            {zipProgress.failed > 0 ? ` · ${zipProgress.failed} skipped` : ''}
+          </div>
+        )}
 
         <div className="relative ml-auto" ref={customUrlRef}>
           <button
@@ -407,6 +509,77 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
           )}
         </div>
 
+        <div className="relative" ref={collectionRef}>
+          <button
+            style={{
+              ...btnBase,
+              background: canUseCollections ? '#FFFFFF' : '#F5F0E8',
+              color: canUseCollections ? '#254F22' : '#A89880',
+              cursor: canUseCollections ? 'pointer' : 'not-allowed',
+            }}
+            onClick={() => canUseCollections && setShowCollection((s) => !s)}
+            title={canUseCollections ? 'Add this album to a public collection' : 'Available on Studio'}
+            disabled={!canUseCollections}
+          >
+            <FolderPlus className="w-4 h-4" style={{ color: canUseCollections ? '#7C5C3E' : '#A89880' }} />
+            Collection
+            {!canUseCollections && (
+              <span className="ml-1 text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>
+                Studio
+              </span>
+            )}
+          </button>
+
+          {showCollection && canUseCollections && (
+            <div
+              className="absolute right-0 top-full mt-2 z-50 rounded-2xl shadow-xl"
+              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 320, padding: '16px' }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Create collection</span>
+                <button onClick={() => setShowCollection(false)} style={{ color: '#A89880', cursor: 'pointer' }}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
+                Create a public grouped page and add this album to it.
+              </p>
+              <input
+                type="text"
+                value={collectionName}
+                onChange={(e) => setCollectionName(e.target.value)}
+                placeholder="Wedding season 2026"
+                maxLength={80}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none mb-2"
+                style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+              />
+              <input
+                type="text"
+                value={collectionSlug}
+                onChange={(e) => setCollectionSlug(e.target.value)}
+                placeholder="collection-url"
+                maxLength={40}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+              />
+              {collectionError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{collectionError}</p>}
+              {collectionUrl && (
+                <p className="text-xs mt-2 break-all" style={{ color: '#254F22' }}>
+                  Created: <a href={collectionUrl} className="underline">{collectionUrl}</a>
+                </p>
+              )}
+              <button
+                onClick={createCollection}
+                disabled={collectionSaving || !collectionName.trim()}
+                className="mt-3 w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{ background: '#254F22', color: '#FDFAF5' }}
+              >
+                {collectionSaving ? 'Creating...' : 'Create and add album'}
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="relative" ref={settingsRef}>
           <button
             style={{ ...btnBase, padding: '6px 10px' }}
@@ -437,14 +610,15 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
                   <button
                     key={preset.value}
                     title={preset.label}
-                    onClick={() => onBgChoiceChange(preset.value)}
+                    onClick={() => saveBackground(preset.value)}
+                    disabled={backgroundSaving}
                     style={{
                       width: '100%',
                       aspectRatio: '1',
                       borderRadius: '10px',
                       background: preset.value,
                       border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
-                      cursor: 'pointer',
+                      cursor: backgroundSaving ? 'wait' : 'pointer',
                       position: 'relative',
                     }}
                   >
@@ -466,7 +640,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
                   <button
                     key={preset.value}
                     title={preset.label}
-                    onClick={() => onBgChoiceChange(preset.value)}
+                    onClick={() => saveBackground(preset.value)}
+                    disabled={backgroundSaving}
                     className="relative overflow-hidden"
                     style={{
                       width: '100%',
@@ -476,7 +651,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
                       backgroundPosition: 'center',
                       backgroundSize: 'cover',
                       border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
-                      cursor: 'pointer',
+                      cursor: backgroundSaving ? 'wait' : 'pointer',
                     }}
                   >
                     {bgChoice === preset.value && (
@@ -504,7 +679,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
                 <input
                   type="color"
                   value={currentColor}
-                  onChange={e => onBgChoiceChange(e.target.value)}
+                  onChange={e => saveBackground(e.target.value)}
                   style={{ width: 36, height: 28, borderRadius: 8, border: '1.5px solid #DDD5C5', cursor: 'pointer', padding: 2 }}
                 />
                 <span className="text-xs font-mono" style={{ color: '#A89880' }}>{currentColor}</span>
@@ -513,10 +688,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCh
               <button
                 className="mt-3 w-full text-xs"
                 style={{ color: '#A89880', cursor: 'pointer', textAlign: 'center' }}
-                onClick={() => onBgChoiceChange('#FDFAF5')}
+                onClick={() => saveBackground(null)}
               >
                 Reset to default
               </button>
+              {backgroundError && (
+                <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{backgroundError}</p>
+              )}
             </div>
           )}
         </div>

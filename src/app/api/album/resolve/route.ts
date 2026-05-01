@@ -29,6 +29,7 @@ type FullAlbum = {
   custom_slug: string | null
   title: string
   description: string | null
+  background_theme: string | null
   created_at: string
   user_id: string | null
   password_hash: string | null
@@ -36,7 +37,7 @@ type FullAlbum = {
 
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash'>
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, created_at, user_id, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, user_id, password_hash'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -129,6 +130,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     custom_slug: album.custom_slug,
     title: album.title,
     description: album.description,
+    background_theme: album.background_theme,
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,

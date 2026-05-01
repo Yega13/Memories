@@ -141,6 +141,14 @@ const billingFaq = [
     a: "Nothing changes for guests. Your albums revert to Free behaviour — the password and custom URL are removed, the album becomes accessible by its original random link, and the 12-month inactivity rule applies again.",
   },
   {
+    q: "What do Studio Collections do?",
+    a: "Collections group several albums under one public /c/... link. They are built for photographers, planners, and families who need to present or manage related albums together instead of sending many separate links.",
+  },
+  {
+    q: "Can I recover a lost owner link?",
+    a: "Contact support with the album name, approximate creation date, and any details that help us verify ownership. Owner links control album management, so recovery is handled carefully instead of automatically exposing private tokens.",
+  },
+  {
     q: "Can I try Pro before I pay?",
     a: "Yes. We give you 14 days to use every Pro feature with no card on file. If you do not start a paid plan after the trial, the album quietly returns to the Free tier — nothing is deleted.",
   },
