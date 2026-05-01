@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
 import type { Tier } from '@/lib/subscriptions'
-import { Copy, QrCode, Download, Check, Settings, X, Link2 } from 'lucide-react'
+import { Copy, QrCode, Download, Check, Settings, X, Link2, Lock, LockOpen } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 
@@ -38,8 +38,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCo
   const [customUrlSaving, setCustomUrlSaving] = useState(false)
   const [customUrlError, setCustomUrlError] = useState('')
   const [customUrlSaved, setCustomUrlSaved] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSaved, setPasswordSaved] = useState(false)
   const settingsRef = useRef<HTMLDivElement>(null)
   const customUrlRef = useRef<HTMLDivElement>(null)
+  const passwordRef = useRef<HTMLDivElement>(null)
 
   // Prefer the custom slug for the share link if one is set — that's the
   // whole point of paying for it. The owner link always uses the random
@@ -76,6 +82,48 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCo
   useEffect(() => {
     if (!showCustomUrl) setCustomUrlInput(album.custom_slug ?? '')
   }, [album.custom_slug, showCustomUrl])
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (passwordRef.current && !passwordRef.current.contains(e.target as Node)) {
+        setShowPassword(false)
+        setPasswordError('')
+        setPasswordSaved(false)
+        setPasswordInput('')
+      }
+    }
+    if (showPassword) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showPassword])
+
+  async function savePassword(action: 'set' | 'clear') {
+    setPasswordSaving(true)
+    setPasswordError('')
+    setPasswordSaved(false)
+    try {
+      const res = await fetch('/api/album/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: album.slug,
+          owner_token: ownerToken,
+          password: action === 'clear' ? null : passwordInput,
+        }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string; password_protected?: boolean }
+      if (!res.ok) {
+        setPasswordError(body.error ?? `Save failed (${res.status})`)
+        return
+      }
+      onAlbumUpdated({ password_protected: !!body.password_protected })
+      setPasswordSaved(true)
+      setPasswordInput('')
+    } catch (e) {
+      setPasswordError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setPasswordSaving(false)
+    }
+  }
 
   async function saveCustomUrl(action: 'set' | 'clear') {
     setCustomUrlSaving(true)
@@ -257,6 +305,89 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, bgCo
                     style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
                   >
                     Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="relative" ref={passwordRef}>
+          <button
+            style={{
+              ...btnBase,
+              background: canCustomize ? '#FFFFFF' : '#F5F0E8',
+              color: canCustomize ? '#254F22' : '#A89880',
+              cursor: canCustomize ? 'pointer' : 'not-allowed',
+            }}
+            onClick={() => canCustomize && setShowPassword((s) => !s)}
+            title={canCustomize ? 'Set a password for this album' : 'Available on Pro and Studio plans'}
+            disabled={!canCustomize}
+          >
+            {album.password_protected ? (
+              <Lock className="w-4 h-4" style={{ color: canCustomize ? '#254F22' : '#A89880' }} />
+            ) : (
+              <LockOpen className="w-4 h-4" style={{ color: canCustomize ? '#7C5C3E' : '#A89880' }} />
+            )}
+            {album.password_protected ? 'Password set' : 'Password'}
+            {!canCustomize && (
+              <span className="ml-1 text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>
+                Pro
+              </span>
+            )}
+          </button>
+
+          {showPassword && canCustomize && (
+            <div
+              className="absolute right-0 top-full mt-2 z-50 rounded-2xl shadow-xl"
+              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 320, padding: '16px' }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Album password</span>
+                <button onClick={() => setShowPassword(false)} style={{ color: '#A89880', cursor: 'pointer' }}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
+                Visitors will need this password to view the album. 4–128 characters. {album.password_protected && 'Saving a new value replaces the old password.'}
+              </p>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder={album.password_protected ? 'New password' : 'Password'}
+                maxLength={128}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !passwordSaving && passwordInput) savePassword('set')
+                }}
+              />
+
+              {passwordError && (
+                <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{passwordError}</p>
+              )}
+              {passwordSaved && !passwordError && (
+                <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>
+              )}
+
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => savePassword('set')}
+                  disabled={passwordSaving || !passwordInput}
+                  className="flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ background: '#254F22', color: '#FDFAF5' }}
+                >
+                  {passwordSaving ? 'Saving…' : 'Save'}
+                </button>
+                {album.password_protected && (
+                  <button
+                    onClick={() => savePassword('clear')}
+                    disabled={passwordSaving}
+                    className="text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
+                    style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
+                  >
+                    Remove
                   </button>
                 )}
               </div>

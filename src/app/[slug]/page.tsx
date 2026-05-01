@@ -9,6 +9,7 @@ import UploadZone from '@/components/UploadZone'
 import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
+import PasswordGate from '@/components/PasswordGate'
 
 const BG_KEY = 'memories-bg-color'
 const DEFAULT_BG = '#FDFAF5'
@@ -25,6 +26,10 @@ export default function AlbumPage() {
   const [isOwner, setIsOwner] = useState(false)
   const [userTier, setUserTier] = useState<Tier>('free')
   const [bgColor, setBgColorState] = useState<string>(DEFAULT_BG)
+  // Password-gate state. When the resolver says "password_required", we
+  // stash the minimal summary it returned (id + title + random slug) and
+  // show <PasswordGate> instead of the album.
+  const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
 
   useEffect(() => {
     const saved = localStorage.getItem(BG_KEY)
@@ -38,17 +43,37 @@ export default function AlbumPage() {
 
   const fetchAlbum = useCallback(async () => {
     // Server-side resolver handles both random slugs and custom slugs, and
-    // hides custom slugs whose owner has lapsed. Either way the response
-    // shape is { album } or 404.
-    const res = await fetch(`/api/album/resolve?slug=${encodeURIComponent(slug)}`, {
+    // hides custom slugs whose owner has lapsed. Three possible responses:
+    //   - { album, password_protected }  → render normally
+    //   - { album: null, password_required, summary } → render <PasswordGate>
+    //   - { album: null } 404 → not found
+    setPasswordGate(null)
+    // Pass owner_token along so the resolver can short-circuit the password
+    // gate for the owner. Non-owners simply omit it.
+    const qs = new URLSearchParams({ slug })
+    if (ownerToken) qs.set('owner_token', ownerToken)
+    const res = await fetch(`/api/album/resolve?${qs.toString()}`, {
       cache: 'no-store',
     })
-    if (!res.ok) {
+    type ResolveResponse = {
+      album: Album | null
+      password_required?: boolean
+      summary?: { id: string; slug: string; title: string }
+      password_protected?: boolean
+    }
+    const json = (await res.json().catch(() => ({}))) as ResolveResponse
+    if (!res.ok && !json.password_required) {
       setNotFound(true)
       setLoading(false)
       return
     }
-    const { album: data } = (await res.json()) as { album: Album | null }
+    if (json.password_required && json.summary) {
+      setPasswordGate(json.summary)
+      setLoading(false)
+      return
+    }
+
+    const data = json.album
     if (!data) {
       setNotFound(true)
       setLoading(false)
@@ -117,6 +142,20 @@ export default function AlbumPage() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: bgColor }}>
         <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '2px solid #DDD5C5', borderTopColor: '#254F22' }} />
       </div>
+    )
+  }
+
+  if (passwordGate) {
+    return (
+      <PasswordGate
+        slug={passwordGate.slug}
+        title={passwordGate.title}
+        onUnlocked={() => {
+          setPasswordGate(null)
+          setLoading(true)
+          fetchAlbum()
+        }}
+      />
     )
   }
 

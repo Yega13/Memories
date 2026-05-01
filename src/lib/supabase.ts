@@ -24,6 +24,11 @@ export type Album = {
   title: string
   description: string | null
   password_hash?: string | null
+  // Public boolean projection of password_hash. The hash itself never
+  // reaches the browser — this is what the resolver returns so the UI can
+  // show "password set / not set" and the share-link copy can warn the
+  // owner that visitors will need the password.
+  password_protected?: boolean
   created_at: string
 }
 
