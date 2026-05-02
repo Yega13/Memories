@@ -78,6 +78,11 @@ type AccountAlbum = {
   created_at: string
 }
 
+type AccountMediaRow = {
+  album_id: string
+  media_type: 'image' | 'video'
+}
+
 export default async function AccountPage({ searchParams }: Props) {
   const { welcome } = await searchParams
   const supabase = await createClient()
@@ -178,13 +183,33 @@ export default async function AccountPage({ searchParams }: Props) {
     album_count: (collectionLinks ?? []).filter((link) => link.collection_id === collection.id).length,
   }))
 
-  const { data: recentAlbums } = await admin
+  const { data: accountAlbums } = await admin
     .from('albums')
     .select('id, slug, custom_slug, title, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
-    .limit(6)
     .returns<AccountAlbum[]>()
+
+  const accountAlbumIds = (accountAlbums ?? []).map((album) => album.id)
+  const { data: accountMedia } = accountAlbumIds.length
+    ? await admin
+        .from('photos')
+        .select('album_id, media_type')
+        .in('album_id', accountAlbumIds)
+        .returns<AccountMediaRow[]>()
+    : { data: [] as AccountMediaRow[] }
+
+  const recentAlbums = (accountAlbums ?? []).slice(0, 6)
+  const photoTotal = (accountMedia ?? []).filter((row) => row.media_type === 'image').length
+  const videoTotal = (accountMedia ?? []).filter((row) => row.media_type === 'video').length
+  const mediaTotal = photoTotal + videoTotal
+  const customUrlTotal = (accountAlbums ?? []).filter((album) => album.custom_slug).length
+  const dashboardStats = [
+    ['Albums', String((accountAlbums ?? []).length), 'Claimed to this account'],
+    ['Collections', String(collectionsWithCounts.length), `${collectionLinks?.length ?? 0} album link${(collectionLinks?.length ?? 0) === 1 ? '' : 's'}`],
+    ['Media', String(mediaTotal), `${photoTotal} photo${photoTotal === 1 ? '' : 's'} · ${videoTotal} video${videoTotal === 1 ? '' : 's'}`],
+    ['Custom URLs', String(customUrlTotal), 'Short branded album links'],
+  ]
 
   return (
     <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
@@ -221,6 +246,20 @@ export default async function AccountPage({ searchParams }: Props) {
                 <p className="font-semibold" style={{ color: '#254F22' }}>{planName}</p>
               </div>
             </div>
+          </section>
+
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
+            {dashboardStats.map(([label, value, detail]) => (
+              <div
+                key={label}
+                className="rounded-2xl p-4"
+                style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 22px rgba(37,79,34,0.06)' }}
+              >
+                <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#8B6F4E' }}>{label}</p>
+                <p className="text-2xl font-bold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>{value}</p>
+                <p className="mt-1 text-xs leading-snug" style={{ color: '#7C5C3E' }}>{detail}</p>
+              </div>
+            ))}
           </section>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
@@ -276,20 +315,29 @@ export default async function AccountPage({ searchParams }: Props) {
               className="hush-hover-lift rounded-2xl p-6"
               style={{ background: '#FBF4E4', border: '1px solid rgba(196,166,120,0.35)' }}
             >
-              <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#8B6F4E' }}>What to keep handy</p>
+              <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#8B6F4E' }}>Quick actions</p>
               <h2 className="text-xl font-semibold mb-3" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>
-                Owner links still matter
+                Keep building
               </h2>
               <p className="text-sm leading-relaxed mb-5" style={{ color: '#5C4A3C' }}>
-                Album ownership is still proven by the owner link. Save it after creating an album, especially before sharing the public link with guests.
+                Create new albums, open Studio pages, or get help without hunting around the site.
               </p>
-              <Link
-                href="/"
-                className="inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
-                style={{ background: '#254F22', color: '#FDFAF5' }}
-              >
-                Create a new album
-              </Link>
+              <div className="grid gap-2">
+                <Link
+                  href="/"
+                  className="inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
+                  style={{ background: '#254F22', color: '#FDFAF5' }}
+                >
+                  Create a new album
+                </Link>
+                <Link
+                  href="/support"
+                  className="inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
+                  style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#254F22' }}
+                >
+                  Contact support
+                </Link>
+              </div>
             </section>
           </div>
 
@@ -324,6 +372,14 @@ export default async function AccountPage({ searchParams }: Props) {
                       <span className="min-w-0">
                         <span className="block truncate font-semibold" style={{ color: '#254F22' }}>{collection.name}</span>
                         <span className="block truncate text-xs" style={{ color: '#8B6F4E' }}>/c/{collection.slug}</span>
+                        {collection.description && (
+                          <span
+                            className="mt-1 block overflow-hidden text-xs leading-snug"
+                            style={{ color: '#5C4A3C', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
+                          >
+                            {collection.description}
+                          </span>
+                        )}
                       </span>
                       <span className="shrink-0 text-xs font-semibold" style={{ color: '#7C5C3E' }}>
                         {collection.album_count} album{collection.album_count === 1 ? '' : 's'}

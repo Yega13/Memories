@@ -75,7 +75,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  let body: { slug?: string; owner_token?: string; name?: string; collection_slug?: string; collection_id?: string }
+  let body: { slug?: string; owner_token?: string; name?: string; description?: string; collection_slug?: string; collection_id?: string }
   try {
     body = await req.json()
   } catch {
@@ -86,6 +86,7 @@ export async function POST(req: Request) {
   const token = String(body.owner_token ?? '').trim()
   const collectionId = String(body.collection_id ?? '').trim()
   const name = String(body.name ?? '').trim().slice(0, 80)
+  const description = String(body.description ?? '').trim().slice(0, 240)
   const rawCollectionSlug = String(body.collection_slug ?? slugFromName(name)).trim()
   if (!albumSlug || !token || (!collectionId && !name)) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
 
   const collection = collectionId
     ? await getExistingCollection(admin, collectionId, user.id)
-    : await createCollection(admin, user.id, name, normalizedCollectionSlug)
+    : await createCollection(admin, user.id, name, normalizedCollectionSlug, description)
 
   if ('error' in collection) return collection.error
 
@@ -229,10 +230,11 @@ async function createCollection(
   userId: string,
   name: string,
   slug: string,
+  description: string,
 ): Promise<{ collection: { id: string; slug: string; name: string } } | { error: NextResponse }> {
   const { data: collection, error } = await admin
     .from('collections')
-    .insert({ user_id: userId, name, slug })
+    .insert({ user_id: userId, name, slug, description: description || null })
     .select('id, slug, name')
     .single<{ id: string; slug: string; name: string }>()
 

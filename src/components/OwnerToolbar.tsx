@@ -65,6 +65,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const [passwordSaved, setPasswordSaved] = useState(false)
 
   const [collectionName, setCollectionName] = useState('')
+  const [collectionDescription, setCollectionDescription] = useState('')
   const [collectionSlug, setCollectionSlug] = useState('')
   const [collectionSaving, setCollectionSaving] = useState(false)
   const [collectionError, setCollectionError] = useState('')
@@ -121,6 +122,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       setPasswordSaved(false)
       setPasswordInput('')
       setCollectionError('')
+      setCollectionDescription('')
       setOpenSection(null)
       setDeleteConfirm(false)
       setDeleteError('')
@@ -292,6 +294,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
           slug: album.slug,
           owner_token: ownerToken,
           name: collectionName,
+          description: collectionDescription,
           collection_slug: collectionSlug,
         }),
       })
@@ -305,6 +308,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       }
       setCollectionUrl(`${window.location.origin}/c/${body.collection.slug}`)
       setCollectionName('')
+      setCollectionDescription('')
       setCollectionSlug('')
       await loadCollections()
     } catch (e) {
@@ -937,6 +941,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       maxLength={80}
                       disabled={!canUseCollections}
                       className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none mb-2 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={inputStyle}
+                    />
+                    <textarea
+                      value={collectionDescription}
+                      onChange={(e) => setCollectionDescription(e.target.value)}
+                      placeholder="Short description for the public collection page"
+                      maxLength={240}
+                      disabled={!canUseCollections}
+                      rows={3}
+                      className="w-full resize-none rounded-lg px-3 py-2 text-sm focus:outline-none mb-2 disabled:cursor-not-allowed disabled:opacity-60"
                       style={inputStyle}
                     />
                     <input
