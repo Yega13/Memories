@@ -83,7 +83,8 @@ export default function AccountNavLink() {
   if (state.canAccess) {
     return (
       <Link href="/account" className={linkClass} style={linkStyle}>
-        Account
+        <span className="hush-account-label-full">Account</span>
+        <span className="hush-account-label-short" aria-hidden="true">Me</span>
       </Link>
     )
   }

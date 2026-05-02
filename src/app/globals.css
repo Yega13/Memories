@@ -41,6 +41,10 @@ img {
   -webkit-user-drag: none;
 }
 
+.hush-account-label-short {
+  display: none;
+}
+
 a:hover,
 .hover\:underline:hover,
 .underline:hover {
@@ -170,11 +174,12 @@ a:hover,
   }
 
   .hush-nav {
-    align-items: flex-start;
+    align-items: center;
   }
 
   .hush-nav-links {
-    max-width: 58vw;
+    flex-wrap: nowrap;
+    max-width: none;
     line-height: 1.1;
   }
 
@@ -335,12 +340,26 @@ a:hover,
 
   .hush-logo {
     height: 20px !important;
-    max-width: 38vw;
+    max-width: 132px;
   }
 
   .hush-nav-links {
-    gap: 0.4rem;
-    max-width: 62vw;
+    gap: 0.48rem;
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .hush-nav-links a,
+  .hush-nav-links button {
+    white-space: nowrap;
+  }
+
+  .hush-account-label-full {
+    display: none;
+  }
+
+  .hush-account-label-short {
+    display: inline;
   }
 
   .hush-fluid-card {
@@ -518,7 +537,15 @@ a:hover,
   .hush-nav-links button,
   .hush-footer-links a,
   .hush-footer-links span {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
+  }
+
+  .hush-logo {
+    max-width: 118px;
+  }
+
+  .hush-nav-links {
+    gap: 0.38rem;
   }
 
   .hush-container,
