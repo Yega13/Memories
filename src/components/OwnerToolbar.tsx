@@ -572,7 +572,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                             aspectRatio: '1',
                             borderRadius: 10,
                             background: preset.value,
-                            border: (bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) ? '2px solid #254F22' : '1.5px solid #DDD5C5',
+                            border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
                             cursor: backgroundSaving ? 'wait' : 'pointer',
                             position: 'relative',
                           }}
@@ -602,7 +602,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                             backgroundImage: `url(${preset.src})`,
                             backgroundPosition: 'center',
                             backgroundSize: 'cover',
-                            border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
+                            border: (bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) ? '2px solid #254F22' : '1.5px solid #DDD5C5',
                             cursor: backgroundSaving ? 'wait' : 'pointer',
                           }}
                         >
