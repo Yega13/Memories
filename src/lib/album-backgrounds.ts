@@ -1,12 +1,13 @@
 export type StockAlbumBackground = {
   label: string
-  value: `image:${string}`
+  value: `image:/backgrounds/${string}.svg`
   src: string
+  legacyValue?: `image:${string}`
 }
 
 function pexelsBackground(photoId: string, label: string): StockAlbumBackground {
   const src = `https://images.pexels.com/photos/${photoId}/pexels-photo-${photoId}.jpeg?auto=compress&cs=tinysrgb&w=1800`
-  return { label, value: `image:${src}`, src }
+  return { label, value: `image:/backgrounds/pexels-${photoId}.svg`, src, legacyValue: `image:${src}` }
 }
 
 export const STOCK_ALBUM_BACKGROUNDS: StockAlbumBackground[] = [
@@ -38,5 +39,19 @@ export const STOCK_ALBUM_BACKGROUNDS: StockAlbumBackground[] = [
 ]
 
 export const STOCK_ALBUM_BACKGROUND_VALUES: ReadonlySet<string> = new Set(
-  STOCK_ALBUM_BACKGROUNDS.map((background) => background.value),
+  STOCK_ALBUM_BACKGROUNDS.flatMap((background) =>
+    background.legacyValue ? [background.value, background.legacyValue] : [background.value],
+  ),
 )
+
+const STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE = new Map<string, string>(
+  STOCK_ALBUM_BACKGROUNDS.flatMap((background) =>
+    background.legacyValue
+      ? ([[background.value, background.src], [background.legacyValue, background.src]] as Array<[string, string]>)
+      : ([[background.value, background.src]] as Array<[string, string]>),
+  ),
+)
+
+export function resolveAlbumBackgroundImage(value: string): string {
+  return STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value) ?? value.slice('image:'.length)
+}

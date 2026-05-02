@@ -10,6 +10,7 @@ import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
 import PasswordGate from '@/components/PasswordGate'
+import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 
 const DEFAULT_BG = '#FDFAF5'
 const IMAGE_BG_PREFIX = 'image:'
@@ -18,7 +19,7 @@ function albumBackgroundStyle(bg: string): React.CSSProperties {
   if (bg.startsWith(IMAGE_BG_PREFIX)) {
     return {
       backgroundColor: '#1A2B1A',
-      backgroundImage: `linear-gradient(rgba(253,250,245,0.72), rgba(253,250,245,0.72)), url(${bg.slice(IMAGE_BG_PREFIX.length)})`,
+      backgroundImage: `linear-gradient(rgba(253,250,245,0.72), rgba(253,250,245,0.72)), url(${resolveAlbumBackgroundImage(bg)})`,
       backgroundAttachment: 'fixed',
       backgroundPosition: 'center',
       backgroundSize: 'cover',
