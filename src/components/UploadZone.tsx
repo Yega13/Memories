@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { supabase, type Album } from '@/lib/supabase'
 import {
   detectKind,
@@ -303,6 +304,18 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         </p>
         <p className="hush-upload-hint text-xs mt-1" style={{ color: '#A89880' }}>
           JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} · MP4, MOV, WebM up to {formatFileSize(caps.video)}
+        </p>
+        <p className="mt-3 text-[11px] leading-relaxed" style={{ color: '#8B6F4E' }}>
+          By uploading, you agree to the{' '}
+          <Link
+            href="/terms"
+            className="font-semibold"
+            style={{ color: '#254F22' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            Terms
+          </Link>
+          . Illegal or abusive content may be removed.
         </p>
         <input
           ref={inputRef}

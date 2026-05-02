@@ -1,8 +1,10 @@
-// Album password helpers. Uses PBKDF2-SHA256 via Web Crypto so it runs on
-// Cloudflare Workers (the deployment target via @opennextjs/cloudflare) with
-// no native dependencies.
+// Album password helpers. Uses Web Crypto so it runs on Cloudflare Workers
+// (the deployment target via @opennextjs/cloudflare) with no native
+// dependencies.
 //
 // Storage format for `albums.password_hash`:
+//   hmac-sha256-v1$<saltBase64>$<hashBase64>
+// Legacy hashes also verify:
 //   pbkdf2$<iterations>$<saltBase64>$<hashBase64>
 //
 // Versioning by prefix means we can switch to a stronger algorithm later
@@ -14,10 +16,7 @@
 // album listing from casual visitors. Real per-asset privacy needs signed
 // URLs, which is a separate feature.
 
-// PBKDF2-SHA256 iteration count for NEW hashes. OWASP 2024 recommends
-// 600,000 for SHA-256. Old hashes saved with smaller counts still verify
-// because the prefix records the count we used at hash time.
-const ITERATIONS = 600_000
+const HASH_VERSION = 'hmac-sha256-v1'
 const KEY_BITS = 256
 // Minimum acceptable iteration count when verifying. Refuse to honour a
 // hash with absurdly low work — protects against a hypothetical future bug
@@ -31,12 +30,28 @@ export const MAX_PASSWORD_LEN = 128
 
 export async function hashPassword(password: string): Promise<string> {
   const salt: Uint8Array<ArrayBuffer> = crypto.getRandomValues(new Uint8Array(16))
-  const hash = await pbkdf2(password, salt, ITERATIONS)
-  return `pbkdf2$${ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`
+  const hash = await hmacPassword(password, salt)
+  return `${HASH_VERSION}$${toBase64(salt)}$${toBase64(hash)}`
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const parts = stored.split('$')
+  if (parts.length === 3 && parts[0] === HASH_VERSION) {
+    let salt: Uint8Array<ArrayBuffer>
+    let expected: Uint8Array<ArrayBuffer>
+    try {
+      salt = fromBase64(parts[1])
+      expected = fromBase64(parts[2])
+    } catch {
+      return false
+    }
+    for (const pepper of passwordPeppers()) {
+      const actual = await hmacPassword(password, salt, pepper)
+      if (timingSafeEqualBytes(actual, expected)) return true
+    }
+    return false
+  }
+
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
   const iterations = Number.parseInt(parts[1], 10)
   if (!Number.isFinite(iterations) || iterations < MIN_VERIFY_ITERATIONS) return false
@@ -69,6 +84,39 @@ export async function deriveAccessToken(passwordHash: string, albumId: string): 
   )
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(albumId))
   return toBase64(new Uint8Array(sig))
+}
+
+// Cloudflare's cheaper Worker plans can terminate expensive PBKDF2 writes.
+// For new hashes, use a server-peppered HMAC instead: a database-only leak is
+// not enough to brute-force album passwords offline, and online guesses still
+// hit the per-album rate limiter.
+async function hmacPassword(
+  password: string,
+  salt: Uint8Array<ArrayBuffer>,
+  pepper = passwordPeppers()[0],
+): Promise<Uint8Array<ArrayBuffer>> {
+  if (!pepper) throw new Error('No password pepper configured')
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(pepper),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const message = new TextEncoder().encode(`${toBase64(salt)}:${password}`)
+  const sig = await crypto.subtle.sign('HMAC', key, message)
+  return new Uint8Array(sig)
+}
+
+function passwordPeppers(): string[] {
+  const peppers = [
+    process.env.ALBUM_PASSWORD_PEPPER ??
+      process.env.SUPABASE_SERVICE_ROLE_KEY ??
+      process.env.POLAR_WEBHOOK_SECRET,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.POLAR_WEBHOOK_SECRET,
+  ].filter((value): value is string => Boolean(value))
+  return Array.from(new Set(peppers))
 }
 
 // Note on type signatures: every Uint8Array here is annotated as

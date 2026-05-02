@@ -762,6 +762,7 @@ export default function Home() {
           <Link href="/qr-code-photo-album" style={{ color: '#7C5C3E' }} className="hover:underline">QR albums</Link>
           <Link href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</Link>
           <Link href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</Link>
+          <Link href="/terms" style={{ color: '#7C5C3E' }} className="hover:underline">Terms</Link>
           <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
         </div>
       </footer>

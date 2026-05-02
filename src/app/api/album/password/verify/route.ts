@@ -13,8 +13,7 @@ export const runtime = 'nodejs'
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // Rate-limiting policy. Tuned so a typo'ing legit user never hits the wall
-// (10 tries is generous), but a brute-force attempt — even with 600k PBKDF2
-// iterations slowing each guess to ~150ms — gets locked out fast.
+// (10 tries is generous), but a brute-force attempt still gets locked out fast.
 const WINDOW_SECONDS = 5 * 60        // sliding window we count failures in
 const MAX_FAILURES_PER_WINDOW = 10   // ≥ this many failed guesses → lockout
 const LOCKOUT_SECONDS = 5 * 60       // how long the gate stays closed

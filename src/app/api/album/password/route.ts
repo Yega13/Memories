@@ -87,7 +87,14 @@ export async function POST(req: Request) {
   // We bind albums.user_id here too so future tier checks (resolver looking
   // up the owner's tier) have someone to call out. Mirrors the custom-URL
   // flow exactly.
-  const password_hash = await hashPassword(raw)
+  let password_hash: string
+  try {
+    password_hash = await hashPassword(raw)
+  } catch (e) {
+    console.error('[password] hash failed:', e)
+    return NextResponse.json({ error: 'Could not prepare password protection' }, { status: 500, headers: NO_STORE })
+  }
+
   const { error: writeError } = await admin
     .from('albums')
     .update({ password_hash, user_id: user.id })
