@@ -257,6 +257,24 @@ a:hover,
     max-width: 18rem;
     margin-inline: auto;
   }
+
+  .hush-support-form {
+    overflow: hidden;
+  }
+
+  .cf-turnstile {
+    width: 270px;
+    max-width: 100%;
+    height: 59px;
+    min-height: 59px;
+    margin: 0 auto 1rem;
+    overflow: hidden;
+  }
+
+  .cf-turnstile iframe {
+    transform: scale(0.9);
+    transform-origin: top left;
+  }
 }
 
 @media (min-width: 401px) and (max-width: 640px) {
@@ -477,16 +495,15 @@ a:hover,
   }
 
   .cf-turnstile {
-    width: 150px;
-    max-width: 100%;
-    min-height: 140px;
-    margin-inline: auto;
-    overflow: visible;
-    transform: none;
+    width: 258px;
+    height: 56px;
+    min-height: 56px;
+    margin-bottom: 1rem;
   }
 
   .cf-turnstile iframe {
-    transform: none;
+    transform: scale(0.86);
+    transform-origin: top left;
   }
 
   input,
@@ -512,13 +529,15 @@ a:hover,
   }
 
   .cf-turnstile {
-    width: 150px;
-    transform: none;
-    margin-bottom: 0;
+    width: 249px;
+    height: 54px;
+    min-height: 54px;
+    margin-bottom: 1rem;
   }
 
   .cf-turnstile iframe {
-    transform: none;
+    transform: scale(0.83);
+    transform-origin: top left;
   }
 
   .hush-album-header {
@@ -545,6 +564,82 @@ a:hover,
 @media (max-width: 640px) and (hover: none) {
   .hush-hover-lift:hover {
     transform: none;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1100px) and (max-height: 720px) {
+  .hush-home-hero {
+    min-height: calc(100svh - 52px) !important;
+  }
+
+  .hush-home-mobile-bg {
+    display: block !important;
+  }
+
+  .hush-home-desktop-bg,
+  .hush-home-feather,
+  .hush-home-visuals {
+    display: none !important;
+  }
+
+  .hush-home-grid {
+    display: flex !important;
+    min-height: calc(100svh - 52px) !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding-top: 1.35rem !important;
+    padding-bottom: 1.35rem !important;
+  }
+
+  .hush-home-main {
+    width: min(100%, 560px);
+    margin-inline: auto;
+  }
+
+  .hush-home-eyebrow {
+    margin-bottom: 0.6rem !important;
+    color: #F3E0BC !important;
+  }
+
+  .hush-home-title {
+    margin-bottom: 0.75rem !important;
+    color: #FDFAF5 !important;
+    font-size: clamp(2.35rem, 5.8vw, 3.35rem) !important;
+    line-height: 0.98 !important;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35) !important;
+  }
+
+  .hush-home-title em {
+    color: #F3E0BC !important;
+  }
+
+  .hush-home-copy {
+    max-width: 30rem !important;
+    margin-bottom: 1rem !important;
+    color: #FBF4E4 !important;
+    font-size: 1rem !important;
+    line-height: 1.45 !important;
+    text-shadow: 0 1px 10px rgba(0, 0, 0, 0.35) !important;
+  }
+
+  .hush-album-create-card {
+    max-width: 500px !important;
+    padding: 1rem !important;
+  }
+
+  .hush-home-input {
+    padding-top: 0.72rem !important;
+    padding-bottom: 0.72rem !important;
+    margin-bottom: 0.65rem !important;
+  }
+
+  .hush-home-button {
+    padding-top: 0.74rem !important;
+    padding-bottom: 0.74rem !important;
+  }
+
+  .hush-home-note {
+    margin-top: 0.55rem !important;
   }
 }
 

@@ -152,7 +152,7 @@ export default function Home() {
 
         {/* Mobile-only background image — full bleed, no clip */}
         <div
-          className="absolute inset-0 lg:hidden"
+          className="hush-home-mobile-bg absolute inset-0 lg:hidden"
           style={{
             backgroundImage: `url(${NATURE_IMG})`,
             backgroundSize: 'cover',
@@ -171,7 +171,7 @@ export default function Home() {
 
         {/* Desktop nature image — right half, angled clip */}
         <div
-          className="absolute inset-y-0 right-0 hidden lg:block lg:w-[58%]"
+          className="hush-home-desktop-bg absolute inset-y-0 right-0 hidden lg:block lg:w-[58%]"
           style={{
             backgroundImage: `url(${NATURE_IMG})`,
             backgroundSize: 'cover',
@@ -185,7 +185,7 @@ export default function Home() {
 
         {/* Soft feather where image meets beige (desktop only) */}
         <div
-          className="absolute inset-y-0 hidden lg:block"
+          className="hush-home-feather absolute inset-y-0 hidden lg:block"
           style={{
             left: '36%',
             width: '130px',
@@ -195,12 +195,12 @@ export default function Home() {
         />
 
         {/* Hero content grid */}
-        <div className="hush-container hush-fade-up relative z-10 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] gap-10 lg:gap-16 2xl:gap-24 items-center lg:min-h-[calc(100vh_-_73px)]">
+        <div className="hush-container hush-home-grid hush-fade-up relative z-10 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] gap-10 lg:gap-16 2xl:gap-24 items-center lg:min-h-[calc(100vh_-_73px)]">
 
           {/* Left — text + form */}
-          <div>
+          <div className="hush-home-main">
             <p
-              className="text-xs sm:text-sm font-medium uppercase mb-4 sm:mb-5 text-[#F3E0BC] lg:text-[#8B6F4E]"
+              className="hush-home-eyebrow text-xs sm:text-sm font-medium uppercase mb-4 sm:mb-5 text-[#F3E0BC] lg:text-[#8B6F4E]"
               style={{ letterSpacing: '0.15em' }}
             >
               No account · No friction
@@ -229,7 +229,7 @@ export default function Home() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && createAlbum()}
-                className="w-full rounded-xl px-4 py-3 mb-3 focus:outline-none transition text-base"
+                className="hush-home-input w-full rounded-xl px-4 py-3 mb-3 focus:outline-none transition text-base"
                 style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                 maxLength={60}
               />
@@ -237,19 +237,19 @@ export default function Home() {
               <button
                 onClick={createAlbum}
                 disabled={loading}
-                className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
+                className="hush-press hush-home-button w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
                 style={{ background: '#254F22', color: '#FDFAF5' }}
               >
                 {loading ? 'Creating your album...' : <>Create Album <ArrowRight className="w-4 h-4" /></>}
               </button>
-              <p className="text-xs mt-3 text-center" style={{ color: '#B0A090' }}>
+              <p className="hush-home-note text-xs mt-3 text-center" style={{ color: '#B0A090' }}>
                 You&apos;ll receive a private link to manage your album
               </p>
             </div>
           </div>
 
           {/* Right — floating photo cards over the nature image */}
-          <div className="relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(520px, 42vw, 700px)' }}>
+          <div className="hush-home-visuals relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(520px, 42vw, 700px)' }}>
 
             {/* Card 1 — top left */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '6%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>

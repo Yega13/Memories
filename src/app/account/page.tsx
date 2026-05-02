@@ -17,7 +17,7 @@ import SubscriptionPolling from './SubscriptionPolling'
 function AccountNav() {
   return (
     <nav
-      className="hush-nav sticky top-0 z-50 flex items-center"
+      className="hush-nav sticky top-0 z-50 flex items-center justify-between"
       style={{
         background: 'rgba(253, 250, 245, 0.85)',
         backdropFilter: 'blur(12px)',
@@ -35,6 +35,17 @@ function AccountNav() {
           style={{ width: 'auto' }}
         />
       </Link>
+      <div className="hush-nav-links">
+        <Link href="/" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+          Home
+        </Link>
+        <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+          Pricing
+        </Link>
+        <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+          Support
+        </Link>
+      </div>
     </nav>
   )
 }

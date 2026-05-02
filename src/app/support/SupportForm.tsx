@@ -216,7 +216,7 @@ export default function SupportForm() {
           className="cf-turnstile mb-4"
           data-sitekey={TURNSTILE_SITE_KEY}
           data-theme="light"
-          data-size="compact"
+          data-size="normal"
         />
 
         {status === 'error' && (
