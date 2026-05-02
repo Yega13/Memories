@@ -76,7 +76,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const canUseCollections = userTier === 'studio'
   const bgChoice = album.background_theme ?? DEFAULT_BG
   const currentColor = bgChoice.startsWith('#') ? bgChoice : DEFAULT_BG
-  const isDark = bgChoice === '#1C2333' || bgChoice === '#1A2B1A' || bgChoice.startsWith('image:')
+  const isDark = bgChoice === '#1C2333' || bgChoice === '#1A2B1A' || bgChoice.startsWith('image:') || bgChoice.startsWith('stock:')
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

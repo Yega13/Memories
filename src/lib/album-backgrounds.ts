@@ -1,13 +1,20 @@
 export type StockAlbumBackground = {
   label: string
-  value: `image:/backgrounds/${string}.svg`
+  value: `stock:pexels-${string}`
   src: string
   legacyValue?: `image:${string}`
+  imageValue?: `image:/backgrounds/${string}.svg`
 }
 
 function pexelsBackground(photoId: string, label: string): StockAlbumBackground {
   const src = `https://images.pexels.com/photos/${photoId}/pexels-photo-${photoId}.jpeg?auto=compress&cs=tinysrgb&w=1800`
-  return { label, value: `image:/backgrounds/pexels-${photoId}.svg`, src, legacyValue: `image:${src}` }
+  return {
+    label,
+    value: `stock:pexels-${photoId}`,
+    src,
+    legacyValue: `image:${src}`,
+    imageValue: `image:/backgrounds/pexels-${photoId}.svg`,
+  }
 }
 
 export const STOCK_ALBUM_BACKGROUNDS: StockAlbumBackground[] = [
@@ -40,18 +47,19 @@ export const STOCK_ALBUM_BACKGROUNDS: StockAlbumBackground[] = [
 
 export const STOCK_ALBUM_BACKGROUND_VALUES: ReadonlySet<string> = new Set(
   STOCK_ALBUM_BACKGROUNDS.flatMap((background) =>
-    background.legacyValue ? [background.value, background.legacyValue] : [background.value],
+    [background.value, background.legacyValue, background.imageValue].filter((value): value is NonNullable<typeof value> => Boolean(value)),
   ),
 )
 
 const STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE = new Map<string, string>(
   STOCK_ALBUM_BACKGROUNDS.flatMap((background) =>
-    background.legacyValue
-      ? ([[background.value, background.src], [background.legacyValue, background.src]] as Array<[string, string]>)
-      : ([[background.value, background.src]] as Array<[string, string]>),
+    [background.value, background.legacyValue, background.imageValue]
+      .filter((value): value is NonNullable<typeof value> => Boolean(value))
+      .map((value) => [value, background.src] as [string, string]),
   ),
 )
 
 export function resolveAlbumBackgroundImage(value: string): string {
+  if (value.startsWith('stock:')) return STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value) ?? ''
   return STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value) ?? value.slice('image:'.length)
 }
