@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { CircleUserRound } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 type AuthState =
@@ -10,7 +11,7 @@ type AuthState =
   | { kind: 'signed-out' }
   | { kind: 'signed-in'; canAccess: boolean }
 
-const linkClass = 'hush-press text-sm font-medium hover:underline'
+const linkClass = 'text-sm font-medium hover:underline'
 const linkStyle = { color: '#254F22' } as const
 
 export default function AccountNavLink() {
@@ -82,9 +83,9 @@ export default function AccountNavLink() {
 
   if (state.canAccess) {
     return (
-      <Link href="/account" className={linkClass} style={linkStyle}>
+      <Link href="/account" className={`${linkClass} hush-account-nav-link`} style={linkStyle} aria-label="Account">
         <span className="hush-account-label-full">Account</span>
-        <span className="hush-account-label-short" aria-hidden="true">Me</span>
+        <CircleUserRound className="hush-account-icon" aria-hidden="true" />
       </Link>
     )
   }

@@ -41,8 +41,19 @@ img {
   -webkit-user-drag: none;
 }
 
-.hush-account-label-short {
+.hush-account-icon {
   display: none;
+}
+
+.hush-account-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hush-account-nav-link:hover {
+  opacity: 1;
+  transform: none;
 }
 
 a:hover,
@@ -263,6 +274,25 @@ a:hover,
     margin-inline: auto;
   }
 
+  .hush-account-label-full {
+    display: none;
+  }
+
+  .hush-account-icon {
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .hush-account-nav-link {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    background: #F5F0E8;
+    border: 1px solid #DDD5C5;
+    flex: 0 0 auto;
+  }
+
   .hush-support-form {
     overflow: hidden;
   }
@@ -358,8 +388,24 @@ a:hover,
     display: none;
   }
 
-  .hush-account-label-short {
-    display: inline;
+  .hush-account-icon {
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
+  }
+
+  .hush-account-nav-link {
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    background: #F5F0E8;
+    border: 1px solid #DDD5C5;
+    flex: 0 0 auto;
+  }
+
+  .hush-account-nav-link:hover {
+    opacity: 1;
+    transform: none;
   }
 
   .hush-fluid-card {
@@ -591,6 +637,66 @@ a:hover,
 @media (max-width: 640px) and (hover: none) {
   .hush-hover-lift:hover {
     transform: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .hush-home-hero {
+    min-height: calc(100svh - 73px) !important;
+  }
+
+  .hush-home-grid {
+    grid-template-columns: minmax(0, 1.05fr) minmax(420px, 0.95fr) !important;
+    min-height: calc(100svh - 73px) !important;
+    padding-top: clamp(1.75rem, 3vh, 3rem) !important;
+    padding-bottom: clamp(1.75rem, 3vh, 3rem) !important;
+    gap: clamp(2rem, 4vw, 4.5rem) !important;
+  }
+
+  .hush-home-main {
+    align-self: center;
+  }
+
+  .hush-home-eyebrow {
+    margin-bottom: clamp(0.7rem, 1.4vh, 1.1rem) !important;
+  }
+
+  .hush-home-title {
+    max-width: 760px;
+    margin-bottom: clamp(0.8rem, 1.6vh, 1.25rem) !important;
+    font-size: clamp(3.2rem, 4.9vw, 5.2rem) !important;
+    line-height: 0.98 !important;
+  }
+
+  .hush-home-copy {
+    max-width: 520px !important;
+    margin-bottom: clamp(1rem, 2vh, 1.55rem) !important;
+    font-size: clamp(1rem, 1.05vw, 1.18rem) !important;
+    line-height: 1.45 !important;
+  }
+
+  .hush-album-create-card {
+    max-width: 500px !important;
+    padding: clamp(1rem, 1.7vw, 1.45rem) !important;
+  }
+
+  .hush-home-input {
+    padding-top: 0.78rem !important;
+    padding-bottom: 0.78rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .hush-home-button {
+    padding-top: 0.82rem !important;
+    padding-bottom: 0.82rem !important;
+  }
+
+  .hush-home-note {
+    margin-top: 0.65rem !important;
+  }
+
+  .hush-home-visuals {
+    height: min(56vh, 620px) !important;
   }
 }
 
