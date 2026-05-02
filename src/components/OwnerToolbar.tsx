@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, QrCode, Settings, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, QrCode, Settings, Trash2, X } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -50,6 +50,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deletingAlbum, setDeletingAlbum] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const [customUrlInput, setCustomUrlInput] = useState(album.custom_slug ?? '')
   const [customUrlSaving, setCustomUrlSaving] = useState(false)
@@ -119,6 +122,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       setPasswordInput('')
       setCollectionError('')
       setOpenSection(null)
+      setDeleteConfirm(false)
+      setDeleteError('')
     }
   }, [album.custom_slug, showSettings])
 
@@ -378,6 +383,34 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     saveAs(content, `${album.title}.zip`)
     setZipping(false)
     setTimeout(() => setZipProgress(null), 2500)
+  }
+
+  async function deleteAlbum() {
+    if (!deleteConfirm) {
+      setDeleteConfirm(true)
+      setDeleteError('')
+      return
+    }
+
+    setDeletingAlbum(true)
+    setDeleteError('')
+    try {
+      const res = await fetch('/api/album/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: album.slug, owner_token: ownerToken }),
+      })
+      const body = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) {
+        setDeleteError(body.error ?? `Delete failed (${res.status})`)
+        return
+      }
+      window.location.href = '/'
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setDeletingAlbum(false)
+    }
   }
 
   const btnBase: React.CSSProperties = {
@@ -678,7 +711,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                   />
                 </button>
                 {openSection === 'files' && (
-                  <div className="px-4 pb-4">
+                  <div className="px-4 pb-4 space-y-3">
                     <button
                       className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ background: '#254F22', color: '#FDFAF5' }}
@@ -688,6 +721,42 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       <Download className="w-4 h-4" />
                       {zipping ? 'Zipping...' : `Download all (${photos.length})`}
                     </button>
+                    <div className="rounded-xl p-3" style={{ background: '#FFF7F4', border: '1px solid rgba(192,57,43,0.25)' }}>
+                      <p className="text-xs leading-relaxed mb-3" style={{ color: '#7A2A1F' }}>
+                        Delete this album, its photos and videos, and remove it from collections.
+                      </p>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={deleteAlbum}
+                          disabled={deletingAlbum}
+                          className="hush-press flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ background: deleteConfirm ? '#C0392B' : '#FFFFFF', border: '1px solid #C0392B', color: deleteConfirm ? '#FFFFFF' : '#C0392B' }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {deletingAlbum ? 'Deleting...' : deleteConfirm ? 'Delete permanently' : 'Delete album'}
+                        </button>
+                        {deleteConfirm && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteConfirm(false)
+                              setDeleteError('')
+                            }}
+                            className="hush-press rounded-lg px-3 py-2 text-sm font-semibold transition hover:opacity-90"
+                            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                      {deleteConfirm && !deleteError && (
+                        <p className="mt-2 text-xs" style={{ color: '#7A2A1F' }}>
+                          Click again to confirm. This cannot be undone.
+                        </p>
+                      )}
+                      {deleteError && <p className="mt-2 text-xs" style={{ color: '#C0392B' }}>{deleteError}</p>}
+                    </div>
                   </div>
                 )}
               </section>

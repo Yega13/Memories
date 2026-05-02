@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasAccountAccess } from '@/lib/access'
+import { isAccountAdmin } from '@/lib/auth'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
 import SignOutButton from './SignOutButton'
@@ -121,6 +122,7 @@ export default async function AccountPage({ searchParams }: Props) {
   }
 
   const subscription = await getActiveSubscription(user.id)
+  const isAdmin = isAccountAdmin(user)
   const tierLabel = subscription
     ? subscription.tier === 'pro'
       ? 'Hushare Pro'
@@ -133,9 +135,11 @@ export default async function AccountPage({ searchParams }: Props) {
         day: 'numeric',
       })
     : null
-  const planName = tierLabel ?? 'Studio test access'
-  const isStudio = subscription?.tier === 'studio' || !subscription
-  const planFeatures = isStudio
+  const planName = isAdmin ? 'Hushare Admin' : tierLabel ?? 'Studio test access'
+  const isStudio = isAdmin || subscription?.tier === 'studio' || !subscription
+  const planFeatures = isAdmin
+    ? ['Everything enabled', 'Studio Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
+    : isStudio
     ? ['Studio Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
     : ['Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
   const nextLabel = subscription?.cancel_at_period_end ? 'Access ends' : 'Next renewal'
@@ -219,18 +223,18 @@ export default async function AccountPage({ searchParams }: Props) {
                   </h2>
                 </div>
                 <span className="rounded-full px-3 py-1 text-xs font-semibold capitalize" style={{ background: '#EAF0E8', color: '#254F22' }}>
-                  {subscription?.status ?? 'admin'}
+                  {isAdmin ? 'admin' : subscription?.status ?? 'test'}
                 </span>
               </div>
 
               <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-5" style={{ color: '#5C4A3C' }}>
                 <div className="rounded-xl p-4" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
                   <dt className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>Uploads</dt>
-                  <dd className="font-semibold" style={{ color: '#254F22' }}>{subscription ? 'Up to 200 MB' : 'Studio limits enabled'}</dd>
+                  <dd className="font-semibold" style={{ color: '#254F22' }}>{isAdmin ? 'Everything enabled' : subscription ? 'Up to 200 MB' : 'Studio limits enabled'}</dd>
                 </div>
                 <div className="rounded-xl p-4" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
                   <dt className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>{periodEnd ? nextLabel : 'Billing'}</dt>
-                  <dd className="font-semibold" style={{ color: '#254F22' }}>{periodEnd ?? 'No active paid subscription'}</dd>
+                  <dd className="font-semibold" style={{ color: '#254F22' }}>{isAdmin ? 'Admin override' : periodEnd ?? 'No active paid subscription'}</dd>
                 </div>
               </dl>
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import AccountNavLink from "@/components/AccountNavLink";
 import CheckoutResumer from "@/components/CheckoutResumer";
+import FaqList from "@/components/FaqList";
 
 export const runtime = "nodejs";
 
@@ -615,6 +616,8 @@ export default function PricingPage() {
             boxShadow: "0 10px 36px rgba(37,79,34,0.08)",
           }}
         >
+          <FaqList items={billingFaq} compactCount={4} plusSize={26} />
+          <div className="hidden">
           {billingFaq.map(({ q, a }, i, arr) => (
             <details
               key={i}
@@ -665,6 +668,7 @@ export default function PricingPage() {
               </p>
             </details>
           ))}
+          </div>
         </div>
 
         <p
