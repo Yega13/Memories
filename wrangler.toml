@@ -19,6 +19,9 @@ NEXT_PUBLIC_SUPABASE_URL = "https://zleajzevvhugkwlqlolt.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsZWFqemV2dmh1Z2t3bHFsb2x0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODgwOTksImV4cCI6MjA5MjI2NDA5OX0.2_vNkn2aLkwiUpQYLuZx_tmXI42QGUNRyUUYuXp_ehw"
 RESEND_DOMAIN_VERIFIED = "true"
 R2_PUBLIC_HOST = "videos.hushare.space"
+# Optional: set ALBUM_RETIREMENT_SECRET as a Worker runtime secret and call
+# POST /api/cron/retire-albums with Authorization: Bearer <secret> from a
+# trusted scheduler. It retires inactive Free albums after 12 months.
 
 # Polar product IDs (live mode). Not secrets — they're identifiers Polar
 # exposes in checkout URLs. Set POLAR_SANDBOX="true" to switch to sandbox-api.polar.sh.

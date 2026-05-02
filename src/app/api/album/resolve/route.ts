@@ -32,13 +32,14 @@ type FullAlbum = {
   description: string | null
   background_theme: string | null
   created_at: string
+  retired_at: string | null
   user_id: string | null
   password_hash: string | null
 }
 
-type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash'>
+type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, user_id, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -61,6 +62,9 @@ export async function GET(req: Request) {
     .maybeSingle<FullAlbum>()
 
   if (byRandom) {
+    if (byRandom.retired_at) {
+      return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
+    }
     return await buildResponse(byRandom, ownerToken)
   }
 
@@ -72,6 +76,9 @@ export async function GET(req: Request) {
     .maybeSingle<FullAlbum>()
 
   if (!byCustom) {
+    return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
+  }
+  if (byCustom.retired_at) {
     return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
   }
 
@@ -136,7 +143,17 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     password_protected: !!album.password_hash,
     upload_caps,
   }
+  await touchAlbumActivity(album.id)
   return NextResponse.json({ album: safe }, { headers: NO_STORE })
+}
+
+async function touchAlbumActivity(albumId: string) {
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('albums')
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq('id', albumId)
+  if (error) console.error('[album/resolve] activity touch failed:', error.message)
 }
 
 async function ownerTokenMatches(albumId: string, supplied: string): Promise<boolean> {
