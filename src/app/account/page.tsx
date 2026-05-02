@@ -9,6 +9,7 @@ import { isAccountAdmin } from '@/lib/auth'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
 import DeleteAlbumButton from './DeleteAlbumButton'
+import DeleteCollectionButton from './DeleteCollectionButton'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
 
@@ -300,20 +301,25 @@ export default async function AccountPage({ searchParams }: Props) {
 
               <div className="space-y-3">
                 {collectionsWithCounts.slice(0, 5).map((collection) => (
-                  <Link
+                  <div
                     key={collection.id}
-                    href={`/c/${collection.slug}`}
-                    className="flex items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:opacity-90"
+                    className="rounded-xl px-4 py-3"
                     style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate font-semibold" style={{ color: '#254F22' }}>{collection.name}</span>
-                      <span className="block truncate text-xs" style={{ color: '#8B6F4E' }}>/c/{collection.slug}</span>
-                    </span>
-                    <span className="shrink-0 text-xs font-semibold" style={{ color: '#7C5C3E' }}>
-                      {collection.album_count} album{collection.album_count === 1 ? '' : 's'}
-                    </span>
-                  </Link>
+                    <Link
+                      href={`/c/${collection.slug}`}
+                      className="flex items-center justify-between gap-4 transition hover:opacity-80"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold" style={{ color: '#254F22' }}>{collection.name}</span>
+                        <span className="block truncate text-xs" style={{ color: '#8B6F4E' }}>/c/{collection.slug}</span>
+                      </span>
+                      <span className="shrink-0 text-xs font-semibold" style={{ color: '#7C5C3E' }}>
+                        {collection.album_count} album{collection.album_count === 1 ? '' : 's'}
+                      </span>
+                    </Link>
+                    <DeleteCollectionButton collectionId={collection.id} />
+                  </div>
                 ))}
                 {collectionsWithCounts.length === 0 && (
                   <p className="rounded-xl px-4 py-4 text-sm" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2', color: '#5C4A3C' }}>

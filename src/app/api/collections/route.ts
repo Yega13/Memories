@@ -136,6 +136,51 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, collection: collection.collection }, { headers: NO_STORE })
 }
 
+export async function DELETE(req: Request) {
+  let body: { collection_id?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400, headers: NO_STORE })
+  }
+
+  const collectionId = String(body.collection_id ?? '').trim()
+  if (!collectionId) {
+    return NextResponse.json({ error: 'Missing collection_id' }, { status: 400, headers: NO_STORE })
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Sign in to delete a collection' }, { status: 401, headers: NO_STORE })
+  }
+  const gate = await requireTier(user, 'studio')
+  if (gate) {
+    return NextResponse.json({ error: 'Studio plan required' }, { status: 403, headers: NO_STORE })
+  }
+
+  const admin = createAdminClient()
+  const { data: collection, error: lookupError } = await admin
+    .from('collections')
+    .select('id')
+    .eq('id', collectionId)
+    .eq('user_id', user.id)
+    .maybeSingle<{ id: string }>()
+
+  if (lookupError || !collection) {
+    return NextResponse.json({ error: 'Collection not found' }, { status: 404, headers: NO_STORE })
+  }
+
+  await admin.from('collection_albums').delete().eq('collection_id', collection.id)
+  const { error: deleteError } = await admin.from('collections').delete().eq('id', collection.id)
+  if (deleteError) {
+    console.error('[collections] delete failed:', deleteError.message)
+    return NextResponse.json({ error: 'Could not delete collection' }, { status: 500, headers: NO_STORE })
+  }
+
+  return NextResponse.json({ ok: true }, { headers: NO_STORE })
+}
+
 async function verifyOwnedAlbum(
   admin: ReturnType<typeof createAdminClient>,
   albumSlug: string,
