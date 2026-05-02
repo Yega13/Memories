@@ -219,7 +219,7 @@ export default function Home() {
               Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
             </p>
 
-            <div className="hush-hover-lift hush-album-create-card rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '520px' }}>
+            <div className="hush-hover-lift hush-album-create-card rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '430px' }}>
               <label className="block text-sm font-medium mb-2" style={{ color: '#8B6F4E' }}>
                 Name your album
               </label>
@@ -249,7 +249,7 @@ export default function Home() {
           </div>
 
           {/* Right — floating photo cards over the nature image */}
-          <div className="hush-home-visuals relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(520px, 42vw, 700px)' }}>
+          <div className="hush-home-visuals relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(460px, 36vw, 600px)' }}>
 
             {/* Card 1 — top left */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '6%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
@@ -443,7 +443,7 @@ export default function Home() {
               'repeating-linear-gradient(to bottom, transparent 0, transparent 47px, rgba(196,166,120,0.15) 47px, rgba(196,166,120,0.15) 48px)',
           }}
         >
-          <FaqList items={homeFaq} compactCount={4} plusSize={28} />
+          <FaqList items={homeFaq} compactCount={6} plusSize={28} />
           <div className="hidden">
           {[
             {

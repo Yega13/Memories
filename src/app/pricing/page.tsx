@@ -616,7 +616,7 @@ export default function PricingPage() {
             boxShadow: "0 10px 36px rgba(37,79,34,0.08)",
           }}
         >
-          <FaqList items={billingFaq} compactCount={4} plusSize={26} />
+          <FaqList items={billingFaq} compactCount={6} plusSize={26} />
           <div className="hidden">
           {billingFaq.map(({ q, a }, i, arr) => (
             <details

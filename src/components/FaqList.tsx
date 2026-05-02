@@ -19,11 +19,11 @@ export default function FaqList({ items, compactCount = 4, plusSize = 28 }: Prop
   return (
     <>
       {items.map(({ q, a }, i, arr) => {
-        const hiddenOnMobile = !expanded && i >= compactCount
+        const isHidden = !expanded && i >= compactCount
         return (
           <details
             key={q}
-            className={`group ${hiddenOnMobile ? 'hidden sm:block' : expanded && i >= compactCount ? 'hush-faq-extra' : ''}`}
+            className={`group ${isHidden ? 'hidden' : expanded && i >= compactCount ? 'hush-faq-extra' : ''}`}
             style={{
               borderBottom: i === arr.length - 1 ? 'none' : '1px dashed rgba(196,166,120,0.45)',
             }}
@@ -72,7 +72,7 @@ export default function FaqList({ items, compactCount = 4, plusSize = 28 }: Prop
       {items.length > compactCount && (
         <button
           type="button"
-          className="hush-press mt-3 flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold sm:hidden"
+          className="hush-press mt-3 flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold"
           style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#254F22' }}
           onClick={() => setExpanded((value) => !value)}
         >
