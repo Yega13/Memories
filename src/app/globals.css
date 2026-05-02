@@ -18,6 +18,23 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+a {
+  text-decoration-line: none;
+  transition:
+    color 160ms ease,
+    opacity 160ms ease,
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+a:hover {
+  opacity: 0.76;
+  text-decoration-line: none !important;
+}
+
+img {
+  -webkit-user-drag: none;
+}
+
 a:hover,
 .hover\:underline:hover,
 .underline:hover {
@@ -164,6 +181,56 @@ a:hover,
 
   .hush-footer-links {
     justify-content: center;
+  }
+}
+
+@media (max-width: 400px) {
+  .hush-container,
+  .hush-container-xl,
+  .hush-readable,
+  .hush-form-width {
+    width: min(calc(100% - 1rem), 100%);
+  }
+
+  .hush-nav {
+    padding-inline: 0.75rem;
+    gap: 0.45rem;
+  }
+
+  .hush-logo {
+    height: 20px !important;
+    max-width: 38vw;
+  }
+
+  .hush-nav-links {
+    gap: 0.4rem;
+    max-width: 62vw;
+  }
+
+  .hush-fluid-card {
+    padding: 1rem;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 360px) {
+  .hush-nav-links a,
+  .hush-nav-links button,
+  .hush-footer-links a,
+  .hush-footer-links span {
+    font-size: 0.72rem;
+  }
+
+  .hush-container,
+  .hush-container-xl,
+  .hush-readable,
+  .hush-form-width {
+    width: min(calc(100% - 0.75rem), 100%);
   }
 }
 

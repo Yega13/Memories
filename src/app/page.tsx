@@ -133,6 +133,7 @@ export default function Home() {
             height={146}
             className="hush-logo"
             style={{ width: 'auto' }}
+            draggable={false}
           />
         </Link>
         <div className="hush-nav-links">
@@ -252,7 +253,7 @@ export default function Home() {
 
             {/* Card 1 — top left */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '6%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" fill sizes="200px" className="object-cover" />
+              <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" fill sizes="200px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
               </div>
@@ -260,7 +261,7 @@ export default function Home() {
 
             {/* Card 2 — top right */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '3deg', animationDelay: '-1.8s', top: '2%', right: '6%', width: 'clamp(180px, 12vw, 250px)', height: 'clamp(220px, 15vw, 310px)', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <Image src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" fill sizes="180px" className="object-cover" />
+              <Image src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" fill sizes="180px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(124,74,45,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Golden hour</span>
               </div>
@@ -268,7 +269,7 @@ export default function Home() {
 
             {/* Card 3 — center, largest */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '1deg', animationDelay: '-3.2s', top: '30%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
-              <Image src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" />
+              <Image src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
               </div>
@@ -276,7 +277,7 @@ export default function Home() {
 
             {/* Card 4 — bottom right */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-2deg', animationDelay: '-4.6s', bottom: '6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <Image src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" fill sizes="190px" className="object-cover" />
+              <Image src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" fill sizes="190px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
               </div>
@@ -371,7 +372,7 @@ export default function Home() {
                   className="relative flex items-center justify-center aspect-square overflow-hidden"
                   style={{ background: '#F5F0E8' }}
                 >
-                  <Image src={step.image} alt={step.alt} fill sizes="240px" className="object-cover" unoptimized />
+                  <Image src={step.image} alt={step.alt} fill sizes="240px" className="object-cover" unoptimized draggable={false} />
                 </div>
 
                 {/* Handwritten caption in the white margin */}
@@ -648,6 +649,7 @@ export default function Home() {
                     width={500}
                     height={500}
                     style={{ width: '22px', height: '22px' }}
+                    draggable={false}
                   />
                   <span
                     className="text-[9px] mt-1 tracking-widest uppercase"
@@ -749,6 +751,7 @@ export default function Home() {
             height={146}
             className="hush-logo"
             style={{ width: 'auto' }}
+            draggable={false}
           />
         </Link>
         <div className="hush-footer-links">

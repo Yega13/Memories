@@ -77,6 +77,15 @@ type UploadStatus = {
   percent: number
 }
 
+async function verifyPublicImageUrl(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export default function UploadZone({ album, onPhotoAdded }: Props) {
   const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
@@ -205,6 +214,14 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         storagePath = path
         publicUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
         storageBackend = 'supabase'
+        const reachable = await verifyPublicImageUrl(publicUrl)
+        if (!reachable) {
+          await supabase.storage.from('Photos').remove([path])
+          setUploadError('Upload failed: the uploaded photo could not be loaded from storage. Please try again.')
+          setCurrentStatus('Upload failed', 0)
+          setUploading(false)
+          return
+        }
         setCurrentStatus('Photo uploaded', 82)
       }
 

@@ -8,6 +8,7 @@ import { hasAccountAccess } from '@/lib/access'
 import { isAccountAdmin } from '@/lib/auth'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
+import DeleteAlbumButton from './DeleteAlbumButton'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
 
@@ -302,7 +303,7 @@ export default async function AccountPage({ searchParams }: Props) {
                   <Link
                     key={collection.id}
                     href={`/c/${collection.slug}`}
-                    className="hush-hover-lift flex items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:opacity-90"
+                    className="flex items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:opacity-90"
                     style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}
                   >
                     <span className="min-w-0">
@@ -334,17 +335,22 @@ export default async function AccountPage({ searchParams }: Props) {
               </div>
               <div className="space-y-3">
                 {(recentAlbums ?? []).map((album) => (
-                  <Link
+                  <div
                     key={album.id}
-                    href={`/${album.custom_slug ?? album.slug}`}
-                    className="block rounded-xl px-4 py-3 transition hover:opacity-90"
+                    className="rounded-xl px-4 py-3"
                     style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}
                   >
-                    <span className="block truncate text-sm font-semibold" style={{ color: '#254F22' }}>{album.title}</span>
-                    <span className="block text-xs" style={{ color: '#8B6F4E' }}>
-                      Created {formatDate(album.created_at)}
-                    </span>
-                  </Link>
+                    <Link
+                      href={`/${album.custom_slug ?? album.slug}`}
+                      className="block transition hover:opacity-80"
+                    >
+                      <span className="block truncate text-sm font-semibold" style={{ color: '#254F22' }}>{album.title}</span>
+                      <span className="block text-xs" style={{ color: '#8B6F4E' }}>
+                        Created {formatDate(album.created_at)}
+                      </span>
+                    </Link>
+                    <DeleteAlbumButton albumId={album.id} />
+                  </div>
                 ))}
                 {(recentAlbums ?? []).length === 0 && (
                   <p className="rounded-xl px-4 py-4 text-sm" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2', color: '#5C4A3C' }}>

@@ -17,6 +17,7 @@ type Props = {
 export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDeleted }: Props) {
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [broken, setBroken] = useState<Set<string>>(new Set())
 
   async function deletePhoto(photo: Photo) {
     if (!ownerToken) return
@@ -44,6 +45,15 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
     a.download = photo.caption || (photo.media_type === 'video' ? 'video' : 'photo')
     a.target = '_blank'
     a.click()
+  }
+
+  function markBroken(photoId: string) {
+    setBroken((current) => {
+      if (current.has(photoId)) return current
+      const nextBroken = new Set(current)
+      nextBroken.add(photoId)
+      return nextBroken
+    })
   }
 
   const prev = useCallback(() => {
@@ -86,6 +96,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
         {photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
+          const isBroken = broken.has(photo.id)
           return (
             <div
               key={photo.id}
@@ -93,7 +104,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
               style={{ background: '#EDE7DB' }}
               onClick={() => setLightbox(index)}
             >
-              {thumbSrc ? (
+              {thumbSrc && !isBroken ? (
                 <Image
                   src={thumbSrc}
                   alt={photo.caption || ''}
@@ -101,10 +112,16 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
                   sizes="(min-width: 1536px) 16vw, (min-width: 1280px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
                   className="object-cover transition group-hover:scale-105"
                   unoptimized
+                  onError={() => {
+                    if (!isVideo) markBroken(photo.id)
+                  }}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center" style={{ background: '#1A2B1A' }}>
-                  <Play className="w-8 h-8" style={{ color: '#C5D9C2' }} />
+                <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-3 text-center" style={{ background: '#E8E0D2' }}>
+                  {isVideo ? <Play className="w-8 h-8" style={{ color: '#7C5C3E' }} /> : null}
+                  <span className="text-xs font-semibold" style={{ color: '#7C5C3E' }}>
+                    {isBroken ? 'File unavailable' : 'Preview unavailable'}
+                  </span>
                 </div>
               )}
 
@@ -195,7 +212,12 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
           </button>
 
           <div className="hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
-            {current.media_type === 'video' ? (
+            {broken.has(current.id) ? (
+              <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center rounded-xl px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)' }}>
+                <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
+                <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
+              </div>
+            ) : current.media_type === 'video' ? (
               <video
                 key={current.id}
                 src={current.url}
@@ -215,6 +237,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
                   sizes="100vw"
                   className="object-contain rounded-xl"
                   unoptimized
+                  onError={() => markBroken(current.id)}
                 />
               </div>
             )}
@@ -226,7 +249,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
                   {current.author_name && <p className="text-sm" style={{ color: '#C5D9C2' }}>by {current.author_name}</p>}
                 </div>
               )}
-              <button onClick={() => downloadPhoto(current)} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
+              <button onClick={() => downloadPhoto(current)} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
                 <Download className="w-5 h-5" />
               </button>
               {isOwner && (
