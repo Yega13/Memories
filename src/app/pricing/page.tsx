@@ -155,7 +155,7 @@ const billingFaq = [
   },
   {
     q: "How do you handle refunds?",
-    a: "We refund any unused full month, no questions asked. Email support@hushare.space and we'll process it within two business days.",
+    a: "Refunds are handled by support, not automatically in the app. Email support@hushare.space with your account email and we'll review it manually within two business days.",
   },
   {
     q: "Do you offer annual pricing?",
@@ -171,7 +171,7 @@ const billingFaq = [
   },
   {
     q: "Is there a discount for non-profits or weddings?",
-    a: "Yes — registered non-profits get Studio for free. For one-off weddings, a single month of Pro usually covers it; we do not currently offer a wedding-specific discount.",
+    a: "Registered non-profits can contact support for a manual Studio discount. For one-off weddings, a single month of Pro usually covers it; we do not currently offer a wedding-specific discount.",
   },
 ];
 

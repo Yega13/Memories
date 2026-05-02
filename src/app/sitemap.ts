@@ -4,6 +4,25 @@ export const runtime = "nodejs";
 
 const SITE_URL = "https://hushare.space";
 
+const seoPages = [
+  {
+    path: "/shared-photo-album",
+    priority: 0.85,
+  },
+  {
+    path: "/wedding-photo-sharing",
+    priority: 0.85,
+  },
+  {
+    path: "/event-photo-sharing",
+    priority: 0.8,
+  },
+  {
+    path: "/qr-code-photo-album",
+    priority: 0.8,
+  },
+];
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
   return [
@@ -13,6 +32,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1,
     },
+    ...seoPages.map((page) => ({
+      url: `${SITE_URL}${page.path}`,
+      lastModified: now,
+      changeFrequency: "monthly" as const,
+      priority: page.priority,
+    })),
     {
       url: `${SITE_URL}/pricing`,
       lastModified: now,
