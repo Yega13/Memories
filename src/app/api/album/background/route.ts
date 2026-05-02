@@ -46,7 +46,15 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error('[album/background] update failed:', error.message)
-    return NextResponse.json({ error: 'Could not save background' }, { status: 500, headers: NO_STORE })
+    const isConstraintError = error.code === '23514' || error.message.includes('albums_background_theme_check')
+    return NextResponse.json(
+      {
+        error: isConstraintError
+          ? 'Database background constraint is outdated. Run the latest album background migration.'
+          : 'Could not save background',
+      },
+      { status: 500, headers: NO_STORE },
+    )
   }
 
   return NextResponse.json({ ok: true, background_theme }, { headers: NO_STORE })

@@ -1,4 +1,4 @@
-import { STOCK_ALBUM_BACKGROUND_VALUES } from './album-backgrounds'
+import { canonicalStockAlbumBackgroundValue, STOCK_ALBUM_BACKGROUND_VALUES } from './album-backgrounds'
 
 const COLOR_RE = /^#[0-9a-f]{6}$/i
 
@@ -9,7 +9,7 @@ export function normalizeAlbumBackground(input: unknown): string | null {
   if (typeof input !== 'string') return null
   const value = input.trim()
   if (COLOR_RE.test(value)) return value.toUpperCase()
-  if (STOCK_BACKGROUND_VALUES.has(value)) return value
+  if (STOCK_BACKGROUND_VALUES.has(value)) return canonicalStockAlbumBackgroundValue(value) ?? value
   return null
 }
 

@@ -534,7 +534,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                             cursor: backgroundSaving ? 'wait' : 'pointer',
                           }}
                         >
-                          {bgChoice === preset.value && (
+                          {(bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) && (
                             <span className="absolute inset-0 flex items-center justify-center" style={{ background: 'rgba(37,79,34,0.25)' }}>
                               <Check className="w-4 h-4" style={{ color: '#FFFFFF' }} />
                             </span>
@@ -831,7 +831,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                   onClick={() => chooseBackground(preset.value, true)}
                   className="hush-hover-lift group overflow-hidden rounded-xl text-left transition hover:opacity-95 disabled:cursor-wait"
                   style={{
-                    border: bgChoice === preset.value ? '2px solid #254F22' : '1px solid #DDD5C5',
+                    border: (bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) ? '2px solid #254F22' : '1px solid #DDD5C5',
                     background: '#FDFAF5',
                     cursor: backgroundSaving ? 'wait' : 'pointer',
                   }}
@@ -844,7 +844,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       backgroundSize: 'cover',
                     }}
                   >
-                    {bgChoice === preset.value && (
+                      {(bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) && (
                       <span
                         className="absolute inset-0 flex items-center justify-center"
                         style={{ background: 'rgba(37,79,34,0.28)', color: '#FFFFFF' }}

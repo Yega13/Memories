@@ -59,6 +59,18 @@ const STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE = new Map<string, string>(
   ),
 )
 
+const STOCK_ALBUM_BACKGROUND_STORAGE_BY_VALUE = new Map<string, string>(
+  STOCK_ALBUM_BACKGROUNDS.flatMap((background) =>
+    [background.value, background.legacyValue, background.imageValue]
+      .filter((value): value is NonNullable<typeof value> => Boolean(value))
+      .map((value) => [value, background.imageValue ?? background.value] as [string, string]),
+  ),
+)
+
+export function canonicalStockAlbumBackgroundValue(value: string): string | null {
+  return STOCK_ALBUM_BACKGROUND_STORAGE_BY_VALUE.get(value) ?? null
+}
+
 export function resolveAlbumBackgroundImage(value: string): string {
   if (value.startsWith('stock:')) return STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value) ?? ''
   return STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value) ?? value.slice('image:'.length)
