@@ -185,7 +185,7 @@ export default function AlbumPage() {
   }
 
   return (
-    <main className="min-h-screen" style={albumBackgroundStyle(album.background_theme ?? DEFAULT_BG)}>
+    <main className="hush-album-page min-h-screen" style={albumBackgroundStyle(album.background_theme ?? DEFAULT_BG)}>
       <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} />
 
       {isOwner && (

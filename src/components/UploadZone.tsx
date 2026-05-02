@@ -283,13 +283,13 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   }
 
   return (
-    <div className="my-6">
+    <div className="hush-upload-wrap my-6">
       <div
         onClick={() => { if (!uploading) inputRef.current?.click() }}
         onDragOver={(e) => { e.preventDefault(); if (!uploading) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
-        className="hush-hover-lift rounded-2xl p-8 text-center cursor-pointer transition"
+        className="hush-hover-lift hush-upload-zone rounded-2xl p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
           background: dragOver ? '#E8F5E3' : '#FDFAF5',
@@ -297,11 +297,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           cursor: uploading ? 'wait' : 'pointer',
         }}
       >
-        <Upload className="w-8 h-8 mx-auto mb-3" style={{ color: '#A89880' }} />
-        <p className="font-medium" style={{ color: '#254F22' }}>
+        <Upload className="hush-upload-icon w-8 h-8 mx-auto mb-3" style={{ color: '#A89880' }} />
+        <p className="hush-upload-title font-medium" style={{ color: '#254F22' }}>
           Drop photos or videos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
         </p>
-        <p className="text-xs mt-1" style={{ color: '#A89880' }}>
+        <p className="hush-upload-hint text-xs mt-1" style={{ color: '#A89880' }}>
           JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} · MP4, MOV, WebM up to {formatFileSize(caps.video)}
         </p>
         <input

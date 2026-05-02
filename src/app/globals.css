@@ -190,6 +190,75 @@ a:hover,
   }
 }
 
+@media (max-width: 640px) {
+  .hush-album-page {
+    background-attachment: scroll !important;
+  }
+
+  .hush-album-header-shell {
+    background: rgba(253, 250, 245, 0.96) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .hush-album-header {
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.8rem !important;
+  }
+
+  .hush-album-logo-link {
+    justify-content: center;
+  }
+
+  .hush-album-title-wrap {
+    width: 100%;
+    border: 1px solid rgba(221, 213, 197, 0.9);
+    border-radius: 1.1rem;
+    background: rgba(255, 255, 255, 0.72);
+    box-shadow: 0 10px 28px rgba(37, 79, 34, 0.08);
+  }
+
+  .hush-album-title {
+    line-height: 1.05 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+
+  .hush-album-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.28rem 0.42rem;
+    line-height: 1.25 !important;
+  }
+
+  .hush-owner-pill {
+    border-radius: 999px;
+    background: #E8F0FB;
+    padding: 0.12rem 0.45rem;
+  }
+
+  .hush-owner-dot,
+  .hush-album-header-spacer {
+    display: none !important;
+  }
+
+  .hush-upload-zone {
+    background: rgba(253, 250, 245, 0.9) !important;
+    box-shadow: 0 12px 32px rgba(37, 79, 34, 0.1);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .hush-upload-hint {
+    max-width: 18rem;
+    margin-inline: auto;
+  }
+}
+
 @media (min-width: 401px) and (max-width: 640px) {
   .hush-nav {
     padding-inline: 1rem;
@@ -216,6 +285,19 @@ a:hover,
   .hush-footer {
     padding-inline: 1rem;
     padding-block: 1rem;
+  }
+
+  .hush-album-header {
+    padding-top: 1.05rem !important;
+    padding-bottom: 1.05rem !important;
+  }
+
+  .hush-album-title {
+    font-size: 1.48rem !important;
+  }
+
+  .hush-album-title-wrap {
+    padding: 0.8rem 1rem !important;
   }
 }
 
@@ -245,6 +327,74 @@ a:hover,
 
   .hush-fluid-card {
     padding: 1rem;
+  }
+
+  .hush-album-header {
+    width: min(calc(100% - 1rem), 100%) !important;
+    gap: 0.7rem !important;
+    padding-top: 0.9rem !important;
+    padding-bottom: 0.95rem !important;
+  }
+
+  .hush-album-header .hush-logo {
+    height: 23px !important;
+    max-width: 170px;
+  }
+
+  .hush-album-title-wrap {
+    width: 100%;
+    padding: 0.7rem 0.8rem !important;
+    border-radius: 1rem;
+  }
+
+  .hush-album-title {
+    font-size: 1.34rem !important;
+  }
+
+  .hush-album-meta {
+    margin-top: 0.42rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  .hush-upload-wrap {
+    margin-top: 1rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .hush-upload-zone {
+    padding: 1.1rem 0.95rem !important;
+    border-radius: 1.15rem !important;
+    background: rgba(253, 250, 245, 0.9) !important;
+    box-shadow: 0 12px 32px rgba(37, 79, 34, 0.1);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .hush-upload-icon {
+    width: 1.85rem !important;
+    height: 1.85rem !important;
+    margin-bottom: 0.65rem !important;
+  }
+
+  .hush-upload-title {
+    font-size: 1rem !important;
+    line-height: 1.28 !important;
+  }
+
+  .hush-upload-hint {
+    margin-top: 0.55rem !important;
+    font-size: 0.76rem !important;
+    line-height: 1.35 !important;
+    max-width: 15rem;
+    margin-inline: auto;
+  }
+
+  .hush-photo-grid {
+    gap: 0.65rem !important;
+  }
+
+  .hush-photo-tile {
+    border-radius: 0.95rem !important;
   }
 
   .hush-home-hero .hush-container {
@@ -368,6 +518,32 @@ a:hover,
   }
 
   .cf-turnstile iframe {
+    transform: none;
+  }
+
+  .hush-album-header {
+    width: min(calc(100% - 0.75rem), 100%) !important;
+  }
+
+  .hush-album-title-wrap {
+    padding: 0.65rem 0.7rem !important;
+  }
+
+  .hush-album-title {
+    font-size: 1.24rem !important;
+  }
+
+  .hush-upload-zone {
+    padding: 1rem 0.8rem !important;
+  }
+
+  .hush-photo-grid {
+    gap: 0.55rem !important;
+  }
+}
+
+@media (max-width: 640px) and (hover: none) {
+  .hush-hover-lift:hover {
     transform: none;
   }
 }

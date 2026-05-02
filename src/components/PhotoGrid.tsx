@@ -92,7 +92,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4">
+      <div className="hush-photo-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4">
         {photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
@@ -100,7 +100,7 @@ export default function PhotoGrid({ photos, isOwner, slug, ownerToken, onPhotoDe
           return (
             <div
               key={photo.id}
-              className="hush-hover-lift group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
+              className="hush-hover-lift hush-photo-tile group relative aspect-square rounded-xl overflow-hidden cursor-pointer"
               style={{ background: '#EDE7DB' }}
               onClick={() => setLightbox(index)}
             >
