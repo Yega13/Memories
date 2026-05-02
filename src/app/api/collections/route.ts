@@ -137,6 +137,72 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok: true, collection: collection.collection }, { headers: NO_STORE })
 }
 
+export async function PATCH(req: Request) {
+  let body: { collection_id?: string; name?: string; description?: string; collection_slug?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid body' }, { status: 400, headers: NO_STORE })
+  }
+
+  const collectionId = String(body.collection_id ?? '').trim()
+  const name = String(body.name ?? '').trim().slice(0, 80)
+  const description = String(body.description ?? '').trim().slice(0, 240)
+  const rawSlug = String(body.collection_slug ?? '').trim()
+  if (!collectionId || !name || !rawSlug) {
+    return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
+  }
+
+  const slugValidation = validateCustomSlug(rawSlug)
+  if (!slugValidation.ok) {
+    return NextResponse.json({ error: slugValidation.reason }, { status: 400, headers: NO_STORE })
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Sign in to edit a collection' }, { status: 401, headers: NO_STORE })
+  }
+  const gate = await requireTier(user, 'studio')
+  if (gate) {
+    return NextResponse.json({ error: 'Studio plan required' }, { status: 403, headers: NO_STORE })
+  }
+
+  const admin = createAdminClient()
+  const { data: collection, error: lookupError } = await admin
+    .from('collections')
+    .select('id')
+    .eq('id', collectionId)
+    .eq('user_id', user.id)
+    .maybeSingle<{ id: string }>()
+
+  if (lookupError || !collection) {
+    return NextResponse.json({ error: 'Collection not found' }, { status: 404, headers: NO_STORE })
+  }
+
+  const { data: updated, error: updateError } = await admin
+    .from('collections')
+    .update({
+      name,
+      slug: slugValidation.slug,
+      description: description || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', collection.id)
+    .select('id, name, slug, description')
+    .single<{ id: string; name: string; slug: string; description: string | null }>()
+
+  if (updateError) {
+    if ((updateError as { code?: string }).code === '23505') {
+      return NextResponse.json({ error: 'That collection URL is already taken' }, { status: 409, headers: NO_STORE })
+    }
+    console.error('[collections] update failed:', updateError.message)
+    return NextResponse.json({ error: 'Could not update collection' }, { status: 500, headers: NO_STORE })
+  }
+
+  return NextResponse.json({ ok: true, collection: updated }, { headers: NO_STORE })
+}
+
 export async function DELETE(req: Request) {
   let body: { collection_id?: string }
   try {

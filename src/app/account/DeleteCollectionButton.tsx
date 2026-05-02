@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
+import { showAccountToast, TOAST_STORAGE_KEY } from './AccountToastViewport'
 
 type Props = {
   collectionId: string
@@ -29,19 +30,24 @@ export default function DeleteCollectionButton({ collectionId }: Props) {
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        setError(body.error ?? `Delete failed (${res.status})`)
+        const message = body.error ?? `Delete failed (${res.status})`
+        setError(message)
+        showAccountToast(message, 'error')
         return
       }
+      window.sessionStorage.setItem(TOAST_STORAGE_KEY, JSON.stringify({ message: 'Collection deleted' }))
       window.location.reload()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setError(message)
+      showAccountToast(message, 'error')
     } finally {
       setDeleting(false)
     }
   }
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={deleteCollection}

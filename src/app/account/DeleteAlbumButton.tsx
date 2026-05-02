@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
+import { showAccountToast, TOAST_STORAGE_KEY } from './AccountToastViewport'
 
 type Props = {
   albumId: string
@@ -29,12 +30,17 @@ export default function DeleteAlbumButton({ albumId }: Props) {
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
-        setError(body.error ?? `Delete failed (${res.status})`)
+        const message = body.error ?? `Delete failed (${res.status})`
+        setError(message)
+        showAccountToast(message, 'error')
         return
       }
+      window.sessionStorage.setItem(TOAST_STORAGE_KEY, JSON.stringify({ message: 'Album deleted' }))
       window.location.reload()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setError(message)
+      showAccountToast(message, 'error')
     } finally {
       setDeleting(false)
     }

@@ -8,8 +8,9 @@ import { hasAccountAccess } from '@/lib/access'
 import { isAccountAdmin } from '@/lib/auth'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
+import AccountToastViewport from './AccountToastViewport'
+import CollectionActions from './CollectionActions'
 import DeleteAlbumButton from './DeleteAlbumButton'
-import DeleteCollectionButton from './DeleteCollectionButton'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
 
@@ -81,6 +82,9 @@ type AccountAlbum = {
 type AccountMediaRow = {
   album_id: string
   media_type: 'image' | 'video'
+  url: string
+  poster_url: string | null
+  created_at: string
 }
 
 export default async function AccountPage({ searchParams }: Props) {
@@ -194,12 +198,22 @@ export default async function AccountPage({ searchParams }: Props) {
   const { data: accountMedia } = accountAlbumIds.length
     ? await admin
         .from('photos')
-        .select('album_id, media_type')
+        .select('album_id, media_type, url, poster_url, created_at')
         .in('album_id', accountAlbumIds)
+        .order('created_at', { ascending: true })
         .returns<AccountMediaRow[]>()
     : { data: [] as AccountMediaRow[] }
 
-  const recentAlbums = (accountAlbums ?? []).slice(0, 6)
+  const albumsWithMedia = (accountAlbums ?? []).map((album) => {
+    const albumMedia = (accountMedia ?? []).filter((row) => row.album_id === album.id)
+    const cover = albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
+    return {
+      ...album,
+      cover_url: cover ? (cover.media_type === 'video' ? cover.poster_url || cover.url : cover.url) : null,
+      media_count: albumMedia.length,
+    }
+  })
+  const recentAlbums = albumsWithMedia.slice(0, 6)
   const photoTotal = (accountMedia ?? []).filter((row) => row.media_type === 'image').length
   const videoTotal = (accountMedia ?? []).filter((row) => row.media_type === 'video').length
   const mediaTotal = photoTotal + videoTotal
@@ -214,6 +228,7 @@ export default async function AccountPage({ searchParams }: Props) {
   return (
     <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
       <AccountNav />
+      <AccountToastViewport />
       <main className="px-4 py-10 sm:py-14">
         <div className="hush-container">
           <section
@@ -385,13 +400,23 @@ export default async function AccountPage({ searchParams }: Props) {
                         {collection.album_count} album{collection.album_count === 1 ? '' : 's'}
                       </span>
                     </Link>
-                    <DeleteCollectionButton collectionId={collection.id} />
+                    <CollectionActions collection={collection} />
                   </div>
                 ))}
                 {collectionsWithCounts.length === 0 && (
-                  <p className="rounded-xl px-4 py-4 text-sm" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2', color: '#5C4A3C' }}>
-                    Create a collection from any album&apos;s Settings menu to group event albums under one public page.
-                  </p>
+                  <div className="rounded-xl px-4 py-6 text-center" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
+                    <p className="font-semibold" style={{ color: '#254F22' }}>No collections yet</p>
+                    <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>
+                      Open an album you own, go to Settings, and create a Studio collection from there.
+                    </p>
+                    <Link
+                      href="/"
+                      className="mt-4 inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition hover:opacity-90"
+                      style={{ background: '#254F22', color: '#FDFAF5' }}
+                    >
+                      Create an album
+                    </Link>
+                  </div>
                 )}
               </div>
             </div>
@@ -410,25 +435,50 @@ export default async function AccountPage({ searchParams }: Props) {
                 {(recentAlbums ?? []).map((album) => (
                   <div
                     key={album.id}
-                    className="rounded-xl px-4 py-3"
+                    className="rounded-xl p-3"
                     style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}
                   >
-                    <Link
-                      href={`/${album.custom_slug ?? album.slug}`}
-                      className="block transition hover:opacity-80"
-                    >
-                      <span className="block truncate text-sm font-semibold" style={{ color: '#254F22' }}>{album.title}</span>
-                      <span className="block text-xs" style={{ color: '#8B6F4E' }}>
-                        Created {formatDate(album.created_at)}
+                    <Link href={`/${album.custom_slug ?? album.slug}`} className="flex items-center gap-3 transition hover:opacity-80">
+                      <span className="relative h-14 w-14 flex-none overflow-hidden rounded-lg" style={{ background: '#E8E0D2' }}>
+                        {album.cover_url ? (
+                          <Image
+                            src={album.cover_url}
+                            alt=""
+                            fill
+                            sizes="56px"
+                            className="object-cover"
+                            unoptimized
+                          />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-[10px] font-semibold" style={{ color: '#8B6F4E' }}>
+                            Empty
+                          </span>
+                        )}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold" style={{ color: '#254F22' }}>{album.title}</span>
+                        <span className="block text-xs" style={{ color: '#8B6F4E' }}>
+                          {album.media_count} item{album.media_count === 1 ? '' : 's'} · Created {formatDate(album.created_at)}
+                        </span>
                       </span>
                     </Link>
                     <DeleteAlbumButton albumId={album.id} />
                   </div>
                 ))}
                 {(recentAlbums ?? []).length === 0 && (
-                  <p className="rounded-xl px-4 py-4 text-sm" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2', color: '#5C4A3C' }}>
-                    Albums appear here after you use a paid feature or add them to a collection.
-                  </p>
+                  <div className="rounded-xl px-4 py-6 text-center" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
+                    <p className="font-semibold" style={{ color: '#254F22' }}>No linked albums yet</p>
+                    <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>
+                      Albums appear here after you use a paid feature or add an album to a collection.
+                    </p>
+                    <Link
+                      href="/"
+                      className="mt-4 inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition hover:opacity-90"
+                      style={{ background: '#254F22', color: '#FDFAF5' }}
+                    >
+                      Start one now
+                    </Link>
+                  </div>
                 )}
               </div>
             </div>
