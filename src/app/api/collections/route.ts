@@ -9,8 +9,73 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
+type AlbumForCollection = { id: string; owner_token: string; user_id: string | null }
+type CollectionSummary = {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  created_at: string
+}
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const albumSlug = (searchParams.get('slug') ?? '').trim()
+  const token = (searchParams.get('owner_token') ?? '').trim()
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Sign in to view collections' }, { status: 401, headers: NO_STORE })
+  }
+  const gate = await requireTier(user, 'studio')
+  if (gate) {
+    return NextResponse.json({ error: 'Studio plan required' }, { status: 403, headers: NO_STORE })
+  }
+
+  const admin = createAdminClient()
+  let album: { id: string } | null = null
+  if (albumSlug && token) {
+    const verified = await verifyOwnedAlbum(admin, albumSlug, token, user.id)
+    if ('error' in verified) return verified.error
+    album = verified.album
+  }
+
+  const { data: collections, error } = await admin
+    .from('collections')
+    .select('id, name, slug, description, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .returns<CollectionSummary[]>()
+
+  if (error) {
+    console.error('[collections] list failed:', error.message)
+    return NextResponse.json({ error: 'Could not load collections' }, { status: 500, headers: NO_STORE })
+  }
+
+  const collectionIds = (collections ?? []).map((collection) => collection.id)
+  const { data: links } = collectionIds.length
+    ? await admin
+        .from('collection_albums')
+        .select('collection_id, album_id')
+        .in('collection_id', collectionIds)
+        .returns<Array<{ collection_id: string; album_id: string }>>()
+    : { data: [] as Array<{ collection_id: string; album_id: string }> }
+
+  const shaped = (collections ?? []).map((collection) => {
+    const collectionLinks = (links ?? []).filter((link) => link.collection_id === collection.id)
+    return {
+      ...collection,
+      album_count: collectionLinks.length,
+      contains_album: album ? collectionLinks.some((link) => link.album_id === album.id) : false,
+    }
+  })
+
+  return NextResponse.json({ collections: shaped }, { headers: NO_STORE })
+}
+
 export async function POST(req: Request) {
-  let body: { slug?: string; owner_token?: string; name?: string; collection_slug?: string }
+  let body: { slug?: string; owner_token?: string; name?: string; collection_slug?: string; collection_id?: string }
   try {
     body = await req.json()
   } catch {
@@ -19,15 +84,18 @@ export async function POST(req: Request) {
 
   const albumSlug = String(body.slug ?? '').trim()
   const token = String(body.owner_token ?? '').trim()
+  const collectionId = String(body.collection_id ?? '').trim()
   const name = String(body.name ?? '').trim().slice(0, 80)
   const rawCollectionSlug = String(body.collection_slug ?? slugFromName(name)).trim()
-  if (!albumSlug || !token || !name) {
+  if (!albumSlug || !token || (!collectionId && !name)) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
 
-  const validation = validateCustomSlug(rawCollectionSlug)
-  if (!validation.ok) {
-    return NextResponse.json({ error: validation.reason }, { status: 400, headers: NO_STORE })
+  let normalizedCollectionSlug = ''
+  if (!collectionId) {
+    const validation = validateCustomSlug(rawCollectionSlug)
+    if (!validation.ok) return NextResponse.json({ error: validation.reason }, { status: 400, headers: NO_STORE })
+    normalizedCollectionSlug = validation.slug
   }
 
   const supabase = await createClient()
@@ -41,56 +109,97 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const { data: album, error: albumError } = await admin
-    .from('albums')
-    .select('id, owner_token, user_id')
-    .eq('slug', albumSlug)
-    .maybeSingle<{ id: string; owner_token: string; user_id: string | null }>()
+  const verified = await verifyOwnedAlbum(admin, albumSlug, token, user.id)
+  if ('error' in verified) return verified.error
+  const { album } = verified
 
-  if (albumError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
+  const collection = collectionId
+    ? await getExistingCollection(admin, collectionId, user.id)
+    : await createCollection(admin, user.id, name, normalizedCollectionSlug)
 
-  if (album.user_id && album.user_id !== user.id) {
-    return NextResponse.json({ error: 'This album is bound to another account' }, { status: 403, headers: NO_STORE })
-  }
-
-  const { data: collection, error: collectionError } = await admin
-    .from('collections')
-    .insert({
-      user_id: user.id,
-      name,
-      slug: validation.slug,
-    })
-    .select('id, slug, name')
-    .single<{ id: string; slug: string; name: string }>()
-
-  if (collectionError) {
-    if ((collectionError as { code?: string }).code === '23505') {
-      return NextResponse.json({ error: 'That collection URL is already taken' }, { status: 409, headers: NO_STORE })
-    }
-    console.error('[collections] create failed:', collectionError.message)
-    return NextResponse.json({ error: 'Could not create collection' }, { status: 500, headers: NO_STORE })
-  }
+  if ('error' in collection) return collection.error
 
   await admin.from('albums').update({ user_id: user.id }).eq('id', album.id).is('user_id', null)
 
   const { error: linkError } = await admin
     .from('collection_albums')
     .upsert(
-      { collection_id: collection.id, album_id: album.id, sort_order: 0 },
+      { collection_id: collection.collection.id, album_id: album.id, sort_order: 0 },
       { onConflict: 'collection_id,album_id' },
     )
 
   if (linkError) {
     console.error('[collections] link failed:', linkError.message)
-    return NextResponse.json({ error: 'Collection created, but album could not be added' }, { status: 500, headers: NO_STORE })
+    return NextResponse.json({ error: 'Album could not be added to the collection' }, { status: 500, headers: NO_STORE })
   }
 
-  return NextResponse.json({ ok: true, collection }, { headers: NO_STORE })
+  return NextResponse.json({ ok: true, collection: collection.collection }, { headers: NO_STORE })
+}
+
+async function verifyOwnedAlbum(
+  admin: ReturnType<typeof createAdminClient>,
+  albumSlug: string,
+  token: string,
+  userId: string,
+): Promise<{ album: AlbumForCollection } | { error: NextResponse }> {
+  const { data: album, error: albumError } = await admin
+    .from('albums')
+    .select('id, owner_token, user_id')
+    .eq('slug', albumSlug)
+    .maybeSingle<AlbumForCollection>()
+
+  if (albumError || !album) {
+    return { error: NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE }) }
+  }
+  if (!timingSafeEqual(token, album.owner_token)) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE }) }
+  }
+  if (album.user_id && album.user_id !== userId) {
+    return { error: NextResponse.json({ error: 'This album is bound to another account' }, { status: 403, headers: NO_STORE }) }
+  }
+
+  return { album }
+}
+
+async function getExistingCollection(
+  admin: ReturnType<typeof createAdminClient>,
+  collectionId: string,
+  userId: string,
+): Promise<{ collection: { id: string; slug: string; name: string } } | { error: NextResponse }> {
+  const { data: collection, error } = await admin
+    .from('collections')
+    .select('id, slug, name')
+    .eq('id', collectionId)
+    .eq('user_id', userId)
+    .maybeSingle<{ id: string; slug: string; name: string }>()
+
+  if (error || !collection) {
+    return { error: NextResponse.json({ error: 'Collection not found' }, { status: 404, headers: NO_STORE }) }
+  }
+  return { collection }
+}
+
+async function createCollection(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  name: string,
+  slug: string,
+): Promise<{ collection: { id: string; slug: string; name: string } } | { error: NextResponse }> {
+  const { data: collection, error } = await admin
+    .from('collections')
+    .insert({ user_id: userId, name, slug })
+    .select('id, slug, name')
+    .single<{ id: string; slug: string; name: string }>()
+
+  if (error) {
+    if ((error as { code?: string }).code === '23505') {
+      return { error: NextResponse.json({ error: 'That collection URL is already taken' }, { status: 409, headers: NO_STORE }) }
+    }
+    console.error('[collections] create failed:', error.message)
+    return { error: NextResponse.json({ error: 'Could not create collection' }, { status: 500, headers: NO_STORE }) }
+  }
+
+  return { collection }
 }
 
 function slugFromName(name: string): string {

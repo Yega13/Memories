@@ -3,8 +3,10 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { hasAccountAccess } from '@/lib/access'
 import { getActiveSubscription } from '@/lib/subscriptions'
+import { formatDate } from '@/lib/utils'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
 
@@ -44,6 +46,22 @@ export const metadata: Metadata = {
 
 type Props = {
   searchParams: Promise<{ welcome?: string }>
+}
+
+type AccountCollection = {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  created_at: string
+}
+
+type AccountAlbum = {
+  id: string
+  slug: string
+  custom_slug: string | null
+  title: string
+  created_at: string
 }
 
 export default async function AccountPage({ searchParams }: Props) {
@@ -121,6 +139,35 @@ export default async function AccountPage({ searchParams }: Props) {
     ? ['Studio Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
     : ['Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
   const nextLabel = subscription?.cancel_at_period_end ? 'Access ends' : 'Next renewal'
+  const admin = createAdminClient()
+  const { data: collections } = await admin
+    .from('collections')
+    .select('id, name, slug, description, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .returns<AccountCollection[]>()
+
+  const collectionIds = (collections ?? []).map((collection) => collection.id)
+  const { data: collectionLinks } = collectionIds.length
+    ? await admin
+        .from('collection_albums')
+        .select('collection_id, album_id')
+        .in('collection_id', collectionIds)
+        .returns<Array<{ collection_id: string; album_id: string }>>()
+    : { data: [] as Array<{ collection_id: string; album_id: string }> }
+
+  const collectionsWithCounts = (collections ?? []).map((collection) => ({
+    ...collection,
+    album_count: (collectionLinks ?? []).filter((link) => link.collection_id === collection.id).length,
+  }))
+
+  const { data: recentAlbums } = await admin
+    .from('albums')
+    .select('id, slug, custom_slug, title, created_at')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+    .limit(6)
+    .returns<AccountAlbum[]>()
 
   return (
     <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
@@ -228,6 +275,81 @@ export default async function AccountPage({ searchParams }: Props) {
               </Link>
             </section>
           </div>
+
+          <section className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+            <div
+              className="rounded-2xl p-6"
+              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.08)' }}
+            >
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>Collections</p>
+                  <h2 className="text-xl font-semibold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>
+                    Studio pages
+                  </h2>
+                </div>
+                <span className="text-xs rounded-full px-3 py-1" style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #E8E0D2' }}>
+                  {collectionsWithCounts.length} total
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {collectionsWithCounts.slice(0, 5).map((collection) => (
+                  <Link
+                    key={collection.id}
+                    href={`/c/${collection.slug}`}
+                    className="hush-hover-lift flex items-center justify-between gap-4 rounded-xl px-4 py-3 transition hover:opacity-90"
+                    style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold" style={{ color: '#254F22' }}>{collection.name}</span>
+                      <span className="block truncate text-xs" style={{ color: '#8B6F4E' }}>/c/{collection.slug}</span>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold" style={{ color: '#7C5C3E' }}>
+                      {collection.album_count} album{collection.album_count === 1 ? '' : 's'}
+                    </span>
+                  </Link>
+                ))}
+                {collectionsWithCounts.length === 0 && (
+                  <p className="rounded-xl px-4 py-4 text-sm" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2', color: '#5C4A3C' }}>
+                    Create a collection from any album&apos;s Settings menu to group event albums under one public page.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div
+              className="rounded-2xl p-6"
+              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.08)' }}
+            >
+              <div className="mb-5">
+                <p className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>Albums</p>
+                <h2 className="text-xl font-semibold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>
+                  Recently linked
+                </h2>
+              </div>
+              <div className="space-y-3">
+                {(recentAlbums ?? []).map((album) => (
+                  <Link
+                    key={album.id}
+                    href={`/${album.custom_slug ?? album.slug}`}
+                    className="block rounded-xl px-4 py-3 transition hover:opacity-90"
+                    style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}
+                  >
+                    <span className="block truncate text-sm font-semibold" style={{ color: '#254F22' }}>{album.title}</span>
+                    <span className="block text-xs" style={{ color: '#8B6F4E' }}>
+                      Created {formatDate(album.created_at)}
+                    </span>
+                  </Link>
+                ))}
+                {(recentAlbums ?? []).length === 0 && (
+                  <p className="rounded-xl px-4 py-4 text-sm" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2', color: '#5C4A3C' }}>
+                    Albums appear here after you use a paid feature or add them to a collection.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
 
           <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 mb-6">
             {[

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, QrCode, Settings, X } from 'lucide-react'
 import JSZip from 'jszip'
@@ -19,6 +19,13 @@ type Props = {
 }
 
 type SettingsSection = 'customization' | 'files' | 'customUrl' | 'password' | 'collection'
+type CollectionSummary = {
+  id: string
+  name: string
+  slug: string
+  album_count: number
+  contains_album: boolean
+}
 
 const PRESETS = [
   { label: 'Cream', value: '#FDFAF5' },
@@ -59,6 +66,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const [collectionSaving, setCollectionSaving] = useState(false)
   const [collectionError, setCollectionError] = useState('')
   const [collectionUrl, setCollectionUrl] = useState('')
+  const [collections, setCollections] = useState<CollectionSummary[]>([])
+  const [collectionsLoading, setCollectionsLoading] = useState(false)
 
   const [backgroundSaving, setBackgroundSaving] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
@@ -77,6 +86,18 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const bgChoice = album.background_theme ?? DEFAULT_BG
   const currentColor = bgChoice.startsWith('#') ? bgChoice : DEFAULT_BG
   const isDark = bgChoice === '#1C2333' || bgChoice === '#1A2B1A' || bgChoice.startsWith('image:') || bgChoice.startsWith('stock:')
+
+  const loadCollections = useCallback(async () => {
+    setCollectionsLoading(true)
+    try {
+      const params = new URLSearchParams({ slug: album.slug, owner_token: ownerToken })
+      const res = await fetch(`/api/collections?${params.toString()}`)
+      const body = (await res.json().catch(() => ({}))) as { collections?: CollectionSummary[] }
+      if (res.ok) setCollections(body.collections ?? [])
+    } finally {
+      setCollectionsLoading(false)
+    }
+  }, [album.slug, ownerToken])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -100,6 +121,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       setOpenSection(null)
     }
   }, [album.custom_slug, showSettings])
+
+  useEffect(() => {
+    if (showSettings && canUseCollections) void loadCollections()
+  }, [showSettings, canUseCollections, loadCollections])
 
   function toggleSection(section: SettingsSection) {
     setOpenSection((current) => {
@@ -274,6 +299,40 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
         return
       }
       setCollectionUrl(`${window.location.origin}/c/${body.collection.slug}`)
+      setCollectionName('')
+      setCollectionSlug('')
+      await loadCollections()
+    } catch (e) {
+      setCollectionError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setCollectionSaving(false)
+    }
+  }
+
+  async function addAlbumToCollection(collectionId: string) {
+    setCollectionSaving(true)
+    setCollectionError('')
+    setCollectionUrl('')
+    try {
+      const res = await fetch('/api/collections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: album.slug,
+          owner_token: ownerToken,
+          collection_id: collectionId,
+        }),
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string
+        collection?: { slug: string }
+      }
+      if (!res.ok || !body.collection?.slug) {
+        setCollectionError(body.error ?? `Save failed (${res.status})`)
+        return
+      }
+      setCollectionUrl(`${window.location.origin}/c/${body.collection.slug}`)
+      await loadCollections()
     } catch (e) {
       setCollectionError(e instanceof Error ? e.message : 'Network error')
     } finally {
@@ -337,10 +396,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   }
 
   const sectionTitle: React.CSSProperties = {
-    color: '#8B6F4E',
+    color: '#254F22',
     fontSize: 11,
     fontWeight: 700,
-    letterSpacing: '0.08em',
+    letterSpacing: '0.06em',
     textTransform: 'uppercase',
   }
 
@@ -354,13 +413,21 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     width: '100%',
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    padding: '12px 0',
+    gap: 10,
+    padding: '13px 14px',
     cursor: 'pointer',
     color: '#254F22',
     background: 'transparent',
     border: 0,
     textAlign: 'left',
+  }
+
+  const settingsSectionStyle: React.CSSProperties = {
+    background: '#FFFFFF',
+    border: '1px solid #E8E0D2',
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 8,
   }
 
   return (
@@ -466,16 +533,21 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
           {showSettings && (
             <div
               className="hush-menu-pop absolute right-0 top-full mt-2 z-50 rounded-2xl shadow-xl max-h-[78vh] overflow-y-auto"
-              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 'min(92vw, 420px)', padding: 16 }}
+              style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', width: 'min(94vw, 480px)', padding: 12 }}
             >
-              <div className="flex items-center justify-between mb-4">
-                <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Album settings</span>
-                <button onClick={() => setShowSettings(false)} style={{ color: '#A89880', cursor: 'pointer' }} aria-label="Close settings">
+              <div className="flex items-start justify-between gap-4 rounded-xl px-3 py-3 mb-3" style={{ background: '#FFFFFF', border: '1px solid #E8E0D2' }}>
+                <div>
+                  <span className="block font-semibold text-sm" style={{ color: '#254F22' }}>Album settings</span>
+                  <span className="block text-xs mt-1" style={{ color: '#8B6F4E' }}>
+                    Share, customize, protect, and organize this album.
+                  </span>
+                </div>
+                <button onClick={() => setShowSettings(false)} className="shrink-0 rounded-full p-1 transition hover:opacity-80" style={{ color: '#A89880', cursor: 'pointer', background: '#F5F0E8' }} aria-label="Close settings">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+              <section style={settingsSectionStyle}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('customization')}>
                   <Images className="w-4 h-4" style={{ color: '#7C5C3E' }} />
                   <span style={sectionTitle}>Customization</span>
@@ -486,7 +558,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 </button>
 
                 {openSection === 'customization' && (
-                  <div className="pb-4">
+                  <div className="px-4 pb-4">
                     <p className="text-xs font-medium mb-2" style={{ color: '#7C5C3E' }}>Color patterns</p>
                     <div className="grid grid-cols-8 gap-2 mb-4">
                       {PRESETS.map((preset) => (
@@ -500,7 +572,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                             aspectRatio: '1',
                             borderRadius: 10,
                             background: preset.value,
-                            border: bgChoice === preset.value ? '2px solid #254F22' : '1.5px solid #DDD5C5',
+                            border: (bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) ? '2px solid #254F22' : '1.5px solid #DDD5C5',
                             cursor: backgroundSaving ? 'wait' : 'pointer',
                             position: 'relative',
                           }}
@@ -596,7 +668,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 )}
               </section>
 
-              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+              <section style={settingsSectionStyle}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('files')}>
                   <Download className="w-4 h-4" style={{ color: '#7C5C3E' }} />
                   <span style={sectionTitle}>Files</span>
@@ -606,7 +678,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                   />
                 </button>
                 {openSection === 'files' && (
-                  <div className="pb-4">
+                  <div className="px-4 pb-4">
                     <button
                       className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ background: '#254F22', color: '#FDFAF5' }}
@@ -620,7 +692,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 )}
               </section>
 
-              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+              <section style={settingsSectionStyle}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('customUrl')}>
                   <Link2 className="w-4 h-4" style={{ color: canCustomize ? '#7C5C3E' : '#A89880' }} />
                   <span style={sectionTitle}>Custom URL</span>
@@ -631,7 +703,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                   />
                 </button>
                 {openSection === 'customUrl' && (
-                  <div className="pb-4">
+                  <div className="px-4 pb-4">
                     <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
                       Pick a friendly path for this album. Letters, numbers, and hyphens, 3 to 40 characters.
                     </p>
@@ -677,7 +749,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 )}
               </section>
 
-              <section style={{ borderBottom: '1px solid #E8E0D2' }}>
+              <section style={settingsSectionStyle}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('password')}>
                   {album.password_protected ? (
                     <Lock className="w-4 h-4" style={{ color: canCustomize ? '#254F22' : '#A89880' }} />
@@ -692,7 +764,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                   />
                 </button>
                 {openSection === 'password' && (
-                  <div className="pb-4">
+                  <div className="px-4 pb-4">
                     <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
                       Visitors will need this password to view the album. 4-128 characters.
                     </p>
@@ -735,10 +807,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                 )}
               </section>
 
-              <section>
+              <section style={{ ...settingsSectionStyle, marginBottom: 0 }}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('collection')}>
                   <FolderPlus className="w-4 h-4" style={{ color: canUseCollections ? '#7C5C3E' : '#A89880' }} />
-                  <span style={sectionTitle}>Create collection</span>
+                  <span style={sectionTitle}>Collections</span>
                   {!canUseCollections && <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#7C4A2D', letterSpacing: '0.06em' }}>Studio</span>}
                   <ChevronDown
                     className={canUseCollections ? 'ml-auto w-4 h-4 transition-transform' : 'w-4 h-4 transition-transform'}
@@ -746,9 +818,47 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                   />
                 </button>
                 {openSection === 'collection' && (
-                  <div className="pb-1">
+                  <div className="px-4 pb-4">
                     <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
-                      Create a public grouped page and add this album to it.
+                      Create a grouped /c/... page, or add this album to one you already use.
+                    </p>
+
+                    {canUseCollections && (
+                      <div className="mb-4 rounded-xl p-3" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <span className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: '#8B6F4E' }}>Your collections</span>
+                          {collectionsLoading && <span className="text-xs" style={{ color: '#A89880' }}>Loading...</span>}
+                        </div>
+                        <div className="space-y-2">
+                          {collections.map((collection) => (
+                            <button
+                              key={collection.id}
+                              type="button"
+                              onClick={() => addAlbumToCollection(collection.id)}
+                              disabled={collectionSaving || collection.contains_album}
+                              className="hush-press flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-xs transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#254F22' }}
+                            >
+                              <span className="min-w-0">
+                                <span className="block truncate font-semibold">{collection.name}</span>
+                                <span className="block truncate" style={{ color: '#8B6F4E' }}>
+                                  /c/{collection.slug} · {collection.album_count} album{collection.album_count === 1 ? '' : 's'}
+                                </span>
+                              </span>
+                              <span className="shrink-0 font-semibold" style={{ color: collection.contains_album ? '#254F22' : '#7C5C3E' }}>
+                                {collection.contains_album ? 'Added' : 'Add'}
+                              </span>
+                            </button>
+                          ))}
+                          {!collectionsLoading && collections.length === 0 && (
+                            <p className="text-xs" style={{ color: '#8B6F4E' }}>No collections yet. Create the first one below.</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] mb-2" style={{ color: '#8B6F4E' }}>
+                      New collection
                     </p>
                     <input
                       type="text"
