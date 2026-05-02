@@ -19,7 +19,7 @@ function albumBackgroundStyle(bg: string): React.CSSProperties {
   if (bg.startsWith(IMAGE_BG_PREFIX)) {
     return {
       backgroundColor: '#1A2B1A',
-      backgroundImage: `linear-gradient(rgba(253,250,245,0.72), rgba(253,250,245,0.72)), url(${resolveAlbumBackgroundImage(bg)})`,
+      backgroundImage: `linear-gradient(rgba(253,250,245,0.48), rgba(253,250,245,0.58)), url("${resolveAlbumBackgroundImage(bg)}")`,
       backgroundAttachment: 'fixed',
       backgroundPosition: 'center',
       backgroundSize: 'cover',

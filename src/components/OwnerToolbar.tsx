@@ -180,6 +180,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   async function saveBackground(choice: string | null): Promise<boolean> {
     setBackgroundSaving(true)
     setBackgroundError('')
+    const previousBackground = album.background_theme ?? null
+    onAlbumUpdated({ background_theme: choice })
     try {
       const res = await fetch('/api/album/background', {
         method: 'POST',
@@ -192,12 +194,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string; background_theme?: string | null }
       if (!res.ok) {
+        onAlbumUpdated({ background_theme: previousBackground })
         setBackgroundError(body.error ?? `Save failed (${res.status})`)
         return false
       }
       onAlbumUpdated({ background_theme: body.background_theme ?? null })
       return true
     } catch (e) {
+      onAlbumUpdated({ background_theme: previousBackground })
       setBackgroundError(e instanceof Error ? e.message : 'Network error')
       return false
     } finally {
