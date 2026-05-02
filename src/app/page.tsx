@@ -148,7 +148,7 @@ export default function Home() {
       </nav>
 
       {/* ── HERO ── mobile: full-bleed image bg with overlay; desktop: image right with diagonal cut */}
-      <div className="relative overflow-hidden lg:min-h-[calc(100vh_-_73px)]">
+      <div className="hush-home-hero relative overflow-hidden lg:min-h-[calc(100vh_-_73px)]">
 
         {/* Mobile-only background image — full bleed, no clip */}
         <div
@@ -206,20 +206,20 @@ export default function Home() {
               No account · No friction
             </p>
             <h1
-              className="text-[#FDFAF5] lg:text-[#254F22] [text-shadow:0_2px_18px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
+              className="hush-home-title text-[#FDFAF5] lg:text-[#254F22] [text-shadow:0_2px_18px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
               style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(2rem, 7vw, 5.4rem)', lineHeight: 1.05, fontWeight: 700, marginBottom: '1.25rem' }}
             >
               Every moment,<br />
               <em className="text-[#F3E0BC] lg:text-[#7C4A2D]">beautifully kept</em>
             </h1>
             <p
-              className="text-base sm:text-lg leading-relaxed mb-8 sm:mb-10 text-[#FBF4E4] lg:text-[#6B5A4E] [text-shadow:0_1px_10px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
+              className="hush-home-copy text-base sm:text-lg leading-relaxed mb-8 sm:mb-10 text-[#FBF4E4] lg:text-[#6B5A4E] [text-shadow:0_1px_10px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
               style={{ maxWidth: '420px' }}
             >
               Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
             </p>
 
-            <div className="hush-hover-lift rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '520px' }}>
+            <div className="hush-hover-lift hush-album-create-card rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '520px' }}>
               <label className="block text-sm font-medium mb-2" style={{ color: '#8B6F4E' }}>
                 Name your album
               </label>

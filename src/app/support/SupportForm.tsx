@@ -79,7 +79,7 @@ export default function SupportForm() {
   if (status === 'sent') {
     return (
       <div
-        className="hush-modal-pop rounded-2xl p-8 text-center"
+        className="hush-modal-pop hush-support-success rounded-2xl p-8 text-center"
         style={{
           background: '#EAF0E8',
           border: '1px solid #C8D6C2',
@@ -117,7 +117,7 @@ export default function SupportForm() {
       />
       <form
         onSubmit={onSubmit}
-        className="hush-hover-lift rounded-2xl p-6 sm:p-8"
+        className="hush-hover-lift hush-support-form rounded-2xl p-6 sm:p-8"
         style={{
           background: '#FFFFFF',
           border: '1px solid #DDD5C5',
@@ -212,7 +212,12 @@ export default function SupportForm() {
           />
         </div>
 
-        <div className="cf-turnstile mb-4" data-sitekey={TURNSTILE_SITE_KEY} data-theme="light" />
+        <div
+          className="cf-turnstile mb-4"
+          data-sitekey={TURNSTILE_SITE_KEY}
+          data-theme="light"
+          data-size="compact"
+        />
 
         {status === 'error' && (
           <div
