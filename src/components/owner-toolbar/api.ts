@@ -56,6 +56,29 @@ export async function saveBackgroundRequest(
   return { ok: true, background_theme: body.background_theme ?? null }
 }
 
+export async function saveMediaSettingsRequest(
+  slug: string,
+  ownerToken: string,
+  mediaRadius: number,
+  videoAutoplay: boolean,
+): Promise<{ ok: true; media_radius: number; video_autoplay: boolean } | { ok: false; error: string }> {
+  const res = await fetch('/api/album/media-settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      slug,
+      owner_token: ownerToken,
+      media_radius: mediaRadius,
+      video_autoplay: videoAutoplay,
+    }),
+  })
+  const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean }>(res)
+  if (!res.ok || body.media_radius == null || body.video_autoplay == null) {
+    return { ok: false, error: body.error ?? `Save failed (${res.status})` }
+  }
+  return { ok: true, media_radius: body.media_radius, video_autoplay: body.video_autoplay }
+}
+
 export async function uploadBackgroundRequest(
   slug: string,
   ownerToken: string,

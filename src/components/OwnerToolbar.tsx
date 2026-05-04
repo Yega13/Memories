@@ -16,6 +16,7 @@ import {
   fetchCollections,
   saveBackgroundRequest,
   saveCustomUrlRequest,
+  saveMediaSettingsRequest,
   savePasswordRequest,
   uploadBackgroundRequest,
 } from '@/components/owner-toolbar/api'
@@ -70,6 +71,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const [backgroundSaving, setBackgroundSaving] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
   const [showBackgroundLibrary, setShowBackgroundLibrary] = useState(false)
+  const [mediaRadius, setMediaRadius] = useState(album.media_radius ?? 12)
+  const [videoAutoplay, setVideoAutoplay] = useState(!!album.video_autoplay)
+  const [mediaSaving, setMediaSaving] = useState(false)
+  const [mediaError, setMediaError] = useState('')
+  const [mediaSaved, setMediaSaved] = useState(false)
 
   const shareRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -114,11 +120,15 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       setPasswordInput('')
       setCollectionError('')
       setCollectionDescription('')
+      setMediaRadius(album.media_radius ?? 12)
+      setVideoAutoplay(!!album.video_autoplay)
+      setMediaError('')
+      setMediaSaved(false)
       setOpenSection(null)
       setDeleteConfirm(false)
       setDeleteError('')
     }
-  }, [album.custom_slug, showSettings])
+  }, [album.custom_slug, album.media_radius, album.video_autoplay, showSettings])
 
   useEffect(() => {
     if (showSettings && canUseCollections) void loadCollections()
@@ -210,6 +220,27 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       return false
     } finally {
       setBackgroundSaving(false)
+    }
+  }
+
+  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay) {
+    setMediaSaving(true)
+    setMediaError('')
+    setMediaSaved(false)
+    try {
+      const result = await saveMediaSettingsRequest(album.slug, ownerToken, nextRadius, nextAutoplay)
+      if (!result.ok) {
+        setMediaError(result.error)
+        return
+      }
+      setMediaRadius(result.media_radius)
+      setVideoAutoplay(result.video_autoplay)
+      onAlbumUpdated({ media_radius: result.media_radius, video_autoplay: result.video_autoplay })
+      setMediaSaved(true)
+    } catch (e) {
+      setMediaError(e instanceof Error ? e.message : 'Network error')
+    } finally {
+      setMediaSaving(false)
     }
   }
 
@@ -549,6 +580,65 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       </button>
                     </div>
                     {backgroundError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{backgroundError}</p>}
+                  </div>
+                )}
+              </section>
+
+              <section style={settingsSectionStyle}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('media')}>
+                  <Settings className="w-4 h-4" style={{ color: '#7C5C3E' }} />
+                  <span style={sectionTitle}>Media display</span>
+                  <ChevronDown
+                    className="ml-auto w-4 h-4 transition-transform"
+                    style={{ color: '#A89880', transform: openSection === 'media' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {openSection === 'media' && (
+                  <div className="px-4 pb-4 space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Global corner radius</label>
+                        <span className="text-xs font-mono" style={{ color: '#A89880' }}>{mediaRadius}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={36}
+                        value={mediaRadius}
+                        onChange={(e) => {
+                          setMediaRadius(Number(e.target.value))
+                          setMediaSaved(false)
+                        }}
+                        className="w-full"
+                      />
+                    </div>
+
+                    <label className="flex items-center justify-between gap-4 rounded-xl px-3 py-3" style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', cursor: 'pointer' }}>
+                      <span>
+                        <span className="block text-sm font-semibold" style={{ color: '#254F22' }}>Video autoplay</span>
+                        <span className="block text-xs" style={{ color: '#7C5C3E' }}>Start videos automatically when opened.</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={videoAutoplay}
+                        onChange={(e) => {
+                          setVideoAutoplay(e.target.checked)
+                          setMediaSaved(false)
+                        }}
+                        className="h-4 w-4"
+                      />
+                    </label>
+
+                    {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}
+                    {mediaSaved && !mediaError && <p className="text-xs" style={{ color: '#254F22' }}>Saved.</p>}
+                    <button
+                      onClick={() => saveMediaSettings()}
+                      disabled={mediaSaving}
+                      className="hush-press w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: '#254F22', color: '#FDFAF5' }}
+                    >
+                      {mediaSaving ? 'Saving...' : 'Save media display'}
+                    </button>
                   </div>
                 )}
               </section>

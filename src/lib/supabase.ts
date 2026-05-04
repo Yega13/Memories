@@ -23,6 +23,8 @@ export type Album = {
   title: string
   description: string | null
   background_theme?: string | null
+  media_radius?: number
+  video_autoplay?: boolean
   // Public boolean projection of password_hash. The hash itself never
   // reaches the browser — this is what the resolver returns so the UI can
   // show "password set / not set" and the share-link copy can warn the
@@ -56,4 +58,8 @@ export type Photo = {
   poster_path: string | null
   poster_url: string | null
   duration_seconds: number | null
+  display_radius: number | null
+  display_filter: MediaDisplayFilter
 }
+
+export type MediaDisplayFilter = 'none' | 'warm' | 'cool' | 'mono' | 'vintage' | 'soft'

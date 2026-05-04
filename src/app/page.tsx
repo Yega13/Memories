@@ -219,7 +219,7 @@ export default function Home() {
               Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
             </p>
 
-            <div className="hush-hover-lift hush-album-create-card rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '430px' }}>
+            <div className="hush-album-create-card rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '430px' }}>
               <label className="block text-sm font-medium mb-2" style={{ color: '#8B6F4E' }}>
                 Name your album
               </label>

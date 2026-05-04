@@ -31,6 +31,8 @@ type FullAlbum = {
   title: string
   description: string | null
   background_theme: string | null
+  media_radius: number
+  video_autoplay: boolean
   created_at: string
   retired_at: string | null
   user_id: string | null
@@ -39,7 +41,7 @@ type FullAlbum = {
 
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, created_at, retired_at, user_id, password_hash'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -139,6 +141,8 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     title: album.title,
     description: album.description,
     background_theme: album.background_theme,
+    media_radius: album.media_radius,
+    video_autoplay: album.video_autoplay,
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,

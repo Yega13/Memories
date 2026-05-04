@@ -201,11 +201,13 @@ export default function AlbumPage() {
       <div className="hush-container pb-12">
         <UploadZone album={album} onPhotoAdded={handlePhotoAdded} />
         <PhotoGrid
+          album={album}
           photos={photos}
           isOwner={isOwner}
           slug={album.slug}
           ownerToken={ownerToken}
           onPhotoDeleted={handlePhotoDeleted}
+          onPhotoUpdated={(photoId, patch) => setPhotos((prev) => prev.map((photo) => (photo.id === photoId ? { ...photo, ...patch } : photo)))}
         />
       </div>
     </main>
