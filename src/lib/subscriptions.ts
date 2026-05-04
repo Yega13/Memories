@@ -1,4 +1,4 @@
-import { createClient as createServerClient } from '@/lib/supabase/server'
+﻿import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isAccountAdmin } from '@/lib/auth'
 
@@ -16,8 +16,6 @@ export type Subscription = {
   updated_at: string
 }
 
-// Returns the user's most recent subscription if it currently grants access.
-// "Grants access" = active, OR canceled-but-still-in-paid-period.
 export async function getActiveSubscription(userId: string): Promise<Subscription | null> {
   const supabase = await createServerClient()
   const { data, error } = await supabase
@@ -36,7 +34,6 @@ export async function getActiveSubscription(userId: string): Promise<Subscriptio
 
   if (data.status === 'active' || data.status === 'trialing') return data
 
-  // Treat canceled / past_due as still-active until the paid period actually ends.
   if (data.status === 'canceled' || data.status === 'past_due') {
     if (!data.current_period_end) return null
     if (new Date(data.current_period_end) > new Date()) return data
@@ -52,21 +49,10 @@ export async function isActiveSubscriber(user: { id?: string } | null | undefine
 
 export type Tier = 'free' | 'pro' | 'studio'
 
-// Tier rank: every feature gate compares numerically so we don't have to
-// hand-roll OR-chains like (tier === 'pro' || tier === 'studio') everywhere.
 const TIER_RANK: Record<Tier, number> = { free: 0, pro: 1, studio: 2 }
 
 type UserLike = { id?: string | null; email?: string | null } | null | undefined
 
-// Resolve the live tier for a user. Anonymous (no id) is always 'free'.
-// A Studio sub returns 'studio'; an in-period Pro sub returns 'pro'; an
-// expired or absent sub returns 'free'. Always read this fresh — never cache
-// across requests.
-//
-// TEMPORARY: while billing is in test mode and no real Pro/Studio rows exist,
-// admins (see ADMIN_EMAILS in @/lib/auth) are treated as Studio so they can
-// exercise paid-tier features end-to-end. Remove this branch once Polar is
-// live and a real subscription exists for testing.
 export async function getUserTier(user: UserLike): Promise<Tier> {
   if (!user?.id) return 'free'
   if (isAccountAdmin(user)) return 'studio'
@@ -74,11 +60,6 @@ export async function getUserTier(user: UserLike): Promise<Tier> {
   return sub?.tier ?? 'free'
 }
 
-// Variant for places that only have a user_id (no auth context) — for
-// example, the public album resolver looking up the owner's tier from
-// `albums.user_id`. Hits auth.admin to fetch the email so the admin
-// override still applies. Keep callers minimal — every call here is an
-// extra round-trip to the auth schema.
 export async function getUserTierById(userId: string | null | undefined): Promise<Tier> {
   if (!userId) return 'free'
   const sub = await getActiveSubscription(userId)
@@ -91,13 +72,6 @@ export async function getUserTierById(userId: string | null | undefined): Promis
   return 'free'
 }
 
-// Gate helper for API routes. Returns null if the user has at least `min`,
-// otherwise returns the actual tier so the caller can decide between 401
-// (no user) and 403 (wrong tier).
-//
-// Typical use:
-//   const gate = await requireTier(user, 'studio')
-//   if (gate) return NextResponse.json({ error: `Studio plan required` }, { status: 403 })
 export async function requireTier(
   user: UserLike,
   min: Tier,

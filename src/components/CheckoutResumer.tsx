@@ -1,13 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState } from 'react'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-// Mounted on /pricing. If the URL has `?product=<uuid>` (set by /api/checkout
-// when an unauthenticated user was bounced through /login → /auth/callback)
-// we auto-POST the checkout form so the user lands straight at Polar instead
-// of having to click the tier button a second time.
 export default function CheckoutResumer() {
   const formRef = useRef<HTMLFormElement>(null)
   const [productId, setProductId] = useState<string | null>(null)
@@ -38,7 +34,7 @@ export default function CheckoutResumer() {
           className="text-base"
           style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
         >
-          Resuming your checkout…
+          Resuming your checkoutâ€¦
         </p>
       </div>
     </>

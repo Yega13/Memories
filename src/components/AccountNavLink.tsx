@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -29,8 +29,6 @@ export default function AccountNavLink() {
         setState({ kind: 'signed-out' })
         return
       }
-      // Server-side check covers admin OR active subscriber. Client-side we
-      // don't have DB access, so defer to /api/me.
       try {
         const res = await fetch('/api/me', { cache: 'no-store' })
         if (cancelled) return
@@ -64,7 +62,6 @@ export default function AccountNavLink() {
     router.refresh()
   }
 
-  // Stable-width placeholder during loading so the nav doesn't reflow.
   if (state.kind === 'loading') {
     return (
       <span className={linkClass} aria-hidden="true" style={{ color: 'transparent' }}>
@@ -90,8 +87,6 @@ export default function AccountNavLink() {
     )
   }
 
-  // Signed in but no Account access (no subscription, not admin). Show
-  // sign-out so the user isn't stranded — they have nowhere else to go.
   return (
     <button
       type="button"

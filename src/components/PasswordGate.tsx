@@ -1,12 +1,9 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { Lock } from 'lucide-react'
 
 type Props = {
-  // Random slug — what the verify endpoint expects. The visitor may have
-  // arrived via a custom slug, but the resolver passes the random slug back
-  // in the summary.
   slug: string
   title: string
   onUnlocked: () => void
@@ -89,7 +86,7 @@ export default function PasswordGate({ slug, title, onUnlocked }: Props) {
             className="w-full font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: '#FDFAF5', color: '#254F22' }}
           >
-            {submitting ? 'Checking…' : 'Unlock album'}
+            {submitting ? 'Checkingâ€¦' : 'Unlock album'}
           </button>
         </form>
       </div>

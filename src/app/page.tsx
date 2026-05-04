@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -115,7 +115,6 @@ export default function Home() {
   return (
     <main style={{ background: '#FDFAF5', fontFamily: 'var(--font-sans)' }} className="min-h-screen">
 
-      {/* Sticky Nav */}
       <nav
         className="hush-nav sticky top-0 z-50 flex items-center justify-between"
         style={{
@@ -147,10 +146,8 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* ── HERO ── mobile: full-bleed image bg with overlay; desktop: image right with diagonal cut */}
       <div className="hush-home-hero relative overflow-hidden lg:min-h-[calc(100vh_-_73px)]">
 
-        {/* Mobile-only background image — full bleed, no clip */}
         <div
           className="hush-home-mobile-bg absolute inset-0 lg:hidden"
           style={{
@@ -159,7 +156,6 @@ export default function Home() {
             backgroundPosition: 'center',
           }}
         >
-          {/* Strong dark overlay so heading + paragraph stay readable on phone */}
           <div
             className="absolute inset-0"
             style={{
@@ -169,7 +165,6 @@ export default function Home() {
           />
         </div>
 
-        {/* Desktop nature image — right half, angled clip */}
         <div
           className="hush-home-desktop-bg absolute inset-y-0 right-0 hidden lg:block lg:w-[58%]"
           style={{
@@ -179,11 +174,9 @@ export default function Home() {
             clipPath: 'polygon(20% 0%, 100% 0%, 100% 100%, 0% 100%)',
           }}
         >
-          {/* Dark green overlay so text on top stays readable */}
           <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, rgba(37,79,34,0.45) 0%, rgba(27,58,107,0.25) 100%)' }} />
         </div>
 
-        {/* Soft feather where image meets beige (desktop only) */}
         <div
           className="hush-home-feather absolute inset-y-0 hidden lg:block"
           style={{
@@ -194,16 +187,14 @@ export default function Home() {
           }}
         />
 
-        {/* Hero content grid */}
         <div className="hush-container hush-home-grid hush-fade-up relative z-10 pt-10 pb-14 lg:pt-16 lg:pb-24 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] gap-10 lg:gap-16 2xl:gap-24 items-center lg:min-h-[calc(100vh_-_73px)]">
 
-          {/* Left — text + form */}
           <div className="hush-home-main">
             <p
               className="hush-home-eyebrow text-xs sm:text-sm font-medium uppercase mb-4 sm:mb-5 text-[#F3E0BC] lg:text-[#8B6F4E]"
               style={{ letterSpacing: '0.15em' }}
             >
-              No account · No friction
+              No account Â· No friction
             </p>
             <h1
               className="hush-home-title text-[#FDFAF5] lg:text-[#254F22] [text-shadow:0_2px_18px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
@@ -216,7 +207,7 @@ export default function Home() {
               className="hush-home-copy text-base sm:text-lg leading-relaxed mb-8 sm:mb-10 text-[#FBF4E4] lg:text-[#6B5A4E] [text-shadow:0_1px_10px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
               style={{ maxWidth: '420px' }}
             >
-              Create a shared album and let anyone add photos with just a link — no sign-up, no app download.
+              Create a shared album and let anyone add photos with just a link â€” no sign-up, no app download.
             </p>
 
             <div className="hush-album-create-card rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '430px' }}>
@@ -225,7 +216,7 @@ export default function Home() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. Summer in Tuscany · 2031"
+                placeholder="e.g. Summer in Tuscany Â· 2031"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && createAlbum()}
@@ -248,18 +239,15 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right — floating photo cards over the nature image */}
           <div className="hush-home-visuals relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(460px, 36vw, 600px)' }}>
 
-            {/* Card 1 — top left */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '-4%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike — a Hushare album photo" fill sizes="200px" className="object-cover" draggable={false} />
+              <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike â€” a Hushare album photo" fill sizes="200px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
               </div>
             </div>
 
-            {/* Card 2 — top right */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '3deg', animationDelay: '-1.8s', top: '-6%', right: '6%', width: 'clamp(180px, 12vw, 250px)', height: 'clamp(220px, 15vw, 310px)', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" fill sizes="180px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(124,74,45,0.6) 0%, transparent 55%)' }}>
@@ -267,23 +255,20 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Card 3 — center, largest */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '1deg', animationDelay: '-3.2s', top: '38%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
-              <Image src="/card3.jpg" alt="Quiet lake at dusk — a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" draggable={false} />
+              <Image src="/card3.jpg" alt="Quiet lake at dusk â€” a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
               </div>
             </div>
 
-            {/* Card 4 — bottom right */}
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-2deg', animationDelay: '-4.6s', bottom: '-6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <Image src="/children.avif" alt="Children exploring outdoors — photo from a shared Hushare family album" fill sizes="190px" className="object-cover" draggable={false} />
+              <Image src="/children.avif" alt="Children exploring outdoors â€” photo from a shared Hushare family album" fill sizes="190px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
               </div>
             </div>
 
-            {/* Floating "live" badge */}
             <div className="absolute rounded-2xl px-4 py-3 shadow-xl" style={{ top: '58%', right: '3%', background: 'rgba(255,255,255,0.92)', border: '1px solid rgba(221,213,197,0.8)', zIndex: 20, backdropFilter: 'blur(8px)' }}>
               <p className="text-xs font-semibold" style={{ color: '#254F22' }}>12 photos added</p>
               <p className="text-xs" style={{ color: '#8B6F4E' }}>by 5 people</p>
@@ -292,7 +277,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Divider */}
       <div className="hush-container py-12">
         <div className="flex items-center gap-6">
           <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
@@ -301,7 +285,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Steps — polaroid filmstrip */}
       <section className="hush-container pb-20 sm:pb-24 pt-4">
         <div className="hush-reveal grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 xl:gap-12 items-start">
           {[
@@ -312,7 +295,7 @@ export default function Home() {
               captionColor: '#7C4A2D',
               caption: '"Name it."',
               label: 'First',
-              desc: 'Give your album a name. You get a private link you own — no account, no app.',
+              desc: 'Give your album a name. You get a private link you own â€” no account, no app.',
               image: 'https://i.pinimg.com/736x/86/28/a9/8628a90f3228558f5961af600d479b28.jpg',
               alt: 'Photo card representing a newly named Hushare album',
             },
@@ -334,7 +317,7 @@ export default function Home() {
               captionColor: '#1B3A6B',
               caption: '"Keep it."',
               label: 'As long as you want',
-              desc: 'Photos flow in from everyone who came. Free albums stay put — untouched for a year, they quietly retire. Active ones live on.',
+              desc: 'Photos flow in from everyone who came. Free albums stay put â€” untouched for a year, they quietly retire. Active ones live on.',
               image: 'https://i.pinimg.com/736x/23/97/bc/2397bc85b02c33168976049f3192fe46.jpg',
               alt: 'Photo card representing a kept Hushare album',
             },
@@ -344,7 +327,6 @@ export default function Home() {
               className="flex flex-col items-center md:[margin-top:var(--lift)]"
               style={{ ['--lift' as string]: `${step.lift}px` }}
             >
-              {/* Polaroid */}
               <div
                 className="hush-hover-lift relative bg-white"
                 style={{
@@ -354,7 +336,6 @@ export default function Home() {
                   boxShadow: '0 18px 44px rgba(37,79,34,0.16), 0 2px 8px rgba(37,79,34,0.08)',
                 }}
               >
-                {/* Masking tape at top */}
                 <div
                   className="absolute -top-3 left-1/2"
                   style={{
@@ -367,7 +348,6 @@ export default function Home() {
                   }}
                 />
 
-                {/* Photo area */}
                 <div
                   className="relative flex items-center justify-center aspect-square overflow-hidden"
                   style={{ background: '#F5F0E8' }}
@@ -375,7 +355,6 @@ export default function Home() {
                   <Image src={step.image} alt={step.alt} fill sizes="240px" className="object-cover" unoptimized draggable={false} />
                 </div>
 
-                {/* Handwritten caption in the white margin */}
                 <div className="absolute bottom-3 left-0 right-0 text-center">
                   <span
                     style={{
@@ -390,7 +369,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Description under the polaroid — counter-rotated so copy stays level */}
               <div
                 className="mt-8 text-center px-2"
                 style={{ maxWidth: '240px', transform: `rotate(${-step.rot * 0.3}deg)` }}
@@ -410,7 +388,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* FAQ divider */}
       <div className="hush-container pt-10 pb-12">
         <div className="flex items-center gap-6">
           <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
@@ -431,7 +408,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* FAQ — journal-page style */}
       <section className="hush-readable pb-24">
         <div
           className="hush-reveal rounded-[8px] px-6 py-4 md:px-10 md:py-6"
@@ -450,7 +426,7 @@ export default function Home() {
               q: 'Do guests need an account to add photos?',
               a: (
                 <>
-                  No. Anyone with your album link can view and add photos — <strong className="font-semibold" style={{ color: '#254F22' }}>no sign-up</strong>, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.
+                  No. Anyone with your album link can view and add photos â€” <strong className="font-semibold" style={{ color: '#254F22' }}>no sign-up</strong>, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.
                 </>
               ),
             },
@@ -498,7 +474,7 @@ export default function Home() {
               q: 'Can I download all the photos at once?',
               a: (
                 <>
-                  Yes. From the owner view of your album, you can download the full collection as a single <strong className="font-semibold" style={{ color: '#254F22' }}>ZIP</strong> file — <strong className="font-semibold" style={{ color: '#254F22' }}>originals</strong>, not compressed thumbnails.
+                  Yes. From the owner view of your album, you can download the full collection as a single <strong className="font-semibold" style={{ color: '#254F22' }}>ZIP</strong> file â€” <strong className="font-semibold" style={{ color: '#254F22' }}>originals</strong>, not compressed thumbnails.
                 </>
               ),
             },
@@ -506,7 +482,7 @@ export default function Home() {
               q: 'Who can see my album?',
               a: (
                 <>
-                  Only people with the link. Albums are <strong className="font-semibold" style={{ color: '#254F22' }}>unlisted</strong> — they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.
+                  Only people with the link. Albums are <strong className="font-semibold" style={{ color: '#254F22' }}>unlisted</strong> â€” they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.
                 </>
               ),
             },
@@ -576,7 +552,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Footer note under FAQ */}
         <p
           className="text-center text-sm mt-8 italic"
           style={{ color: '#8B6F4E', fontFamily: 'var(--font-serif)' }}
@@ -588,7 +563,6 @@ export default function Home() {
         </p>
       </section>
 
-      {/* Bottom CTA — photo postcard */}
       <section className="hush-container-xl mb-20 relative">
         <div
           className="hush-reveal relative rounded-[28px] overflow-hidden"
@@ -600,7 +574,6 @@ export default function Home() {
             boxShadow: '0 24px 60px rgba(37,79,34,0.22)',
           }}
         >
-          {/* Warm painterly overlay */}
           <div
             className="absolute inset-0"
             style={{
@@ -609,7 +582,6 @@ export default function Home() {
             }}
           />
 
-          {/* Grain texture using radial dots */}
           <div
             className="absolute inset-0 opacity-[0.12] mix-blend-overlay pointer-events-none"
             style={{
@@ -620,7 +592,6 @@ export default function Home() {
           />
 
           <div className="relative z-10 grid grid-cols-1 md:grid-cols-12 gap-0 min-h-[440px]">
-            {/* Left — floating paper card */}
             <div className="md:col-span-7 flex items-center px-6 sm:px-10 md:px-14 py-14">
               <div
                 className="relative max-w-lg p-8 md:p-10"
@@ -633,7 +604,6 @@ export default function Home() {
                   borderRadius: '4px',
                 }}
               >
-                {/* Corner stamp */}
                 <div
                   className="absolute -top-3 -right-3 w-16 h-20 flex flex-col items-center justify-center"
                   style={{
@@ -659,7 +629,6 @@ export default function Home() {
                   </span>
                 </div>
 
-                {/* Postmark circle */}
                 <div
                   className="absolute -top-6 right-16 w-20 h-20 rounded-full hidden md:flex items-center justify-center opacity-60"
                   style={{
@@ -671,16 +640,15 @@ export default function Home() {
                     className="text-[10px] tracking-[0.2em] uppercase"
                     style={{ color: '#7C4A2D', fontFamily: 'var(--font-serif)' }}
                   >
-                    Kept · 2026
+                    Kept Â· 2026
                   </span>
                 </div>
 
-                {/* "To:" line */}
                 <p
                   className="text-[11px] uppercase mb-3"
                   style={{ color: '#8B6F4E', letterSpacing: '0.22em', fontWeight: 600 }}
                 >
-                  To — the keeper of moments
+                  To â€” the keeper of moments
                 </p>
 
                 <h2
@@ -723,7 +691,6 @@ export default function Home() {
                   Create your album <ArrowRight className="w-4 h-4" />
                 </button>
 
-                {/* Signature mark */}
                 <p
                   className="mt-6 text-sm italic"
                   style={{
@@ -731,12 +698,11 @@ export default function Home() {
                     fontFamily: 'var(--font-serif)',
                   }}
                 >
-                  — with love, from Yerevan
+                  â€” with love, from Yerevan
                 </p>
               </div>
             </div>
 
-            {/* Right — intentionally empty so photo breathes on desktop */}
             <div className="md:col-span-5" />
           </div>
         </div>
@@ -763,7 +729,7 @@ export default function Home() {
           <Link href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</Link>
           <Link href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</Link>
           <Link href="/terms" style={{ color: '#7C5C3E' }} className="hover:underline">Terms</Link>
-          <span style={{ color: '#B0A090' }}>© {new Date().getFullYear()} — your moments, always.</span>
+          <span style={{ color: '#B0A090' }}>Â© {new Date().getFullYear()} â€” your moments, always.</span>
         </div>
       </footer>
     </main>

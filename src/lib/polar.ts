@@ -1,12 +1,8 @@
-// Thin wrapper around the Polar REST API. We deliberately don't use
-// @polar-sh/sdk so we can keep the Worker bundle small and the surface
-// minimal — only the two operations we actually need.
-
+﻿
 const PROD_BASE = 'https://api.polar.sh'
 const SANDBOX_BASE = 'https://sandbox-api.polar.sh'
 
 function apiBase(): string {
-  // Default to production unless POLAR_SANDBOX === "true".
   return process.env.POLAR_SANDBOX === 'true' ? SANDBOX_BASE : PROD_BASE
 }
 
@@ -56,8 +52,6 @@ export async function createCheckout(input: CheckoutInput): Promise<CheckoutResu
   return { id: data.id, url: data.url }
 }
 
-// Creates a one-time customer-portal session for an existing Polar customer.
-// Returned URL is signed and short-lived; redirect the user straight to it.
 export async function createCustomerSession(customerId: string): Promise<string> {
   const res = await fetch(`${apiBase()}/v1/customer-sessions/`, {
     method: 'POST',
@@ -77,12 +71,6 @@ export async function createCustomerSession(customerId: string): Promise<string>
   return data.customer_portal_url
 }
 
-// Standard-Webhooks-style signature verification, with a Polar-specific
-// twist: Polar's HMAC key is the raw UTF-8 bytes of the FULL prefixed
-// secret string (e.g. "polar_whs_xyz..."), NOT the base64-decoded suffix
-// that the Standard Webhooks reference implementation uses. Verified
-// empirically 2026-04-27 by trying both interpretations against a real
-// delivery — only the full-string interpretation matched.
 export async function verifyWebhookSignature(
   rawBody: string,
   headers: Headers,
@@ -94,10 +82,6 @@ export async function verifyWebhookSignature(
 
   if (!id || !timestamp || !signatureHeader) return false
 
-  // Reject signatures more than 1 hour old to limit replay window. Tight
-  // enough to defeat replay in practice; loose enough to tolerate Polar
-  // delivery delays under load and dashboard Resends used for debugging
-  // (which keep the original webhook-timestamp).
   const ts = Number(timestamp)
   if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 3600) return false
 
@@ -114,7 +98,6 @@ export async function verifyWebhookSignature(
   const sig = await crypto.subtle.sign('HMAC', cryptoKey, signedContent)
   const expected = btoa(String.fromCharCode(...new Uint8Array(sig)))
 
-  // The header may be a space-separated list of "v1,<sig>" entries.
   const candidates = signatureHeader
     .split(' ')
     .map((s) => s.trim())
@@ -131,8 +114,6 @@ function timingSafeEqual(a: string, b: string): boolean {
   return result === 0
 }
 
-// Maps Polar product IDs to our internal tier + cycle. Keep in sync with
-// the IDs in wrangler.toml's [vars] section.
 type ProductMap = Record<string, { tier: 'pro' | 'studio'; cycle: 'monthly' | 'yearly' }>
 
 export function getProductMap(): ProductMap {

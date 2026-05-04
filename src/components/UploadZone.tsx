@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -40,7 +40,6 @@ async function uploadToR2(
       try {
         body = JSON.parse(xhr.responseText || '{}')
       } catch {
-        // Use the status fallback below.
       }
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error(body.error || `R2 upload returned ${xhr.status}`))
@@ -96,9 +95,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingRef = useRef<PendingItem[]>([])
 
-  // Caps come from the resolver based on the OWNER's tier — every guest
-  // uploading to a Pro album gets the larger cap. Fall back to free
-  // defaults if the resolver didn't (or couldn't) populate them.
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
 
   useEffect(() => {
@@ -139,7 +135,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       })
     })
 
-    if (rejected.length) setUploadError(rejected.join(' · '))
+    if (rejected.length) setUploadError(rejected.join(' Â· '))
     else setUploadError('')
     setPending((prev) => [...prev, ...next])
   }
@@ -181,8 +177,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       let storageBackend: 'supabase' | 'r2'
 
       if (item.kind === 'video') {
-        // Videos go to R2 — Supabase free tier caps files at 50 MB and
-        // charges egress; R2 is unlimited at our scale and free egress.
         try {
           const res = await uploadToR2(item.file, album.id, filename, 'video', (percent) => {
             setCurrentStatus('Uploading video', Math.max(8, Math.min(82, Math.round(percent * 0.82))))
@@ -243,8 +237,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
             posterPath = res.storage_path
             posterUrl = res.url
           } catch (e) {
-            // A missing poster is a soft failure — the video still plays,
-            // it just won't have a thumbnail. Log and continue.
             console.warn('Poster upload failed:', e)
           }
           durationSeconds = poster.durationSeconds || null
@@ -303,7 +295,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           Drop photos or videos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
         </p>
         <p className="hush-upload-hint text-xs mt-1" style={{ color: '#A89880' }}>
-          JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} · MP4, MOV, WebM up to {formatFileSize(caps.video)}
+          JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} Â· MP4, MOV, WebM up to {formatFileSize(caps.video)}
         </p>
         <p className="mt-3 text-[11px] leading-relaxed" style={{ color: '#8B6F4E' }}>
           By uploading, you agree to the{' '}
@@ -408,10 +400,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
             <div className="rounded-xl p-3" style={{ background: '#F5F0E8', border: '1px solid #DDD5C5' }}>
               <div className="flex items-center justify-between gap-3 text-xs mb-2" style={{ color: '#7C5C3E' }}>
                 <span className="truncate">
-                  {uploadStatus.phase} · {uploadStatus.fileName}
+                  {uploadStatus.phase} Â· {uploadStatus.fileName}
                 </span>
                 <span className="flex-none">
-                  {uploadStatus.index}/{uploadStatus.total} · {uploadStatus.percent}%
+                  {uploadStatus.index}/{uploadStatus.total} Â· {uploadStatus.percent}%
                 </span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
@@ -50,20 +50,10 @@ export default function AlbumPage() {
   const [userTier, setUserTier] = useState<Tier>('free')
   const [mediaRadiusMax, setMediaRadiusMax] = useState(FALLBACK_MEDIA_RADIUS_MAX)
   const [forceGlobalRadius, setForceGlobalRadius] = useState(false)
-  // Password-gate state. When the resolver says "password_required", we
-  // stash the minimal summary it returned (id + title + random slug) and
-  // show <PasswordGate> instead of the album.
   const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
 
   const fetchAlbum = useCallback(async () => {
-    // Server-side resolver handles both random slugs and custom slugs, and
-    // hides custom slugs whose owner has lapsed. Three possible responses:
-    //   - { album, password_protected }  → render normally
-    //   - { album: null, password_required, summary } → render <PasswordGate>
-    //   - { album: null } 404 → not found
     setPasswordGate(null)
-    // Pass owner_token along so the resolver can short-circuit the password
-    // gate for the owner. Non-owners simply omit it.
     const qs = new URLSearchParams({ slug })
     if (ownerToken) qs.set('owner_token', ownerToken)
     const res = await fetch(`/api/album/resolve?${qs.toString()}`, {
@@ -96,8 +86,6 @@ export default function AlbumPage() {
 
     setAlbum(data)
 
-    // Ownership is verified server-side so the owner_token never reaches
-    // the browser. The endpoint returns just a boolean.
     if (ownerToken) {
       try {
         const authRes = await fetch('/api/album/auth', {
@@ -108,16 +96,12 @@ export default function AlbumPage() {
         const result = (await authRes.json()) as { isOwner?: boolean }
         setIsOwner(!!result.isOwner)
 
-        // Fetch the signed-in user's tier so the owner toolbar can show
-        // paid-tier UI. Anonymous owners return 'free' here.
         if (result.isOwner) {
           try {
             const tierRes = await fetch('/api/me/tier', { cache: 'no-store' })
             const tierJson = (await tierRes.json()) as { tier?: Tier }
             if (tierJson.tier) setUserTier(tierJson.tier)
           } catch {
-            // Network blip — keep defaulting to 'free' so we don't show
-            // gated UI by accident.
           }
         }
       } catch {
@@ -192,9 +176,6 @@ export default function AlbumPage() {
   }
 
   if (notFound || !album) {
-    // Two-tone treatment for the 404 — deep green plate, cream type. Ignores
-    // the user's chosen bgColor on purpose so the not-found state always
-    // looks intentional rather than tinted by a stale localStorage value.
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center"
@@ -205,7 +186,7 @@ export default function AlbumPage() {
         </h1>
         <p className="opacity-90">This link may be invalid or the album was deleted.</p>
         <Link href="/" className="underline underline-offset-4 hover:opacity-80 transition">
-          Create a new album →
+          Create a new album â†’
         </Link>
       </div>
     )

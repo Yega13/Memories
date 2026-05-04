@@ -1,30 +1,8 @@
-// Album password helpers. Uses Web Crypto so it runs on Cloudflare Workers
-// (the deployment target via @opennextjs/cloudflare) with no native
-// dependencies.
-//
-// Storage format for `albums.password_hash`:
-//   hmac-sha256-v1$<saltBase64>$<hashBase64>
-// Legacy hashes also verify:
-//   pbkdf2$<iterations>$<saltBase64>$<hashBase64>
-//
-// Versioning by prefix means we can switch to a stronger algorithm later
-// without invalidating existing hashes — verify reads the algorithm from
-// the prefix and dispatches.
-//
-// IMPORTANT: this is page-level protection. Photo and video URLs themselves
-// remain publicly hosted on R2/Supabase Storage; this gate just hides the
-// album listing from casual visitors. Real per-asset privacy needs signed
-// URLs, which is a separate feature.
-
+﻿
 const HASH_VERSION = 'hmac-sha256-v1'
 const KEY_BITS = 256
-// Minimum acceptable iteration count when verifying. Refuse to honour a
-// hash with absurdly low work — protects against a hypothetical future bug
-// where someone wrote a too-cheap value into the column.
 const MIN_VERIFY_ITERATIONS = 50_000
 
-// Minimum password length enforced at write time. Anything shorter has too
-// small a keyspace to survive a determined attacker even with rate limits.
 export const MIN_PASSWORD_LEN = 6
 export const MAX_PASSWORD_LEN = 128
 
@@ -67,13 +45,6 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return timingSafeEqualBytes(actual, expected)
 }
 
-// Stable per-album access token derived from password_hash + albumId.
-// Used as the cookie value after a successful verify. Rotates automatically
-// when the owner changes the password (because the hash changes).
-//
-// We never put the password_hash itself in the cookie — that's the secret
-// the verifier compares against, and exposing it would let an attacker
-// brute-force offline.
 export async function deriveAccessToken(passwordHash: string, albumId: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
@@ -86,10 +57,6 @@ export async function deriveAccessToken(passwordHash: string, albumId: string): 
   return toBase64(new Uint8Array(sig))
 }
 
-// Cloudflare's cheaper Worker plans can terminate expensive PBKDF2 writes.
-// For new hashes, use a server-peppered HMAC instead: a database-only leak is
-// not enough to brute-force album passwords offline, and online guesses still
-// hit the per-album rate limiter.
 async function hmacPassword(
   password: string,
   salt: Uint8Array<ArrayBuffer>,
@@ -119,10 +86,6 @@ function passwordPeppers(): string[] {
   return Array.from(new Set(peppers))
 }
 
-// Note on type signatures: every Uint8Array here is annotated as
-// `Uint8Array<ArrayBuffer>` (rather than the default `Uint8Array<ArrayBufferLike>`).
-// TS 5.7's `BufferSource` rejects the wider `ArrayBufferLike` because it would
-// allow `SharedArrayBuffer`, which Web Crypto refuses at runtime.
 async function pbkdf2(
   password: string,
   salt: Uint8Array<ArrayBuffer>,
@@ -164,7 +127,7 @@ function timingSafeEqualBytes(a: Uint8Array<ArrayBuffer>, b: Uint8Array<ArrayBuf
 }
 
 export const PASSWORD_COOKIE_PREFIX = 'hushare_pw_'
-export const PASSWORD_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30 // 30 days
+export const PASSWORD_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 
 export function cookieNameForAlbum(albumId: string): string {
   return `${PASSWORD_COOKIE_PREFIX}${albumId}`

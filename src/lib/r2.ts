@@ -1,7 +1,4 @@
-// Minimal local types for the Cloudflare R2 binding. The full type lives in
-// `@cloudflare/workers-types`, but adding that whole package as a dep just to
-// pick up `R2Bucket` is overkill — these two methods are all we touch.
-
+﻿
 export type R2HttpMetadata = {
   contentType?: string
   contentLanguage?: string

@@ -1,9 +1,4 @@
-// Reserved words that must never become a custom album slug. Routes that
-// already exist (or are planned) on the site go here — without this list a
-// user could claim `hushare.space/pricing` and shadow the real pricing page.
-//
-// Keep alphabetised. Add to this list whenever a new top-level route ships.
-const RESERVED_SLUGS = new Set([
+﻿const RESERVED_SLUGS = new Set([
   'account', 'admin', 'api', 'app', 'auth',
   'billing', 'c', 'callback', 'checkout', 'contact',
   'dashboard', 'faq', 'help', 'home', 'hushare',
@@ -17,9 +12,6 @@ export type SlugValidationResult =
   | { ok: true; slug: string }
   | { ok: false; reason: string }
 
-// Validates a user-supplied custom slug. The result `slug` is normalised
-// (lowercased, trimmed) and safe to insert into the database. Uniqueness
-// against existing rows is the caller's job — this only enforces format.
 export function validateCustomSlug(input: unknown): SlugValidationResult {
   if (typeof input !== 'string') return { ok: false, reason: 'Must be text' }
   const slug = input.trim().toLowerCase()

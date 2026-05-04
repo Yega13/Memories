@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -126,8 +126,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       onPhotoDeleted(photo.id)
       if (lightbox !== null) setLightbox(null)
     }
-    // On failure we leave the photo visible — better than silently lying.
-    // A future improvement: surface a toast or inline error.
 
     setDeleting(null)
   }
@@ -157,8 +155,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setLightbox((cur) => (cur === null ? null : cur === photos.length - 1 ? 0 : cur + 1))
   }, [photos.length])
 
-  // Keyboard navigation while the lightbox is open. Skip if focus is in a
-  // form field so arrow keys still work for editing inputs elsewhere.
   useEffect(() => {
     if (lightbox === null) return
     function onKey(e: KeyboardEvent) {
@@ -335,8 +331,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
       {current && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setLightbox(null)}>
-          {/* Lightly softened backdrop: the current item's still image, dimmed
-              for contrast. For videos we use the poster if one exists. */}
           <div
             aria-hidden
             className="absolute inset-0"

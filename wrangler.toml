@@ -1,4 +1,4 @@
-name = "memories"
+﻿name = "memories"
 main = "worker.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
@@ -8,14 +8,8 @@ directory = ".open-next/assets"
 binding = "ASSETS"
 
 [triggers]
-# Daily at 03:17 UTC. The custom worker forwards this scheduled event to
-# POST /api/cron/retire-albums, so the existing route remains the single
-# implementation of album retirement.
 crons = ["17 3 * * *"]
 
-# Cloudflare R2 bucket for videos. Public via the custom domain set in
-# the bucket's "Custom Domains" panel. The binding lets the worker write
-# objects without API tokens.
 [[r2_buckets]]
 binding = "R2_VIDEOS"
 bucket_name = "hushare-videos"
@@ -25,19 +19,11 @@ NEXT_PUBLIC_SUPABASE_URL = "https://zleajzevvhugkwlqlolt.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsZWFqemV2dmh1Z2t3bHFsb2x0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODgwOTksImV4cCI6MjA5MjI2NDA5OX0.2_vNkn2aLkwiUpQYLuZx_tmXI42QGUNRyUUYuXp_ehw"
 RESEND_DOMAIN_VERIFIED = "true"
 R2_PUBLIC_HOST = "videos.hushare.space"
-# Optional: set ALBUM_RETIREMENT_SECRET as a Worker runtime secret and call
-# POST /api/cron/retire-albums with Authorization: Bearer <secret> from a
-# trusted scheduler. It retires inactive Free albums after 12 months.
 
-# Polar product IDs (live mode). Not secrets — they're identifiers Polar
-# exposes in checkout URLs. Set POLAR_SANDBOX="true" to switch to sandbox-api.polar.sh.
 POLAR_PRODUCT_PRO_MONTHLY = "1afab126-3496-48d4-af31-705405791c38"
 POLAR_PRODUCT_PRO_YEARLY = "4b2373b1-638f-4db2-97fc-8b66c5a5f0e3"
 POLAR_PRODUCT_STUDIO_MONTHLY = "bf0869d4-0217-44fc-82f4-8717a79efe6e"
 POLAR_PRODUCT_STUDIO_YEARLY = "463d2cb3-cf3c-4230-939e-397525c35ac8"
 
-# First-month discounts (live mode). Auto-applied in /api/checkout when the
-# customer picks a monthly plan. Both are "Once" duration in Polar so they
-# only hit the first invoice.
 POLAR_DISCOUNT_PRO_FIRST_MONTH = "b8cea209-11e8-4691-88fd-0b448d829330"
 POLAR_DISCOUNT_STUDIO_FIRST_MONTH = "8fb830fd-4cab-42c2-a4cc-e58b2930bc97"
