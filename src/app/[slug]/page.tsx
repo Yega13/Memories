@@ -15,7 +15,7 @@ import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 const DEFAULT_BG = '#FDFAF5'
 const IMAGE_BG_PREFIX = 'image:'
 const STOCK_BG_PREFIX = 'stock:'
-const FALLBACK_MEDIA_RADIUS_MAX = 512
+const FALLBACK_MEDIA_RADIUS_MAX = 144
 
 function albumBackgroundStyle(bg: string): React.CSSProperties {
   if (bg.startsWith(IMAGE_BG_PREFIX) || bg.startsWith(STOCK_BG_PREFIX)) {
@@ -31,44 +31,6 @@ function albumBackgroundStyle(bg: string): React.CSSProperties {
   return { background: bg }
 }
 
-async function measureImageMax(src: string): Promise<number | null> {
-  return new Promise((resolve) => {
-    const img = new window.Image()
-    img.onload = () => resolve(Math.max(img.naturalWidth, img.naturalHeight) || null)
-    img.onerror = () => resolve(null)
-    img.src = src
-  })
-}
-
-async function measureVideoMax(src: string): Promise<number | null> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video')
-    const finish = (value: number | null) => {
-      video.removeAttribute('src')
-      video.load()
-      resolve(value)
-    }
-    const timeout = window.setTimeout(() => finish(null), 5000)
-    video.preload = 'metadata'
-    video.onloadedmetadata = () => {
-      window.clearTimeout(timeout)
-      finish(Math.max(video.videoWidth, video.videoHeight) || null)
-    }
-    video.onerror = () => {
-      window.clearTimeout(timeout)
-      finish(null)
-    }
-    video.src = src
-  })
-}
-
-async function measurePhotoMax(photo: Photo): Promise<number> {
-  const measured = photo.media_type === 'video'
-    ? (await measureVideoMax(photo.url)) ?? (photo.poster_url ? await measureImageMax(photo.poster_url) : null)
-    : await measureImageMax(photo.url)
-  return Math.max(1, measured ?? FALLBACK_MEDIA_RADIUS_MAX)
-}
-
 export default function AlbumPage() {
   const { slug } = useParams<{ slug: string }>()
   const searchParams = useSearchParams()
@@ -80,7 +42,7 @@ export default function AlbumPage() {
   const [notFound, setNotFound] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [userTier, setUserTier] = useState<Tier>('free')
-  const [mediaRadiusMaxById, setMediaRadiusMaxById] = useState<Record<string, number>>({})
+  const [mediaRadiusMax, setMediaRadiusMax] = useState(FALLBACK_MEDIA_RADIUS_MAX)
   // Password-gate state. When the resolver says "password_required", we
   // stash the minimal summary it returned (id + title + random slug) and
   // show <PasswordGate> instead of the album.
@@ -174,21 +136,6 @@ export default function AlbumPage() {
     fetchAlbum()
   }, [fetchAlbum])
 
-  useEffect(() => {
-    let cancelled = false
-    async function measureAll() {
-      const entries = await Promise.all(
-        photos.map(async (photo) => [photo.id, await measurePhotoMax(photo)] as const),
-      )
-      if (!cancelled) setMediaRadiusMaxById(Object.fromEntries(entries))
-    }
-    if (photos.length > 0) void measureAll()
-    else setMediaRadiusMaxById({})
-    return () => {
-      cancelled = true
-    }
-  }, [photos])
-
   const handlePhotoAdded = () => {
     if (album) fetchPhotos(album.id)
   }
@@ -246,11 +193,7 @@ export default function AlbumPage() {
     )
   }
 
-  const globalMediaRadiusMax = Math.max(
-    album.media_radius ?? 12,
-    FALLBACK_MEDIA_RADIUS_MAX,
-    ...Object.values(mediaRadiusMaxById),
-  )
+  const globalMediaRadiusMax = Math.max(1, mediaRadiusMax)
 
   return (
     <main className="hush-album-page min-h-screen" style={albumBackgroundStyle(album.background_theme ?? DEFAULT_BG)}>
@@ -275,7 +218,7 @@ export default function AlbumPage() {
           isOwner={isOwner}
           slug={album.slug}
           ownerToken={ownerToken}
-          mediaRadiusMaxById={mediaRadiusMaxById}
+          onRadiusMaxChange={setMediaRadiusMax}
           onPhotoDeleted={handlePhotoDeleted}
           onPhotoUpdated={(photoId, patch) => setPhotos((prev) => prev.map((photo) => (photo.id === photoId ? { ...photo, ...patch } : photo)))}
         />

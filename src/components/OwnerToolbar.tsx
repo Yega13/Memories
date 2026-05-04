@@ -95,6 +95,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const isDark = bgChoice === '#1C2333' || bgChoice === '#1A2B1A' || bgChoice.startsWith('image:') || bgChoice.startsWith('stock:')
   const radiusMax = Math.max(1, Math.round(mediaRadiusMax))
 
+  useEffect(() => {
+    if (mediaRadius > radiusMax) {
+      setMediaRadius(radiusMax)
+      onAlbumUpdated({ media_radius: radiusMax })
+      setMediaSaved(false)
+    }
+  }, [mediaRadius, onAlbumUpdated, radiusMax])
+
   const loadCollections = useCallback(async () => {
     setCollectionsLoading(true)
     try {

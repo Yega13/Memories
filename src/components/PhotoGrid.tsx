@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { type Album, type MediaDisplayFilter, type Photo } from '@/lib/supabase'
 import { formatDuration } from '@/lib/media'
 import Image from 'next/image'
@@ -12,7 +12,7 @@ type Props = {
   isOwner: boolean
   slug: string
   ownerToken: string | null
-  mediaRadiusMaxById: Record<string, number>
+  onRadiusMaxChange: (max: number) => void
   onPhotoDeleted: (id: string) => void
   onPhotoUpdated: (id: string, patch: Partial<Photo>) => void
 }
@@ -52,10 +52,14 @@ function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
   return photo.display_filter ?? album.media_filter ?? 'none'
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, mediaRadiusMaxById, onPhotoDeleted, onPhotoUpdated }: Props) {
+export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
+  const gridRef = useRef<HTMLDivElement>(null)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
+  const [tileRadiusMaxById, setTileRadiusMaxById] = useState<Record<string, number>>({})
+  const [lightboxMediaNode, setLightboxMediaNode] = useState<HTMLElement | null>(null)
+  const [lightboxRadiusMax, setLightboxRadiusMax] = useState<number | null>(null)
   const [settingsPhoto, setSettingsPhoto] = useState<Photo | null>(null)
   const [settingsRadius, setSettingsRadius] = useState(album.media_radius ?? 12)
   const [settingsFilter, setSettingsFilter] = useState<PhotoFilterChoice>('global')
@@ -82,7 +86,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, me
   }
 
   function radiusMaxFor(photo: Photo): number {
-    return Math.max(1, Math.round(mediaRadiusMaxById[photo.id] ?? 512))
+    if (lightbox !== null && photos[lightbox]?.id === photo.id && lightboxRadiusMax != null) {
+      return lightboxRadiusMax
+    }
+    return Math.max(1, Math.round(tileRadiusMaxById[photo.id] ?? 144))
   }
 
   function applySettingsRadius(value: number) {
@@ -188,6 +195,73 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, me
     return () => window.removeEventListener('keydown', onKey)
   }, [lightbox, prev, next])
 
+  const current = lightbox !== null ? photos[lightbox] : null
+
+  useEffect(() => {
+    const maybeGrid = gridRef.current
+    if (!maybeGrid) return
+    const grid = maybeGrid
+
+    function measureTiles() {
+      const nextCaps: Record<string, number> = {}
+      let globalMax = 1
+      grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => {
+        const id = tile.dataset.photoId
+        if (!id) return
+        const rect = tile.getBoundingClientRect()
+        const cap = Math.max(1, Math.ceil(Math.min(rect.width, rect.height) / 2))
+        nextCaps[id] = cap
+        globalMax = Math.max(globalMax, cap)
+      })
+      setTileRadiusMaxById(nextCaps)
+      onRadiusMaxChange(globalMax)
+    }
+
+    measureTiles()
+    const observer = new ResizeObserver(measureTiles)
+    observer.observe(grid)
+    grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => observer.observe(tile))
+    window.addEventListener('resize', measureTiles)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measureTiles)
+    }
+  }, [photos, onRadiusMaxChange])
+
+  useEffect(() => {
+    setLightboxMediaNode(null)
+    setLightboxRadiusMax(null)
+  }, [current?.id])
+
+  useEffect(() => {
+    const maybeMediaNode = lightboxMediaNode
+    if (!maybeMediaNode) return
+    const mediaNode = maybeMediaNode
+
+    function measureLightboxMedia() {
+      const rect = mediaNode.getBoundingClientRect()
+      const cap = Math.max(1, Math.ceil(Math.min(rect.width, rect.height) / 2))
+      setLightboxRadiusMax(cap)
+    }
+
+    measureLightboxMedia()
+    const observer = new ResizeObserver(measureLightboxMedia)
+    observer.observe(mediaNode)
+    window.addEventListener('resize', measureLightboxMedia)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measureLightboxMedia)
+    }
+  }, [lightboxMediaNode])
+
+  useEffect(() => {
+    if (!settingsPhoto) return
+    const max = lightbox !== null && photos[lightbox]?.id === settingsPhoto.id && lightboxRadiusMax != null
+      ? lightboxRadiusMax
+      : Math.max(1, Math.round(tileRadiusMaxById[settingsPhoto.id] ?? 144))
+    if (settingsRadius > max) setSettingsRadius(max)
+  }, [lightbox, lightboxRadiusMax, photos, settingsPhoto, settingsRadius, tileRadiusMaxById])
+
   if (photos.length === 0) {
     return (
       <div className="text-center py-20" style={{ color: '#A89880' }}>
@@ -197,11 +271,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, me
     )
   }
 
-  const current = lightbox !== null ? photos[lightbox] : null
-
   return (
     <>
-      <div className="hush-photo-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4">
+      <div ref={gridRef} className="hush-photo-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4">
         {photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
@@ -212,6 +284,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, me
             <div key={photo.id}>
               <div
                 className="hush-hover-lift hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer"
+                data-photo-id={photo.id}
                 style={{ background: '#EDE7DB', borderRadius: mediaRadius }}
                 onClick={() => setLightbox(index)}
               >
@@ -339,6 +412,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, me
                 autoPlay={!!album.video_autoplay}
                 playsInline
                 className="max-h-[70vh] max-w-full"
+                ref={(node) => setLightboxMediaNode(node)}
                 style={{ background: '#000', borderRadius: previewRadiusFor(current), filter: cssFilter(previewFilterFor(current)) }}
               />
             ) : (
@@ -348,6 +422,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, me
                   src={current.url}
                   alt={current.caption || ''}
                   className="block max-h-full max-w-full object-contain"
+                  ref={(node) => setLightboxMediaNode(node)}
                   style={{
                     borderRadius: previewRadiusFor(current),
                     filter: cssFilter(previewFilterFor(current)),
