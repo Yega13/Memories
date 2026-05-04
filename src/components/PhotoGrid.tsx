@@ -444,7 +444,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         if (tile.isConnected) tile.setPointerCapture(pointerId)
       } catch {
       }
-    }, 520)
+    }, 1000)
   }
 
   function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
@@ -669,21 +669,19 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           const mediaRadius = previewRadiusFor(photo)
           const filter = cssMediaDisplayFilter(previewFilterFor(photo))
           const hover = album.media_hover ?? 'none'
+          const isReorderMode = reorderDraggingId != null
           const isReorderDragging = reorderDraggingId === photo.id
           const isReorderTarget = reorderDraggingId != null && reorderTargetId === photo.id && reorderDraggingId !== photo.id
           return (
             <div key={photo.id}>
               <div
-                className={`${hover === 'lift' ? 'hush-hover-lift ' : ''}hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer`}
+                className={`${hover === 'lift' ? 'hush-hover-lift ' : ''}${isReorderMode ? 'hush-reorder-ring ' : ''}${isReorderDragging || isReorderTarget ? 'hush-reorder-ring-solid ' : ''}hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer`}
                 data-photo-id={photo.id}
                 style={{
                   background: '#EDE7DB',
                   borderRadius: mediaRadius,
                   opacity: isReorderDragging ? 0.58 : 1,
-                  outline: isReorderTarget ? '3px solid #254F22' : '0 solid transparent',
-                  outlineOffset: 3,
                   touchAction: reorderDraggingId ? 'none' : 'manipulation',
-                  cursor: isOwner ? (reorderDraggingId ? 'grabbing' : 'grab') : 'pointer',
                 }}
                 onClick={() => handleTileClick(index)}
                 onPointerDown={(e) => startReorderPress(photo, e)}
@@ -694,6 +692,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   if (!reorderDraggingId) clearReorderTimer()
                   else handleReorderMove(e)
                 }}
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
               >
                 {thumbSrc && !isBroken ? (
                   <Image
@@ -704,9 +704,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                     className={mediaImageClass(hover)}
                     style={{ '--hush-media-filter': filter } as React.CSSProperties}
                     unoptimized
+                    draggable={false}
                     onError={() => {
                       if (!isVideo) markBroken(photo.id)
                     }}
+                    onContextMenu={(e) => e.preventDefault()}
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-3 text-center" style={{ background: '#E8E0D2' }}>
@@ -844,6 +846,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 onTouchStart={handleMediaTouchStart}
                 onTouchMove={handleMediaTouchMove}
                 onTouchEnd={handleMediaTouchEnd}
+                onContextMenu={(e) => e.preventDefault()}
               />
             ) : (
               <div className="flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center">
@@ -864,6 +867,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   onTouchStart={handleMediaTouchStart}
                   onTouchMove={handleMediaTouchMove}
                   onTouchEnd={handleMediaTouchEnd}
+                  onContextMenu={(e) => e.preventDefault()}
+                  onDragStart={(e) => e.preventDefault()}
                 />
               </div>
             )}

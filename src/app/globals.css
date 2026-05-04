@@ -167,6 +167,39 @@ a:hover,
     grid-template-columns: repeat(var(--hush-grid-cols, 3), minmax(0, 1fr));
   }
 
+  .hush-photo-tile,
+  .hush-photo-tile img,
+  .hush-photo-tile video {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+
+  .hush-reorder-ring::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border-radius: inherit;
+    padding: 3px;
+    pointer-events: none;
+    background: repeating-conic-gradient(#254F22 0deg 9deg, transparent 9deg 18deg);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: hush-reorder-border 1.4s linear infinite;
+  }
+
+  .hush-reorder-ring-solid::after {
+    padding: 0;
+    border: 3px solid #254F22;
+    background: transparent;
+    -webkit-mask: none;
+    mask: none;
+    animation: none;
+  }
+
   .hush-nav {
     padding: clamp(0.85rem, 1.1vw, 1.25rem) clamp(0.875rem, 3.2vw, 5rem);
     gap: clamp(0.65rem, 1.6vw, 1.5rem);
@@ -933,6 +966,12 @@ html {
   }
   50% {
     transform: translateY(-8px) rotate(var(--hush-rotate, 0deg));
+  }
+}
+
+@keyframes hush-reorder-border {
+  to {
+    transform: rotate(360deg);
   }
 }
 
