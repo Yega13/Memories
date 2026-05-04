@@ -8,7 +8,7 @@ alter table public.albums
 
 alter table public.albums
   add constraint albums_media_radius_check
-  check (media_radius between 0 and 999);
+  check (media_radius between 0 and 10000);
 
 alter table public.albums
   drop constraint if exists albums_media_filter_check;
@@ -30,7 +30,7 @@ alter table public.photos
 
 alter table public.photos
   add constraint photos_display_radius_check
-  check (display_radius is null or display_radius between 0 and 999);
+  check (display_radius is null or display_radius between 0 and 10000);
 
 alter table public.photos
   drop constraint if exists photos_display_filter_check;

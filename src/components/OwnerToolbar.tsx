@@ -36,10 +36,11 @@ type Props = {
   photos: Photo[]
   ownerToken: string
   userTier: Tier
+  mediaRadiusMax: number
   onAlbumUpdated: (patch: Partial<Album>) => void
 }
 
-export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAlbumUpdated }: Props) {
+export default function OwnerToolbar({ album, photos, ownerToken, userTier, mediaRadiusMax, onAlbumUpdated }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
   const [showShare, setShowShare] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -92,6 +93,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const bgChoice = album.background_theme ?? DEFAULT_BG
   const currentColor = bgChoice.startsWith('#') ? bgChoice : DEFAULT_BG
   const isDark = bgChoice === '#1C2333' || bgChoice === '#1A2B1A' || bgChoice.startsWith('image:') || bgChoice.startsWith('stock:')
+  const radiusMax = Math.max(1, Math.round(mediaRadiusMax))
 
   const loadCollections = useCallback(async () => {
     setCollectionsLoading(true)
@@ -246,6 +248,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     } finally {
       setMediaSaving(false)
     }
+  }
+
+  function applyMediaRadius(value: number) {
+    const nextRadius = Math.max(0, Math.min(radiusMax, Math.round(value)))
+    setMediaRadius(nextRadius)
+    onAlbumUpdated({ media_radius: nextRadius })
+    setMediaSaved(false)
   }
 
   async function chooseBackground(choice: string, closeLibrary = false) {
@@ -607,15 +616,21 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       <input
                         type="range"
                         min={0}
-                        max={999}
+                        max={radiusMax}
                         value={mediaRadius}
                         onChange={(e) => {
-                          const nextRadius = Number(e.target.value)
-                          setMediaRadius(nextRadius)
-                          onAlbumUpdated({ media_radius: nextRadius })
-                          setMediaSaved(false)
+                          applyMediaRadius(Number(e.target.value))
                         }}
                         className="w-full"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        max={radiusMax}
+                        value={mediaRadius}
+                        onChange={(e) => applyMediaRadius(Number(e.target.value))}
+                        className="mt-2 w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                        style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                       />
                     </div>
 

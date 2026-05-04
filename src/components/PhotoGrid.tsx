@@ -12,6 +12,7 @@ type Props = {
   isOwner: boolean
   slug: string
   ownerToken: string | null
+  mediaRadiusMaxById: Record<string, number>
   onPhotoDeleted: (id: string) => void
   onPhotoUpdated: (id: string, patch: Partial<Photo>) => void
 }
@@ -51,7 +52,7 @@ function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
   return photo.display_filter ?? album.media_filter ?? 'none'
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, onPhotoDeleted, onPhotoUpdated }: Props) {
+export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, mediaRadiusMaxById, onPhotoDeleted, onPhotoUpdated }: Props) {
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
@@ -78,6 +79,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
       return settingsFilter === 'global' ? album.media_filter ?? 'none' : settingsFilter
     }
     return filterFor(photo, album)
+  }
+
+  function radiusMaxFor(photo: Photo): number {
+    return Math.max(1, Math.round(mediaRadiusMaxById[photo.id] ?? 512))
+  }
+
+  function applySettingsRadius(value: number) {
+    if (!settingsPhoto) return
+    const max = radiusMaxFor(settingsPhoto)
+    setSettingsRadius(Math.max(0, Math.min(max, Math.round(value))))
   }
 
   async function savePhotoSettings() {
@@ -397,10 +408,19 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 <input
                   type="range"
                   min={0}
-                  max={999}
+                  max={radiusMaxFor(settingsPhoto)}
                   value={settingsRadius}
-                  onChange={(e) => setSettingsRadius(Number(e.target.value))}
+                  onChange={(e) => applySettingsRadius(Number(e.target.value))}
                   className="w-full"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={radiusMaxFor(settingsPhoto)}
+                  value={settingsRadius}
+                  onChange={(e) => applySettingsRadius(Number(e.target.value))}
+                  className="mt-2 w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                  style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                 />
                 <button type="button" onClick={() => setSettingsRadius(album.media_radius ?? 12)} className="mt-2 text-xs" style={{ color: '#A89880' }}>
                   Use global radius
