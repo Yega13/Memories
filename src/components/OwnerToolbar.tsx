@@ -65,6 +65,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [customUrlSaved, setCustomUrlSaved] = useState(false)
 
   const [passwordInput, setPasswordInput] = useState('')
+  const [passwordInputKey, setPasswordInputKey] = useState(0)
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [passwordSaved, setPasswordSaved] = useState(false)
@@ -164,6 +165,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const next = current === section ? null : section
       if (section === 'password') {
         setPasswordInput('')
+        setPasswordInputKey((key) => key + 1)
         setPasswordError('')
         setPasswordSaved(false)
       }
@@ -894,13 +896,20 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
                       Visitors will need this password to view the album. 4-128 characters.
                     </p>
+                    <input type="text" name="username" autoComplete="username" value={ownerUrl} readOnly hidden />
                     <input
-                      type="password"
+                      key={passwordInputKey}
+                      type={passwordInput ? 'password' : 'text'}
                       value={passwordInput}
                       onChange={(e) => setPasswordInput(e.target.value)}
                       placeholder={album.password_protected ? 'New password' : 'Password'}
                       maxLength={128}
                       disabled={!canCustomize}
+                      autoComplete="new-password"
+                      autoCorrect="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
+                      name={`hush-album-password-${album.id}`}
                       className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       style={inputStyle}
                       onKeyDown={(e) => {
