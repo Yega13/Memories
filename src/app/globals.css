@@ -163,6 +163,10 @@ a:hover,
     margin-inline: auto;
   }
 
+  .hush-photo-grid {
+    grid-template-columns: repeat(var(--hush-grid-cols, 3), minmax(0, 1fr));
+  }
+
   .hush-nav {
     padding: clamp(0.85rem, 1.1vw, 1.25rem) clamp(0.875rem, 3.2vw, 5rem);
     gap: clamp(0.65rem, 1.6vw, 1.5rem);
@@ -305,10 +309,6 @@ a:hover,
     gap: 0.28rem 0.42rem;
     line-height: 1.25 !important;
     font-size: 0.86rem !important;
-  }
-
-  .hush-photo-grid {
-    grid-template-columns: repeat(var(--hush-mobile-grid-cols, 3), minmax(0, 1fr)) !important;
   }
 
   .hush-owner-pill {
@@ -560,10 +560,6 @@ a:hover,
 
   .hush-photo-grid {
     gap: 0.55rem !important;
-  }
-
-  .hush-photo-tile {
-    border-radius: 0.95rem !important;
   }
 
   .hush-home-hero .hush-container {

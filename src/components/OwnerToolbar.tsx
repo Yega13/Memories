@@ -774,7 +774,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Mobile grid</label>
+                      <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Grid</label>
                       <div className="grid grid-cols-4 gap-2">
                         {MOBILE_GRID_COLUMN_OPTIONS.map((option) => {
                           const selected = mobileGridColumns === option.value
@@ -800,7 +800,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                         })}
                       </div>
                       <p className="mt-2 text-xs" style={{ color: '#8B6F4E' }}>
-                        Mobile only. Desktop keeps the normal responsive grid.
+                        Applies to album thumbnails on desktop and mobile.
                       </p>
                     </div>
 

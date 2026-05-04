@@ -39,10 +39,14 @@ function mediaImageClass(hover: Album['media_hover']): string {
 export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
+  const lightboxHistoryRef = useRef(false)
+  const longPressTimerRef = useRef<number | null>(null)
+  const suppressNextClickRef = useRef(false)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeAnimating, setSwipeAnimating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [deletePromptPhoto, setDeletePromptPhoto] = useState<Photo | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
   const [tileRadiusMaxById, setTileRadiusMaxById] = useState<Record<string, number>>({})
   const [lightboxMediaNode, setLightboxMediaNode] = useState<HTMLElement | null>(null)
@@ -83,6 +87,47 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (!settingsPhoto) return
     const max = radiusMaxFor(settingsPhoto)
     setSettingsRadius(Math.max(0, Math.min(max, Math.round(value))))
+  }
+
+  const closeLightbox = useCallback(() => {
+    setLightbox(null)
+    if (lightboxHistoryRef.current) {
+      lightboxHistoryRef.current = false
+      window.history.back()
+    }
+  }, [])
+
+  function openLightbox(index: number) {
+    setLightbox(index)
+    if (!lightboxHistoryRef.current) {
+      window.history.pushState({ hushLightbox: true }, '', window.location.href)
+      lightboxHistoryRef.current = true
+    }
+  }
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current != null) {
+      window.clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  function startLongPress(photo: Photo) {
+    if (!isOwner || !ownerToken) return
+    clearLongPressTimer()
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTimerRef.current = null
+      suppressNextClickRef.current = true
+      setDeletePromptPhoto(photo)
+    }, 560)
+  }
+
+  function handleTileClick(index: number) {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false
+      return
+    }
+    openLightbox(index)
   }
 
   async function savePhotoSettings() {
@@ -138,7 +183,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
     if (res.ok) {
       onPhotoDeleted(photo.id)
-      if (lightbox !== null) setLightbox(null)
+      if (lightbox !== null) closeLightbox()
       showAppToast('Media deleted.')
     } else {
       showAppToast(`Delete failed (${res.status})`, 'error')
@@ -231,11 +276,23 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
       if (e.key === 'ArrowLeft') { e.preventDefault(); prev() }
       else if (e.key === 'ArrowRight') { e.preventDefault(); next() }
-      else if (e.key === 'Escape') { e.preventDefault(); setLightbox(null) }
+      else if (e.key === 'Escape') { e.preventDefault(); closeLightbox() }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [lightbox, prev, next])
+  }, [lightbox, prev, next, closeLightbox])
+
+  useEffect(() => {
+    function onPopState() {
+      if (!lightboxHistoryRef.current) return
+      lightboxHistoryRef.current = false
+      setLightbox(null)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  useEffect(() => () => clearLongPressTimer(), [])
 
   const current = lightbox !== null ? photos[lightbox] : null
 
@@ -319,8 +376,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     <>
       <div
         ref={gridRef}
-        className="hush-photo-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4"
-        style={{ '--hush-mobile-grid-cols': album.mobile_grid_columns ?? 3 } as React.CSSProperties}
+        className="hush-photo-grid grid gap-3 xl:gap-4"
+        style={{ '--hush-grid-cols': album.mobile_grid_columns ?? 3 } as React.CSSProperties}
       >
         {photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
@@ -335,7 +392,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 className={`${hover === 'lift' ? 'hush-hover-lift ' : ''}hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer`}
                 data-photo-id={photo.id}
                 style={{ background: '#EDE7DB', borderRadius: mediaRadius }}
-                onClick={() => setLightbox(index)}
+                onClick={() => handleTileClick(index)}
+                onTouchStart={() => startLongPress(photo)}
+                onTouchMove={clearLongPressTimer}
+                onTouchEnd={clearLongPressTimer}
+                onTouchCancel={clearLongPressTimer}
+                onMouseDown={() => startLongPress(photo)}
+                onMouseLeave={clearLongPressTimer}
+                onMouseUp={clearLongPressTimer}
+                onContextMenu={(e) => {
+                  if (isOwner) e.preventDefault()
+                }}
               >
                 {thumbSrc && !isBroken ? (
                   <Image
@@ -404,8 +471,38 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         })}
       </div>
 
+      {deletePromptPhoto && isOwner && (
+        <div className="fixed inset-x-3 bottom-4 z-[70] mx-auto max-w-sm rounded-2xl p-3 shadow-2xl" style={{ background: '#FDFAF5', border: '1px solid #DDD5C5' }}>
+          <p className="px-1 text-sm font-semibold" style={{ color: '#254F22' }}>Delete this media?</p>
+          <p className="mt-1 px-1 text-xs" style={{ color: '#7C5C3E' }}>This removes only the selected picture or video.</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className="hush-press rounded-xl py-2 text-sm font-semibold"
+              style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22' }}
+              onClick={() => setDeletePromptPhoto(null)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleting === deletePromptPhoto.id}
+              className="hush-press rounded-xl py-2 text-sm font-semibold disabled:opacity-50"
+              style={{ background: '#C0392B', border: '1px solid #C0392B', color: '#FDFAF5' }}
+              onClick={() => {
+                const target = deletePromptPhoto
+                setDeletePromptPhoto(null)
+                void deletePhoto(target)
+              }}
+            >
+              {deleting === deletePromptPhoto.id ? 'Deleting...' : 'Delete'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {current && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setLightbox(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={closeLightbox}>
           <div
             aria-hidden
             className="absolute inset-0"
@@ -432,7 +529,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
             }}
-            onClick={(e) => { e.stopPropagation(); setLightbox(null) }}
+            onClick={(e) => { e.stopPropagation(); closeLightbox() }}
           >
             <X className="w-5 h-5" />
           </button>
