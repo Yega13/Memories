@@ -843,57 +843,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
               </section>
 
               <section style={settingsSectionStyle}>
-                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('danger')}>
-                  <Trash2 className="w-4 h-4" style={{ color: '#C0392B' }} />
-                  <span style={sectionTitle}>Delete album</span>
-                  <ChevronDown
-                    className="ml-auto w-4 h-4 transition-transform"
-                    style={{ color: '#A89880', transform: openSection === 'danger' ? 'rotate(180deg)' : 'rotate(0deg)' }}
-                  />
-                </button>
-                {openSection === 'danger' && (
-                  <div className="px-4 pb-4">
-                    <div className="rounded-xl p-3" style={{ background: '#FFF7F4', border: '1px solid rgba(192,57,43,0.25)' }}>
-                      <p className="text-xs leading-relaxed mb-3" style={{ color: '#7A2A1F' }}>
-                        Delete this album, its photos and videos, and remove it from collections.
-                      </p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={deleteAlbum}
-                          disabled={deletingAlbum}
-                          className="hush-press flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ background: deleteConfirm ? '#C0392B' : '#FFFFFF', border: '1px solid #C0392B', color: deleteConfirm ? '#FFFFFF' : '#C0392B' }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          {deletingAlbum ? 'Deleting...' : deleteConfirm ? 'Delete permanently' : 'Delete album'}
-                        </button>
-                        {deleteConfirm && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeleteConfirm(false)
-                              setDeleteError('')
-                            }}
-                            className="hush-press rounded-lg px-3 py-2 text-sm font-semibold transition hover:opacity-90"
-                            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                      {deleteConfirm && !deleteError && (
-                        <p className="mt-2 text-xs" style={{ color: '#7A2A1F' }}>
-                          Click again to confirm. This cannot be undone.
-                        </p>
-                      )}
-                      {deleteError && <p className="mt-2 text-xs" style={{ color: '#C0392B' }}>{deleteError}</p>}
-                    </div>
-                  </div>
-                )}
-              </section>
-
-              <section style={settingsSectionStyle}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('customUrl')}>
                   <Link2 className="w-4 h-4" style={{ color: canCustomize ? '#7C5C3E' : '#A89880' }} />
                   <span style={sectionTitle}>Custom URL</span>
@@ -1015,7 +964,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                 )}
               </section>
 
-              <section style={{ ...settingsSectionStyle, marginBottom: 0 }}>
+              <section style={settingsSectionStyle}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('collection')}>
                   <FolderPlus className="w-4 h-4" style={{ color: canUseCollections ? '#7C5C3E' : '#A89880' }} />
                   <span style={sectionTitle}>Collections</span>
@@ -1112,6 +1061,57 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     >
                       {collectionSaving ? 'Creating...' : 'Create collection'}
                     </button>
+                  </div>
+                )}
+              </section>
+
+              <section style={{ ...settingsSectionStyle, marginBottom: 0 }}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('danger')}>
+                  <Trash2 className="w-4 h-4" style={{ color: '#C0392B' }} />
+                  <span style={sectionTitle}>Delete album</span>
+                  <ChevronDown
+                    className="ml-auto w-4 h-4 transition-transform"
+                    style={{ color: '#A89880', transform: openSection === 'danger' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {openSection === 'danger' && (
+                  <div className="px-4 pb-4">
+                    <div className="rounded-xl p-3" style={{ background: '#FFF7F4', border: '1px solid rgba(192,57,43,0.25)' }}>
+                      <p className="text-xs leading-relaxed mb-3" style={{ color: '#7A2A1F' }}>
+                        Delete this album, its photos and videos, and remove it from collections.
+                      </p>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <button
+                          type="button"
+                          onClick={deleteAlbum}
+                          disabled={deletingAlbum}
+                          className="hush-press flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-semibold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ background: deleteConfirm ? '#C0392B' : '#FFFFFF', border: '1px solid #C0392B', color: deleteConfirm ? '#FFFFFF' : '#C0392B' }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          {deletingAlbum ? 'Deleting...' : deleteConfirm ? 'Delete permanently' : 'Delete album'}
+                        </button>
+                        {deleteConfirm && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteConfirm(false)
+                              setDeleteError('')
+                            }}
+                            className="hush-press rounded-lg px-3 py-2 text-sm font-semibold transition hover:opacity-90"
+                            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                      {deleteConfirm && !deleteError && (
+                        <p className="mt-2 text-xs" style={{ color: '#7A2A1F' }}>
+                          Click again to confirm. This cannot be undone.
+                        </p>
+                      )}
+                      {deleteError && <p className="mt-2 text-xs" style={{ color: '#C0392B' }}>{deleteError}</p>}
+                    </div>
                   </div>
                 )}
               </section>

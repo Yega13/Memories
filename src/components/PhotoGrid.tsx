@@ -36,11 +36,20 @@ function mediaImageClass(hover: Album['media_hover']): string {
   return classes.join(' ')
 }
 
+function touchDistance(touches: React.TouchList): number {
+  const first = touches[0]
+  const second = touches[1]
+  return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY)
+}
+
 export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const lightboxHistoryRef = useRef(false)
+  const pinchRef = useRef<{ distance: number; scale: number } | null>(null)
+  const lastTapRef = useRef(0)
   const [lightbox, setLightbox] = useState<number | null>(null)
+  const [zoomScale, setZoomScale] = useState(1)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeAnimating, setSwipeAnimating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -100,6 +109,57 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       window.history.pushState({ hushLightbox: true }, '', window.location.href)
       lightboxHistoryRef.current = true
     }
+  }
+
+  function toggleZoom() {
+    setZoomScale((currentScale) => (currentScale > 1 ? 1 : 2))
+  }
+
+  function mediaZoomStyle(photo: Photo): React.CSSProperties {
+    return {
+      borderRadius: previewRadiusFor(photo),
+      filter: cssMediaDisplayFilter(previewFilterFor(photo)),
+      transform: `scale(${zoomScale})`,
+      transformOrigin: 'center',
+      transition: 'transform 160ms ease, filter 180ms ease',
+      touchAction: zoomScale > 1 ? 'none' : 'pan-y',
+      cursor: zoomScale > 1 ? 'zoom-out' : 'zoom-in',
+    }
+  }
+
+  function handleMediaTouchStart(e: React.TouchEvent<HTMLElement>) {
+    if (e.touches.length === 2) {
+      e.stopPropagation()
+      pinchRef.current = { distance: touchDistance(e.touches), scale: zoomScale }
+      return
+    }
+    if (zoomScale > 1) e.stopPropagation()
+  }
+
+  function handleMediaTouchMove(e: React.TouchEvent<HTMLElement>) {
+    if (!pinchRef.current || e.touches.length !== 2) return
+    e.stopPropagation()
+    if (e.cancelable) e.preventDefault()
+    const nextScale = pinchRef.current.scale * (touchDistance(e.touches) / pinchRef.current.distance)
+    setZoomScale(Math.max(1, Math.min(4, nextScale)))
+  }
+
+  function handleMediaTouchEnd(e: React.TouchEvent<HTMLElement>) {
+    if (pinchRef.current) {
+      e.stopPropagation()
+      if (e.touches.length < 2) pinchRef.current = null
+      return
+    }
+
+    const now = Date.now()
+    if (now - lastTapRef.current < 280) {
+      e.stopPropagation()
+      if (e.cancelable) e.preventDefault()
+      toggleZoom()
+      lastTapRef.current = 0
+      return
+    }
+    lastTapRef.current = now
   }
 
   async function savePhotoSettings() {
@@ -300,6 +360,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   useEffect(() => {
     setLightboxMediaNode(null)
     setLightboxRadiusMax(null)
+    setZoomScale(1)
+    pinchRef.current = null
     setSwipeAnimating(false)
     setSwipeOffset(0)
   }, [current?.id])
@@ -477,7 +539,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               transform: `translateX(${swipeOffset}px) scale(${Math.max(0.94, 1 - Math.min(Math.abs(swipeOffset), 180) / 1800)})`,
               transition: swipeAnimating ? 'transform 150ms ease-out' : 'none',
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); closeLightbox() }}
             onTouchStart={handleSwipeStart}
             onTouchMove={handleSwipeMove}
             onTouchEnd={handleSwipeEnd}
@@ -489,7 +551,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
             }}
           >
             {broken.has(current.id) ? (
-              <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }}>
+              <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
                 <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
               </div>
@@ -503,7 +565,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 playsInline
                 className="max-h-[70vh] max-w-full"
                 ref={(node) => setLightboxMediaNode(node)}
-                style={{ background: '#000', borderRadius: previewRadiusFor(current), filter: cssMediaDisplayFilter(previewFilterFor(current)) }}
+                style={{ background: '#000', ...mediaZoomStyle(current) }}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => { e.stopPropagation(); toggleZoom() }}
+                onTouchStart={handleMediaTouchStart}
+                onTouchMove={handleMediaTouchMove}
+                onTouchEnd={handleMediaTouchEnd}
               />
             ) : (
               <div className="flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center">
@@ -513,31 +580,33 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   alt={current.caption || ''}
                   className="block max-h-full max-w-full object-contain"
                   ref={(node) => setLightboxMediaNode(node)}
-                  style={{
-                    borderRadius: previewRadiusFor(current),
-                    filter: cssMediaDisplayFilter(previewFilterFor(current)),
-                  }}
+                  style={mediaZoomStyle(current)}
                   onError={() => markBroken(current.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => { e.stopPropagation(); toggleZoom() }}
+                  onTouchStart={handleMediaTouchStart}
+                  onTouchMove={handleMediaTouchMove}
+                  onTouchEnd={handleMediaTouchEnd}
                 />
               </div>
             )}
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
               {(current.caption || current.author_name) && (
                 <div className="text-center">
                   {current.caption && <p className="font-medium" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
                   {current.author_name && <p className="text-sm" style={{ color: '#C5D9C2' }}>by {current.author_name}</p>}
                 </div>
               )}
-              <button onClick={() => downloadPhoto(current)} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
+              <button onClick={(e) => { e.stopPropagation(); downloadPhoto(current) }} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
                 <Download className="w-5 h-5" />
               </button>
               {isOwner && (
                 <>
-                  <button onClick={() => openSettings(current)} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Settings">
+                  <button onClick={(e) => { e.stopPropagation(); openSettings(current) }} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Settings">
                     <Settings className="w-5 h-5" />
                   </button>
-                  <button onClick={() => deletePhoto(current)} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
+                  <button onClick={(e) => { e.stopPropagation(); deletePhoto(current) }} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </>
