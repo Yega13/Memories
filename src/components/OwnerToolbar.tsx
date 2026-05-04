@@ -37,7 +37,13 @@ type Props = {
   ownerToken: string
   userTier: Tier
   mediaRadiusMax: number
-  onAlbumUpdated: (patch: Partial<Album>) => void
+  onAlbumUpdated: (
+    patch: Partial<Album>,
+    options?: {
+      resetRadiusOverrides?: boolean
+      resetFilterOverrides?: boolean
+    },
+  ) => void
 }
 
 export default function OwnerToolbar({ album, photos, ownerToken, userTier, mediaRadiusMax, onAlbumUpdated }: Props) {
@@ -259,7 +265,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setMediaRadius(result.media_radius)
       setVideoAutoplay(result.video_autoplay)
       setMediaFilter(result.media_filter)
-      onAlbumUpdated({ media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter })
+      onAlbumUpdated(
+        { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter },
+        { resetRadiusOverrides, resetFilterOverrides },
+      )
       setMediaSaved(true)
     } catch (e) {
       setMediaError(e instanceof Error ? e.message : 'Network error')

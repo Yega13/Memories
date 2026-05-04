@@ -17,6 +17,11 @@ const IMAGE_BG_PREFIX = 'image:'
 const STOCK_BG_PREFIX = 'stock:'
 const FALLBACK_MEDIA_RADIUS_MAX = 144
 
+type AlbumUpdateOptions = {
+  resetRadiusOverrides?: boolean
+  resetFilterOverrides?: boolean
+}
+
 function albumBackgroundStyle(bg: string): React.CSSProperties {
   if (bg.startsWith(IMAGE_BG_PREFIX) || bg.startsWith(STOCK_BG_PREFIX)) {
     const imageUrl = resolveAlbumBackgroundImage(bg)
@@ -144,15 +149,15 @@ export default function AlbumPage() {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))
   }
 
-  const handleAlbumUpdated = (patch: Partial<Album>) => {
+  const handleAlbumUpdated = useCallback((patch: Partial<Album>, options: AlbumUpdateOptions = {}) => {
     setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))
-    if (patch.media_radius != null) {
+    if (options.resetRadiusOverrides) {
       setPhotos((prev) => prev.map((photo) => ({ ...photo, display_radius: null })))
     }
-    if (patch.media_filter != null) {
+    if (options.resetFilterOverrides) {
       setPhotos((prev) => prev.map((photo) => ({ ...photo, display_filter: null })))
     }
-  }
+  }, [])
 
   if (loading) {
     return (
