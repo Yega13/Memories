@@ -1,14 +1,33 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
-import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, QrCode, Settings, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Settings, Trash2, X } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
-import { STOCK_ALBUM_BACKGROUNDS } from '@/lib/album-backgrounds'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
+import BackgroundLibraryModal from '@/components/owner-toolbar/BackgroundLibraryModal'
+import ShareMenu from '@/components/owner-toolbar/ShareMenu'
+import {
+  addAlbumToCollectionRequest,
+  createCollectionRequest,
+  deleteAlbumRequest,
+  fetchCollections,
+  saveBackgroundRequest,
+  saveCustomUrlRequest,
+  savePasswordRequest,
+  uploadBackgroundRequest,
+} from '@/components/owner-toolbar/api'
+import {
+  BACKGROUND_IMAGE_TYPES,
+  DEFAULT_BG,
+  FEATURED_STOCK_BACKGROUNDS,
+  MAX_BACKGROUND_BYTES,
+  PRESETS,
+} from '@/components/owner-toolbar/constants'
+import { accordionButton, btnBase, inputStyle, sectionTitle, settingsSectionStyle } from '@/components/owner-toolbar/styles'
+import type { CollectionSummary, SettingsSection } from '@/components/owner-toolbar/types'
 
 type Props = {
   album: Album
@@ -17,31 +36,6 @@ type Props = {
   userTier: Tier
   onAlbumUpdated: (patch: Partial<Album>) => void
 }
-
-type SettingsSection = 'customization' | 'files' | 'customUrl' | 'password' | 'collection'
-type CollectionSummary = {
-  id: string
-  name: string
-  slug: string
-  album_count: number
-  contains_album: boolean
-}
-
-const PRESETS = [
-  { label: 'Cream', value: '#FDFAF5' },
-  { label: 'White', value: '#FFFFFF' },
-  { label: 'Sky', value: '#EDF4FB' },
-  { label: 'Sage', value: '#EFF4EE' },
-  { label: 'Blush', value: '#FDF0F2' },
-  { label: 'Lavender', value: '#F2EFF8' },
-  { label: 'Midnight', value: '#1C2333' },
-  { label: 'Forest', value: '#1A2B1A' },
-]
-
-const FEATURED_STOCK_BACKGROUNDS = STOCK_ALBUM_BACKGROUNDS.slice(0, 5)
-const DEFAULT_BG = '#FDFAF5'
-const MAX_BACKGROUND_BYTES = 10 * 1024 * 1024
-const BACKGROUND_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif'])
 
 export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAlbumUpdated }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
@@ -94,10 +88,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const loadCollections = useCallback(async () => {
     setCollectionsLoading(true)
     try {
-      const params = new URLSearchParams({ slug: album.slug, owner_token: ownerToken })
-      const res = await fetch(`/api/collections?${params.toString()}`)
-      const body = (await res.json().catch(() => ({}))) as { collections?: CollectionSummary[] }
-      if (res.ok) setCollections(body.collections ?? [])
+      setCollections(await fetchCollections(album.slug, ownerToken))
     } finally {
       setCollectionsLoading(false)
     }
@@ -156,21 +147,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     setCustomUrlError('')
     setCustomUrlSaved(false)
     try {
-      const res = await fetch('/api/album/custom-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: album.slug,
-          owner_token: ownerToken,
-          custom_slug: action === 'clear' ? null : customUrlInput.trim().toLowerCase(),
-        }),
-      })
-      const body = (await res.json().catch(() => ({}))) as { error?: string; custom_slug?: string | null }
-      if (!res.ok) {
-        setCustomUrlError(body.error ?? `Save failed (${res.status})`)
+      const result = await saveCustomUrlRequest(
+        album.slug,
+        ownerToken,
+        action === 'clear' ? null : customUrlInput.trim().toLowerCase(),
+      )
+      if (!result.ok) {
+        setCustomUrlError(result.error)
         return
       }
-      onAlbumUpdated({ custom_slug: body.custom_slug ?? null })
+      onAlbumUpdated({ custom_slug: result.custom_slug })
       setCustomUrlSaved(true)
       if (action === 'clear') setCustomUrlInput('')
     } catch (e) {
@@ -185,21 +171,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     setPasswordError('')
     setPasswordSaved(false)
     try {
-      const res = await fetch('/api/album/password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: album.slug,
-          owner_token: ownerToken,
-          password: action === 'clear' ? null : passwordInput,
-        }),
-      })
-      const body = (await res.json().catch(() => ({}))) as { error?: string; password_protected?: boolean }
-      if (!res.ok) {
-        setPasswordError(body.error ?? `Save failed (${res.status})`)
+      const result = await savePasswordRequest(
+        album.slug,
+        ownerToken,
+        action === 'clear' ? null : passwordInput,
+      )
+      if (!result.ok) {
+        setPasswordError(result.error)
         return
       }
-      onAlbumUpdated({ password_protected: !!body.password_protected })
+      onAlbumUpdated({ password_protected: result.password_protected })
       setPasswordSaved(true)
       setPasswordInput('')
     } catch (e) {
@@ -215,22 +196,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     const previousBackground = album.background_theme ?? null
     onAlbumUpdated({ background_theme: choice })
     try {
-      const res = await fetch('/api/album/background', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: album.slug,
-          owner_token: ownerToken,
-          background_theme: choice,
-        }),
-      })
-      const body = (await res.json().catch(() => ({}))) as { error?: string; background_theme?: string | null }
-      if (!res.ok) {
+      const result = await saveBackgroundRequest(album.slug, ownerToken, choice)
+      if (!result.ok) {
         onAlbumUpdated({ background_theme: previousBackground })
-        setBackgroundError(body.error ?? `Save failed (${res.status})`)
+        setBackgroundError(result.error)
         return false
       }
-      onAlbumUpdated({ background_theme: body.background_theme ?? null })
+      onAlbumUpdated({ background_theme: result.background_theme })
       return true
     } catch (e) {
       onAlbumUpdated({ background_theme: previousBackground })
@@ -259,21 +231,12 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
 
     setBackgroundSaving(true)
     try {
-      const form = new FormData()
-      form.set('slug', album.slug)
-      form.set('owner_token', ownerToken)
-      form.set('file', file)
-
-      const res = await fetch('/api/album/background/upload', {
-        method: 'POST',
-        body: form,
-      })
-      const body = (await res.json().catch(() => ({}))) as { error?: string; background_theme?: string | null }
-      if (!res.ok || !body.background_theme) {
-        setBackgroundError(body.error ?? `Upload failed (${res.status})`)
+      const result = await uploadBackgroundRequest(album.slug, ownerToken, file)
+      if (!result.ok) {
+        setBackgroundError(result.error)
         return
       }
-      onAlbumUpdated({ background_theme: body.background_theme })
+      onAlbumUpdated({ background_theme: result.background_theme })
     } catch (e) {
       setBackgroundError(e instanceof Error ? e.message : 'Network error')
     } finally {
@@ -287,26 +250,18 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     setCollectionError('')
     setCollectionUrl('')
     try {
-      const res = await fetch('/api/collections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: album.slug,
-          owner_token: ownerToken,
-          name: collectionName,
-          description: collectionDescription,
-          collection_slug: collectionSlug,
-        }),
+      const result = await createCollectionRequest({
+        slug: album.slug,
+        ownerToken,
+        name: collectionName,
+        description: collectionDescription,
+        collectionSlug,
       })
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string
-        collection?: { slug: string }
-      }
-      if (!res.ok || !body.collection?.slug) {
-        setCollectionError(body.error ?? `Save failed (${res.status})`)
+      if (!result.ok) {
+        setCollectionError(result.error)
         return
       }
-      setCollectionUrl(`${window.location.origin}/c/${body.collection.slug}`)
+      setCollectionUrl(`${window.location.origin}/c/${result.slug}`)
       setCollectionName('')
       setCollectionDescription('')
       setCollectionSlug('')
@@ -323,24 +278,12 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     setCollectionError('')
     setCollectionUrl('')
     try {
-      const res = await fetch('/api/collections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug: album.slug,
-          owner_token: ownerToken,
-          collection_id: collectionId,
-        }),
-      })
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string
-        collection?: { slug: string }
-      }
-      if (!res.ok || !body.collection?.slug) {
-        setCollectionError(body.error ?? `Save failed (${res.status})`)
+      const result = await addAlbumToCollectionRequest(album.slug, ownerToken, collectionId)
+      if (!result.ok) {
+        setCollectionError(result.error)
         return
       }
-      setCollectionUrl(`${window.location.origin}/c/${body.collection.slug}`)
+      setCollectionUrl(`${window.location.origin}/c/${result.slug}`)
       await loadCollections()
     } catch (e) {
       setCollectionError(e instanceof Error ? e.message : 'Network error')
@@ -399,14 +342,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     setDeletingAlbum(true)
     setDeleteError('')
     try {
-      const res = await fetch('/api/album/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: album.slug, owner_token: ownerToken }),
-      })
-      const body = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) {
-        setDeleteError(body.error ?? `Delete failed (${res.status})`)
+      const result = await deleteAlbumRequest(album.slug, ownerToken)
+      if (!result.ok) {
+        setDeleteError(result.error)
         return
       }
       window.location.href = '/'
@@ -415,56 +353,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     } finally {
       setDeletingAlbum(false)
     }
-  }
-
-  const btnBase: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    fontSize: '13px',
-    fontWeight: 500,
-    padding: '6px 14px',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    transition: 'opacity 0.15s',
-    background: '#FFFFFF',
-    border: '1px solid #DDD5C5',
-    color: '#254F22',
-  }
-
-  const sectionTitle: React.CSSProperties = {
-    color: '#254F22',
-    fontSize: 11,
-    fontWeight: 700,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase',
-  }
-
-  const inputStyle: React.CSSProperties = {
-    background: '#FDFAF5',
-    border: '1px solid #DDD5C5',
-    color: '#254F22',
-  }
-
-  const accordionButton: React.CSSProperties = {
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '13px 14px',
-    cursor: 'pointer',
-    color: '#254F22',
-    background: 'transparent',
-    border: 0,
-    textAlign: 'left',
-  }
-
-  const settingsSectionStyle: React.CSSProperties = {
-    background: '#FFFFFF',
-    border: '1px solid #E8E0D2',
-    borderRadius: 14,
-    overflow: 'hidden',
-    marginBottom: 8,
   }
 
   return (
@@ -484,54 +372,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
           </button>
 
           {showShare && (
-            <div
-              className="hush-menu-pop absolute left-0 top-full mt-2 z-50 rounded-2xl shadow-xl"
-              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 320, padding: 16 }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Send link</span>
-                <button onClick={() => setShowShare(false)} style={{ color: '#A89880', cursor: 'pointer' }} aria-label="Close share menu">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <button
-                className="hush-hover-lift w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:opacity-90"
-                style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', cursor: 'pointer' }}
-                onClick={() => copy('share')}
-              >
-                <span>
-                  <span className="block text-sm font-semibold" style={{ color: '#254F22' }}>Guest share link</span>
-                  <span className="block text-xs truncate" style={{ color: '#8B6F4E', maxWidth: 220 }}>{shareUrl}</span>
-                </span>
-                {copied === 'share' ? <Check className="w-4 h-4" style={{ color: '#254F22' }} /> : <Copy className="w-4 h-4" style={{ color: '#7C5C3E' }} />}
-              </button>
-
-              <button
-                className="hush-hover-lift w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 mt-2 text-left transition hover:opacity-90"
-                style={{ background: '#E8F0FB', border: '1px solid #B8CCEE', cursor: 'pointer' }}
-                onClick={() => copy('owner')}
-              >
-                <span>
-                  <span className="block text-sm font-semibold" style={{ color: '#1B3A6B' }}>Owner management link</span>
-                  <span className="block text-xs truncate" style={{ color: '#45628C', maxWidth: 220 }}>{ownerUrl}</span>
-                </span>
-                {copied === 'owner' ? <Check className="w-4 h-4" style={{ color: '#1B3A6B' }} /> : <Copy className="w-4 h-4" style={{ color: '#1B3A6B' }} />}
-              </button>
-
-              <div className="mt-3 rounded-xl p-3" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
-                <div className="flex items-center gap-3">
-                  <Image src={qrUrl} alt="QR Code" width={92} height={92} unoptimized />
-                  <div>
-                    <p className="text-sm font-semibold flex items-center gap-2" style={{ color: '#254F22' }}>
-                      <QrCode className="w-4 h-4" />
-                      QR code
-                    </p>
-                    <p className="text-xs leading-relaxed" style={{ color: '#7C5C3E' }}>Guests scan this to open the album.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ShareMenu
+              copied={copied}
+              ownerUrl={ownerUrl}
+              qrUrl={qrUrl}
+              shareUrl={shareUrl}
+              onClose={() => setShowShare(false)}
+              onCopy={copy}
+            />
           )}
         </div>
 
@@ -986,74 +834,12 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       </div>
 
       {showBackgroundLibrary && (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center px-4 py-6"
-          style={{ background: 'rgba(26, 43, 26, 0.46)', backdropFilter: 'blur(8px)' }}
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setShowBackgroundLibrary(false)
-          }}
-        >
-          <div
-            className="hush-modal-pop max-h-[88vh] w-full max-w-4xl overflow-y-auto rounded-2xl shadow-2xl"
-            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}
-          >
-            <div
-              className="sticky top-0 z-10 flex items-center justify-between px-5 py-4"
-              style={{ background: '#FFFFFF', borderBottom: '1px solid #E8E0D2' }}
-            >
-              <div>
-                <h2 className="text-base font-semibold" style={{ color: '#254F22' }}>Stock backgrounds</h2>
-                <p className="text-xs" style={{ color: '#7C5C3E' }}>Pick a quiet image for this album.</p>
-              </div>
-              <button
-                onClick={() => setShowBackgroundLibrary(false)}
-                className="rounded-full p-2 transition hover:opacity-80"
-                style={{ color: '#7C5C3E', background: '#F5F0E8', cursor: 'pointer' }}
-                aria-label="Close stock backgrounds"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
-              {STOCK_ALBUM_BACKGROUNDS.map((preset) => (
-                <button
-                  key={preset.value}
-                  type="button"
-                  disabled={backgroundSaving}
-                  onClick={() => chooseBackground(preset.value, true)}
-                  className="hush-hover-lift group overflow-hidden rounded-xl text-left transition hover:opacity-95 disabled:cursor-wait"
-                  style={{
-                    border: (bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) ? '2px solid #254F22' : '1px solid #DDD5C5',
-                    background: '#FDFAF5',
-                    cursor: backgroundSaving ? 'wait' : 'pointer',
-                  }}
-                >
-                  <span
-                    className="relative block aspect-[4/3] w-full"
-                    style={{
-                      backgroundImage: `url(${preset.src})`,
-                      backgroundPosition: 'center',
-                      backgroundSize: 'cover',
-                    }}
-                  >
-                      {(bgChoice === preset.value || bgChoice === preset.legacyValue || bgChoice === preset.imageValue) && (
-                      <span
-                        className="absolute inset-0 flex items-center justify-center"
-                        style={{ background: 'rgba(37,79,34,0.28)', color: '#FFFFFF' }}
-                      >
-                        <Check className="h-6 w-6" />
-                      </span>
-                    )}
-                  </span>
-                  <span className="block px-3 py-2 text-xs font-semibold" style={{ color: '#254F22' }}>
-                    {preset.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <BackgroundLibraryModal
+          backgroundSaving={backgroundSaving}
+          bgChoice={bgChoice}
+          onChoose={chooseBackground}
+          onClose={() => setShowBackgroundLibrary(false)}
+        />
       )}
     </div>
   )

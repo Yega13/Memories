@@ -1,11 +1,17 @@
 name = "memories"
-main = ".open-next/worker.js"
+main = "worker.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
+
+[triggers]
+# Daily at 03:17 UTC. The custom worker forwards this scheduled event to
+# POST /api/cron/retire-albums, so the existing route remains the single
+# implementation of album retirement.
+crons = ["17 3 * * *"]
 
 # Cloudflare R2 bucket for videos. Public via the custom domain set in
 # the bucket's "Custom Domains" panel. The binding lets the worker write

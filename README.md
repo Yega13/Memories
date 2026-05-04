@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hushare
 
-## Getting Started
+Shared photo albums from one link. Guests can add photos or videos without an account; album owners can manage sharing, downloads, backgrounds, passwords, custom URLs, and Studio collections.
 
-First, run the development server:
+## Stack
+
+- Next.js 15 app router
+- React 19
+- Supabase Auth, Postgres, and Storage
+- Cloudflare Workers via OpenNext
+- Cloudflare R2 for video files
+- Polar for subscriptions
+
+## Local Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app expects the environment values used by Supabase, R2, Polar, Resend, and optional cron/password secrets. Local `.env*` files are intentionally ignored.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Useful Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run cf:build
+npm run preview
+npm run deploy
+```
 
-## Learn More
+If `npm` is unavailable in the current shell, the local package entrypoints can be run through `node node_modules/<package>/...`.
 
-To learn more about Next.js, take a look at the following resources:
+## Cron
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Album retirement lives in `src/app/api/cron/retire-albums/route.ts`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Cloudflare scheduled events are wired through `worker.ts`, which reuses the generated OpenNext fetch handler and forwards the daily cron to that route. The schedule is configured in `wrangler.toml`.
 
-## Deploy on Vercel
+Set `ALBUM_RETIREMENT_SECRET` as a Worker secret in production. When present, the scheduled worker sends it as `Authorization: Bearer <secret>`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment Notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`wrangler.toml` is the Worker source of truth. Build output directories such as `.next`, `.open-next`, and `.wrangler` are generated artifacts and should stay untracked.
+
+OpenNext warns that Windows support is imperfect; WSL is the safer build environment for Cloudflare production builds.
