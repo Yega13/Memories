@@ -7,7 +7,7 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 const MIN_RADIUS = 0
-const MAX_RADIUS = 36
+const MAX_RADIUS = 999
 const FILTERS = new Set<MediaDisplayFilter>(['none', 'warm', 'cool', 'mono', 'vintage', 'soft'])
 
 export async function POST(req: Request) {

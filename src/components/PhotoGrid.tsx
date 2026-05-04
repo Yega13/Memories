@@ -44,7 +44,7 @@ function cssFilter(filter: MediaDisplayFilter | null | undefined): string {
 }
 
 function radiusFor(photo: Photo, album: Album): number {
-  return album.media_radius ?? photo.display_radius ?? 12
+  return photo.display_radius ?? album.media_radius ?? 12
 }
 
 function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
@@ -397,7 +397,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 <input
                   type="range"
                   min={0}
-                  max={36}
+                  max={999}
                   value={settingsRadius}
                   onChange={(e) => setSettingsRadius(Number(e.target.value))}
                   className="w-full"

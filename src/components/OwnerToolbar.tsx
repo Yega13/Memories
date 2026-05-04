@@ -607,7 +607,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       <input
                         type="range"
                         min={0}
-                        max={36}
+                        max={999}
                         value={mediaRadius}
                         onChange={(e) => {
                           const nextRadius = Number(e.target.value)

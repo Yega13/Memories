@@ -142,6 +142,13 @@ export default function AlbumPage() {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))
   }
 
+  const handleAlbumUpdated = (patch: Partial<Album>) => {
+    setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))
+    if (patch.media_radius != null || patch.media_filter != null) {
+      setPhotos((prev) => prev.map((photo) => ({ ...photo, display_radius: null, display_filter: null })))
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={albumBackgroundStyle(DEFAULT_BG)}>
@@ -194,7 +201,7 @@ export default function AlbumPage() {
           photos={photos}
           ownerToken={ownerToken!}
           userTier={userTier}
-          onAlbumUpdated={(patch) => setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))}
+          onAlbumUpdated={handleAlbumUpdated}
         />
       )}
 
