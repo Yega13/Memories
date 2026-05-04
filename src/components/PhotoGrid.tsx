@@ -68,6 +68,18 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
     setSettingsError('')
   }
 
+  function previewRadiusFor(photo: Photo): number {
+    if (settingsPhoto?.id === photo.id) return settingsRadius
+    return radiusFor(photo, album)
+  }
+
+  function previewFilterFor(photo: Photo): MediaDisplayFilter {
+    if (settingsPhoto?.id === photo.id) {
+      return settingsFilter === 'global' ? album.media_filter ?? 'none' : settingsFilter
+    }
+    return filterFor(photo, album)
+  }
+
   async function savePhotoSettings() {
     if (!settingsPhoto || !ownerToken) return
     setSettingsSaving(true)
@@ -183,8 +195,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
           const isVideo = photo.media_type === 'video'
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
           const isBroken = broken.has(photo.id)
-          const mediaRadius = radiusFor(photo, album)
-          const filter = cssFilter(filterFor(photo, album))
+          const mediaRadius = previewRadiusFor(photo)
+          const filter = cssFilter(previewFilterFor(photo))
           return (
             <div key={photo.id}>
               <div
@@ -255,17 +267,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                   </div>
                 )}
               </div>
-              {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => openSettings(photo)}
-                  className="hush-press mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition hover:opacity-90"
-                  style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#254F22' }}
-                >
-                  <Settings className="h-3.5 w-3.5" />
-                  Settings
-                </button>
-              )}
             </div>
           )
         })}
@@ -314,7 +315,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
 
           <div className="hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
             {broken.has(current.id) ? (
-              <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: radiusFor(current, album) }}>
+              <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }}>
                 <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
               </div>
@@ -327,17 +328,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 autoPlay={!!album.video_autoplay}
                 playsInline
                 className="max-h-[70vh] max-w-full"
-                style={{ background: '#000', borderRadius: radiusFor(current, album), filter: cssFilter(filterFor(current, album)) }}
+                style={{ background: '#000', borderRadius: previewRadiusFor(current), filter: cssFilter(previewFilterFor(current)) }}
               />
             ) : (
-              <div className="relative w-[min(92vw,1100px)] h-[70vh] overflow-hidden" style={{ borderRadius: radiusFor(current, album) }}>
+              <div className="relative w-[min(92vw,1100px)] h-[70vh] overflow-hidden" style={{ borderRadius: previewRadiusFor(current) }}>
                 <Image
                   src={current.url}
                   alt={current.caption || ''}
                   fill
                   sizes="100vw"
                   className="object-contain"
-                  style={{ filter: cssFilter(filterFor(current, album)) }}
+                  style={{ filter: cssFilter(previewFilterFor(current)) }}
                   unoptimized
                   onError={() => markBroken(current.id)}
                 />

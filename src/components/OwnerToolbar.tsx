@@ -610,7 +610,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                         max={36}
                         value={mediaRadius}
                         onChange={(e) => {
-                          setMediaRadius(Number(e.target.value))
+                          const nextRadius = Number(e.target.value)
+                          setMediaRadius(nextRadius)
+                          onAlbumUpdated({ media_radius: nextRadius })
                           setMediaSaved(false)
                         }}
                         className="w-full"
@@ -626,7 +628,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                         type="checkbox"
                         checked={videoAutoplay}
                         onChange={(e) => {
-                          setVideoAutoplay(e.target.checked)
+                          const nextAutoplay = e.target.checked
+                          setVideoAutoplay(nextAutoplay)
+                          onAlbumUpdated({ video_autoplay: nextAutoplay })
                           setMediaSaved(false)
                         }}
                         className="h-4 w-4"
@@ -638,7 +642,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                       <select
                         value={mediaFilter}
                         onChange={(e) => {
-                          setMediaFilter(e.target.value as MediaDisplayFilter)
+                          const nextFilter = e.target.value as MediaDisplayFilter
+                          setMediaFilter(nextFilter)
+                          onAlbumUpdated({ media_filter: nextFilter })
                           setMediaSaved(false)
                         }}
                         className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
