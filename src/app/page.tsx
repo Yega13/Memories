@@ -322,7 +322,7 @@ export default function Home() {
               caption: '"Share it."',
               label: 'Then',
               desc: 'Text it, print a QR for the table, drop it in the group chat. One link, everyone in.',
-              image: 'https://i.pinimg.com/webp70/736x/04/cf/49/04cf4974d0e093ab542a51317dc7abe8.webp',
+              image: '/share.jpg',
               alt: 'Photo card representing a shared Hushare album link',
             },
             {
