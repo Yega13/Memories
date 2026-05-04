@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     owner_token?: string
     photo_id?: string
     display_radius?: number | null
-    display_filter?: MediaDisplayFilter
+    display_filter?: MediaDisplayFilter | null
   }
   try {
     body = await req.json()
@@ -28,7 +28,11 @@ export async function POST(req: Request) {
   const token = String(body.owner_token ?? '').trim()
   const photoId = String(body.photo_id ?? '').trim()
   const displayRadius = body.display_radius == null ? null : clampRadius(body.display_radius)
-  const displayFilter = FILTERS.has(body.display_filter ?? 'none') ? body.display_filter ?? 'none' : null
+  const displayFilter = body.display_filter == null
+    ? null
+    : FILTERS.has(body.display_filter)
+      ? body.display_filter
+      : undefined
 
   if (!slug || !token || !photoId) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
@@ -36,7 +40,7 @@ export async function POST(req: Request) {
   if (body.display_radius != null && displayRadius == null) {
     return NextResponse.json({ error: 'Invalid border radius' }, { status: 400, headers: NO_STORE })
   }
-  if (!displayFilter) {
+  if (displayFilter === undefined) {
     return NextResponse.json({ error: 'Invalid filter' }, { status: 400, headers: NO_STORE })
   }
 

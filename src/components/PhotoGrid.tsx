@@ -24,6 +24,7 @@ const FILTER_OPTIONS: Array<{ value: MediaDisplayFilter; label: string }> = [
   { value: 'vintage', label: 'Vintage' },
   { value: 'soft', label: 'Soft' },
 ]
+type PhotoFilterChoice = MediaDisplayFilter | 'global'
 
 function cssFilter(filter: MediaDisplayFilter | null | undefined): string {
   switch (filter) {
@@ -46,20 +47,24 @@ function radiusFor(photo: Photo, album: Album): number {
   return photo.display_radius ?? album.media_radius ?? 12
 }
 
+function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
+  return photo.display_filter ?? album.media_filter ?? 'none'
+}
+
 export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, onPhotoDeleted, onPhotoUpdated }: Props) {
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
   const [settingsPhoto, setSettingsPhoto] = useState<Photo | null>(null)
   const [settingsRadius, setSettingsRadius] = useState(album.media_radius ?? 12)
-  const [settingsFilter, setSettingsFilter] = useState<MediaDisplayFilter>('none')
+  const [settingsFilter, setSettingsFilter] = useState<PhotoFilterChoice>('global')
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState('')
 
   function openSettings(photo: Photo) {
     setSettingsPhoto(photo)
     setSettingsRadius(radiusFor(photo, album))
-    setSettingsFilter(photo.display_filter ?? 'none')
+    setSettingsFilter(photo.display_filter ?? 'global')
     setSettingsError('')
   }
 
@@ -76,13 +81,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
           owner_token: ownerToken,
           photo_id: settingsPhoto.id,
           display_radius: settingsRadius === (album.media_radius ?? 12) ? null : settingsRadius,
-          display_filter: settingsFilter,
+          display_filter: settingsFilter === 'global' ? null : settingsFilter,
         }),
       })
       const body = (await res.json().catch(() => ({}))) as {
         error?: string
         display_radius?: number | null
-        display_filter?: MediaDisplayFilter
+        display_filter?: MediaDisplayFilter | null
       }
       if (!res.ok) {
         setSettingsError(body.error ?? `Save failed (${res.status})`)
@@ -90,7 +95,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
       }
       onPhotoUpdated(settingsPhoto.id, {
         display_radius: body.display_radius ?? null,
-        display_filter: body.display_filter ?? settingsFilter,
+        display_filter: body.display_filter ?? null,
       })
       setSettingsPhoto(null)
     } catch (e) {
@@ -179,7 +184,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
           const isBroken = broken.has(photo.id)
           const mediaRadius = radiusFor(photo, album)
-          const filter = cssFilter(photo.display_filter)
+          const filter = cssFilter(filterFor(photo, album))
           return (
             <div key={photo.id}>
               <div
@@ -322,7 +327,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 autoPlay={!!album.video_autoplay}
                 playsInline
                 className="max-h-[70vh] max-w-full"
-                style={{ background: '#000', borderRadius: radiusFor(current, album), filter: cssFilter(current.display_filter) }}
+                style={{ background: '#000', borderRadius: radiusFor(current, album), filter: cssFilter(filterFor(current, album)) }}
               />
             ) : (
               <div className="relative w-[min(92vw,1100px)] h-[70vh] overflow-hidden" style={{ borderRadius: radiusFor(current, album) }}>
@@ -332,7 +337,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                   fill
                   sizes="100vw"
                   className="object-contain"
-                  style={{ filter: cssFilter(current.display_filter) }}
+                  style={{ filter: cssFilter(filterFor(current, album)) }}
                   unoptimized
                   onError={() => markBroken(current.id)}
                 />
@@ -350,9 +355,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 <Download className="w-5 h-5" />
               </button>
               {isOwner && (
-                <button onClick={() => deletePhoto(current)} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                <>
+                  <button onClick={() => openSettings(current)} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Settings">
+                    <Settings className="w-5 h-5" />
+                  </button>
+                  <button onClick={() => deletePhoto(current)} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </>
               )}
             </div>
 
@@ -399,10 +409,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Filter</label>
                 <select
                   value={settingsFilter}
-                  onChange={(e) => setSettingsFilter(e.target.value as MediaDisplayFilter)}
+                  onChange={(e) => setSettingsFilter(e.target.value as PhotoFilterChoice)}
                   className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                   style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                 >
+                  <option value="global">Use global ({FILTER_OPTIONS.find((option) => option.value === (album.media_filter ?? 'none'))?.label ?? 'None'})</option>
                   {FILTER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}

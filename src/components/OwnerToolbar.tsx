@@ -5,6 +5,7 @@ import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, Lo
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
+import type { MediaDisplayFilter } from '@/lib/supabase'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
 import BackgroundLibraryModal from '@/components/owner-toolbar/BackgroundLibraryModal'
@@ -73,6 +74,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
   const [showBackgroundLibrary, setShowBackgroundLibrary] = useState(false)
   const [mediaRadius, setMediaRadius] = useState(album.media_radius ?? 12)
   const [videoAutoplay, setVideoAutoplay] = useState(!!album.video_autoplay)
+  const [mediaFilter, setMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
   const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
   const [mediaSaved, setMediaSaved] = useState(false)
@@ -122,13 +124,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
       setCollectionDescription('')
       setMediaRadius(album.media_radius ?? 12)
       setVideoAutoplay(!!album.video_autoplay)
+      setMediaFilter(album.media_filter ?? 'none')
       setMediaError('')
       setMediaSaved(false)
       setOpenSection(null)
       setDeleteConfirm(false)
       setDeleteError('')
     }
-  }, [album.custom_slug, album.media_radius, album.video_autoplay, showSettings])
+  }, [album.custom_slug, album.media_filter, album.media_radius, album.video_autoplay, showSettings])
 
   useEffect(() => {
     if (showSettings && canUseCollections) void loadCollections()
@@ -223,19 +226,20 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
     }
   }
 
-  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay) {
+  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter) {
     setMediaSaving(true)
     setMediaError('')
     setMediaSaved(false)
     try {
-      const result = await saveMediaSettingsRequest(album.slug, ownerToken, nextRadius, nextAutoplay)
+      const result = await saveMediaSettingsRequest(album.slug, ownerToken, nextRadius, nextAutoplay, nextFilter)
       if (!result.ok) {
         setMediaError(result.error)
         return
       }
       setMediaRadius(result.media_radius)
       setVideoAutoplay(result.video_autoplay)
-      onAlbumUpdated({ media_radius: result.media_radius, video_autoplay: result.video_autoplay })
+      setMediaFilter(result.media_filter)
+      onAlbumUpdated({ media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter })
       setMediaSaved(true)
     } catch (e) {
       setMediaError(e instanceof Error ? e.message : 'Network error')
@@ -628,6 +632,26 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, onAl
                         className="h-4 w-4"
                       />
                     </label>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Global filter</label>
+                      <select
+                        value={mediaFilter}
+                        onChange={(e) => {
+                          setMediaFilter(e.target.value as MediaDisplayFilter)
+                          setMediaSaved(false)
+                        }}
+                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                        style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+                      >
+                        <option value="none">None</option>
+                        <option value="warm">Warm</option>
+                        <option value="cool">Cool</option>
+                        <option value="mono">Mono</option>
+                        <option value="vintage">Vintage</option>
+                        <option value="soft">Soft</option>
+                      </select>
+                    </div>
 
                     {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}
                     {mediaSaved && !mediaError && <p className="text-xs" style={{ color: '#254F22' }}>Saved.</p>}

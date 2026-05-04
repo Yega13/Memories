@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import type { MediaDisplayFilter } from '@/lib/supabase'
 import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
@@ -7,9 +8,10 @@ export const runtime = 'nodejs'
 const NO_STORE = { 'Cache-Control': 'no-store' }
 const MIN_RADIUS = 0
 const MAX_RADIUS = 36
+const FILTERS = new Set<MediaDisplayFilter>(['none', 'warm', 'cool', 'mono', 'vintage', 'soft'])
 
 export async function POST(req: Request) {
-  let body: { slug?: string; owner_token?: string; media_radius?: number; video_autoplay?: boolean }
+  let body: { slug?: string; owner_token?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter }
   try {
     body = await req.json()
   } catch {
@@ -20,12 +22,16 @@ export async function POST(req: Request) {
   const token = String(body.owner_token ?? '').trim()
   const mediaRadius = clampRadius(body.media_radius)
   const videoAutoplay = Boolean(body.video_autoplay)
+  const mediaFilter = FILTERS.has(body.media_filter ?? 'none') ? body.media_filter ?? 'none' : null
 
   if (!slug || !token) {
     return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
   }
   if (mediaRadius == null) {
     return NextResponse.json({ error: 'Invalid border radius' }, { status: 400, headers: NO_STORE })
+  }
+  if (!mediaFilter) {
+    return NextResponse.json({ error: 'Invalid filter' }, { status: 400, headers: NO_STORE })
   }
 
   const admin = createAdminClient()
@@ -44,14 +50,26 @@ export async function POST(req: Request) {
 
   const { data: updated, error } = await admin
     .from('albums')
-    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay })
+    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter })
     .eq('id', album.id)
-    .select('media_radius, video_autoplay')
-    .single<{ media_radius: number; video_autoplay: boolean }>()
+    .select('media_radius, video_autoplay, media_filter')
+    .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter }>()
 
   if (error) {
     console.error('[album/media-settings] update failed:', error.message)
-    return NextResponse.json({ error: 'Could not save media settings' }, { status: 500, headers: NO_STORE })
+    const migrationMissing =
+      error.message.includes('media_radius') ||
+      error.message.includes('video_autoplay') ||
+      error.message.includes('media_filter') ||
+      error.message.includes('schema cache')
+    return NextResponse.json(
+      {
+        error: migrationMissing
+          ? 'Database media settings migration is not applied yet.'
+          : 'Could not save media settings',
+      },
+      { status: 500, headers: NO_STORE },
+    )
   }
 
   return NextResponse.json({ ok: true, ...updated }, { headers: NO_STORE })

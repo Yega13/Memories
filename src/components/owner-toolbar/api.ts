@@ -1,4 +1,5 @@
 import type { CollectionSummary } from '@/components/owner-toolbar/types'
+import type { MediaDisplayFilter } from '@/lib/supabase'
 
 async function jsonBody<T>(res: Response): Promise<T> {
   return (await res.json().catch(() => ({}))) as T
@@ -61,7 +62,8 @@ export async function saveMediaSettingsRequest(
   ownerToken: string,
   mediaRadius: number,
   videoAutoplay: boolean,
-): Promise<{ ok: true; media_radius: number; video_autoplay: boolean } | { ok: false; error: string }> {
+  mediaFilter: MediaDisplayFilter,
+): Promise<{ ok: true; media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter } | { ok: false; error: string }> {
   const res = await fetch('/api/album/media-settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -70,13 +72,14 @@ export async function saveMediaSettingsRequest(
       owner_token: ownerToken,
       media_radius: mediaRadius,
       video_autoplay: videoAutoplay,
+      media_filter: mediaFilter,
     }),
   })
-  const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean }>(res)
-  if (!res.ok || body.media_radius == null || body.video_autoplay == null) {
+  const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter }>(res)
+  if (!res.ok || body.media_radius == null || body.video_autoplay == null || !body.media_filter) {
     return { ok: false, error: body.error ?? `Save failed (${res.status})` }
   }
-  return { ok: true, media_radius: body.media_radius, video_autoplay: body.video_autoplay }
+  return { ok: true, media_radius: body.media_radius, video_autoplay: body.video_autoplay, media_filter: body.media_filter }
 }
 
 export async function uploadBackgroundRequest(

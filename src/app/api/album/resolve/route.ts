@@ -33,6 +33,7 @@ type FullAlbum = {
   background_theme: string | null
   media_radius?: number | null
   video_autoplay?: boolean | null
+  media_filter?: MediaDisplayFilter | null
   created_at: string
   retired_at: string | null
   user_id: string | null
@@ -41,7 +42,9 @@ type FullAlbum = {
 
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, created_at, retired_at, user_id, password_hash'
+type MediaDisplayFilter = 'none' | 'warm' | 'cool' | 'mono' | 'vintage' | 'soft'
+
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, created_at, retired_at, user_id, password_hash'
 const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
 
 export async function GET(req: Request) {
@@ -136,6 +139,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     background_theme: album.background_theme,
     media_radius: album.media_radius ?? 12,
     video_autoplay: !!album.video_autoplay,
+    media_filter: album.media_filter ?? 'none',
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,
@@ -159,7 +163,7 @@ async function lookupAlbum(
 
   // Backward compatibility for deployments where the app has updated before
   // the media display migration has reached Supabase.
-  if (error.message.includes('media_radius') || error.message.includes('video_autoplay')) {
+  if (error.message.includes('media_radius') || error.message.includes('video_autoplay') || error.message.includes('media_filter')) {
     console.warn('[album/resolve] media settings columns missing; using legacy album projection')
     const { data: legacy, error: legacyError } = await admin
       .from('albums')
@@ -170,7 +174,7 @@ async function lookupAlbum(
       console.error('[album/resolve] legacy album lookup failed:', legacyError.message)
       return null
     }
-    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false } : null
+    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false, media_filter: 'none' } : null
   }
 
   console.error('[album/resolve] album lookup failed:', error.message)
