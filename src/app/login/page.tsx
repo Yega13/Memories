@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 
 export const metadata: Metadata = {
   title: 'Sign in',
-  description: 'Sign in to your Hushare account with a magic link - no password needed.',
+  description: 'Sign in to your Hushare account with a magic link — no password needed.',
   robots: { index: false, follow: false },
 }
 
@@ -25,9 +25,6 @@ export default async function LoginPage({ searchParams }: Props) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Already signed in. Send admins/subscribers to /account; everyone else
-  // back to where they came from (or homepage). Don't bounce non-admins to
-  // /account - that page would 403 them and look broken.
   if (user) {
     if (await hasAccountAccess(user)) {
       redirect(requestedNext ?? '/account')
@@ -49,7 +46,7 @@ export default async function LoginPage({ searchParams }: Props) {
             Sign in to Hushare
           </h1>
           <p className="text-sm" style={{ color: '#5C4A3C' }}>
-            We&apos;ll email you a magic link - no password needed.
+            We&apos;ll email you a magic link — no password needed.
           </p>
         </div>
 
