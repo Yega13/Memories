@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { MediaDisplayFilter } from '@/lib/supabase'
+import { clampMediaRadius, isMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
 import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-const MIN_RADIUS = 0
-const MAX_RADIUS = 10000
-const FILTERS = new Set<MediaDisplayFilter>(['none', 'warm', 'cool', 'mono', 'vintage', 'soft'])
 
 export async function POST(req: Request) {
   let body: {
@@ -27,10 +24,10 @@ export async function POST(req: Request) {
   const slug = String(body.slug ?? '').trim()
   const token = String(body.owner_token ?? '').trim()
   const photoId = String(body.photo_id ?? '').trim()
-  const displayRadius = body.display_radius == null ? null : clampRadius(body.display_radius)
+  const displayRadius = body.display_radius == null ? null : clampMediaRadius(body.display_radius)
   const displayFilter = body.display_filter == null
     ? null
-    : FILTERS.has(body.display_filter)
+    : isMediaDisplayFilter(body.display_filter)
       ? body.display_filter
       : undefined
 
@@ -76,7 +73,7 @@ export async function POST(req: Request) {
     .update({ display_radius: displayRadius, display_filter: displayFilter })
     .eq('id', photo.id)
     .select('display_radius, display_filter')
-    .single<{ display_radius: number | null; display_filter: MediaDisplayFilter }>()
+    .single<{ display_radius: number | null; display_filter: MediaDisplayFilter | null }>()
 
   if (error) {
     console.error('[photo/settings] update failed:', error.message)
@@ -84,10 +81,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, ...updated }, { headers: NO_STORE })
-}
-
-function clampRadius(value: unknown): number | null {
-  const numeric = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(numeric)) return null
-  return Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, Math.round(numeric)))
 }

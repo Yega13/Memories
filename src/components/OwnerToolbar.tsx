@@ -5,7 +5,7 @@ import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, Lo
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
-import type { MediaDisplayFilter } from '@/lib/supabase'
+import { MEDIA_DISPLAY_FILTER_OPTIONS, type MediaDisplayFilter } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
 import BackgroundLibraryModal from '@/components/owner-toolbar/BackgroundLibraryModal'
@@ -40,6 +40,7 @@ type Props = {
   onAlbumUpdated: (
     patch: Partial<Album>,
     options?: {
+      forceGlobalRadius?: boolean
       resetRadiusOverrides?: boolean
       resetFilterOverrides?: boolean
     },
@@ -80,8 +81,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [backgroundError, setBackgroundError] = useState('')
   const [showBackgroundLibrary, setShowBackgroundLibrary] = useState(false)
   const [mediaRadius, setMediaRadius] = useState(album.media_radius ?? 12)
+  const [savedMediaRadius, setSavedMediaRadius] = useState(album.media_radius ?? 12)
   const [videoAutoplay, setVideoAutoplay] = useState(!!album.video_autoplay)
   const [mediaFilter, setMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
+  const [savedMediaFilter, setSavedMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
   const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
   const [mediaSaved, setMediaSaved] = useState(false)
@@ -104,7 +107,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   useEffect(() => {
     if (mediaRadius > radiusMax) {
       setMediaRadius(radiusMax)
-      onAlbumUpdated({ media_radius: radiusMax })
+      onAlbumUpdated({ media_radius: radiusMax }, { forceGlobalRadius: true })
       setMediaSaved(false)
     }
   }, [mediaRadius, onAlbumUpdated, radiusMax])
@@ -139,8 +142,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setCollectionError('')
       setCollectionDescription('')
       setMediaRadius(album.media_radius ?? 12)
+      setSavedMediaRadius(album.media_radius ?? 12)
       setVideoAutoplay(!!album.video_autoplay)
       setMediaFilter(album.media_filter ?? 'none')
+      setSavedMediaFilter(album.media_filter ?? 'none')
       setMediaError('')
       setMediaSaved(false)
       setOpenSection(null)
@@ -247,8 +252,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setMediaError('')
     setMediaSaved(false)
     try {
-      const resetRadiusOverrides = nextRadius !== (album.media_radius ?? 12)
-      const resetFilterOverrides = nextFilter !== (album.media_filter ?? 'none')
+      const resetRadiusOverrides = nextRadius !== savedMediaRadius
+      const resetFilterOverrides = nextFilter !== savedMediaFilter
       const result = await saveMediaSettingsRequest(
         album.slug,
         ownerToken,
@@ -263,11 +268,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         return
       }
       setMediaRadius(result.media_radius)
+      setSavedMediaRadius(result.media_radius)
       setVideoAutoplay(result.video_autoplay)
       setMediaFilter(result.media_filter)
+      setSavedMediaFilter(result.media_filter)
       onAlbumUpdated(
         { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter },
-        { resetRadiusOverrides, resetFilterOverrides },
+        { forceGlobalRadius: false, resetRadiusOverrides, resetFilterOverrides },
       )
       setMediaSaved(true)
     } catch (e) {
@@ -280,7 +287,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   function applyMediaRadius(value: number) {
     const nextRadius = Math.max(0, Math.min(radiusMax, Math.round(value)))
     setMediaRadius(nextRadius)
-    onAlbumUpdated({ media_radius: nextRadius })
+    onAlbumUpdated({ media_radius: nextRadius }, { forceGlobalRadius: true })
     setMediaSaved(false)
   }
 
@@ -692,12 +699,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                         className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                         style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                       >
-                        <option value="none">None</option>
-                        <option value="warm">Warm</option>
-                        <option value="cool">Cool</option>
-                        <option value="mono">Mono</option>
-                        <option value="vintage">Vintage</option>
-                        <option value="soft">Soft</option>
+                        {MEDIA_DISPLAY_FILTER_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
                       </select>
                     </div>
 

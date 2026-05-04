@@ -1,5 +1,5 @@
 import type { CollectionSummary } from '@/components/owner-toolbar/types'
-import type { MediaDisplayFilter } from '@/lib/supabase'
+import type { MediaDisplayFilter } from '@/lib/media-display'
 
 async function jsonBody<T>(res: Response): Promise<T> {
   return (await res.json().catch(() => ({}))) as T

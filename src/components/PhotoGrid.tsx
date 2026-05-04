@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { type Album, type MediaDisplayFilter, type Photo } from '@/lib/supabase'
+import { type Album, type Photo } from '@/lib/supabase'
+import { MEDIA_DISPLAY_FILTER_OPTIONS, cssMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
 import { formatDuration } from '@/lib/media'
 import Image from 'next/image'
 import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Settings } from 'lucide-react'
@@ -12,47 +13,23 @@ type Props = {
   isOwner: boolean
   slug: string
   ownerToken: string | null
+  forceGlobalRadius: boolean
   onRadiusMaxChange: (max: number) => void
   onPhotoDeleted: (id: string) => void
   onPhotoUpdated: (id: string, patch: Partial<Photo>) => void
 }
 
-const FILTER_OPTIONS: Array<{ value: MediaDisplayFilter; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'warm', label: 'Warm' },
-  { value: 'cool', label: 'Cool' },
-  { value: 'mono', label: 'Mono' },
-  { value: 'vintage', label: 'Vintage' },
-  { value: 'soft', label: 'Soft' },
-]
 type PhotoFilterChoice = MediaDisplayFilter | 'global'
 
-function cssFilter(filter: MediaDisplayFilter | null | undefined): string {
-  switch (filter) {
-    case 'warm':
-      return 'sepia(0.18) saturate(1.12) contrast(1.02)'
-    case 'cool':
-      return 'saturate(1.05) hue-rotate(8deg) contrast(1.02)'
-    case 'mono':
-      return 'grayscale(1) contrast(1.04)'
-    case 'vintage':
-      return 'sepia(0.32) saturate(0.92) contrast(1.08)'
-    case 'soft':
-      return 'saturate(0.94) brightness(1.04) contrast(0.94)'
-    default:
-      return 'none'
-  }
-}
-
-function radiusFor(photo: Photo, album: Album): number {
-  return photo.display_radius ?? album.media_radius ?? 12
+function radiusFor(photo: Photo, album: Album, forceGlobalRadius = false): number {
+  return forceGlobalRadius ? album.media_radius ?? 12 : photo.display_radius ?? album.media_radius ?? 12
 }
 
 function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
   return photo.display_filter ?? album.media_filter ?? 'none'
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
+export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -68,14 +45,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
 
   function openSettings(photo: Photo) {
     setSettingsPhoto(photo)
-    setSettingsRadius(radiusFor(photo, album))
+    setSettingsRadius(radiusFor(photo, album, forceGlobalRadius))
     setSettingsFilter(photo.display_filter ?? 'global')
     setSettingsError('')
   }
 
   function previewRadiusFor(photo: Photo): number {
     if (settingsPhoto?.id === photo.id) return settingsRadius
-    return radiusFor(photo, album)
+    return radiusFor(photo, album, forceGlobalRadius)
   }
 
   function previewFilterFor(photo: Photo): MediaDisplayFilter {
@@ -279,7 +256,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
           const isBroken = broken.has(photo.id)
           const mediaRadius = previewRadiusFor(photo)
-          const filter = cssFilter(previewFilterFor(photo))
+          const filter = cssMediaDisplayFilter(previewFilterFor(photo))
           return (
             <div key={photo.id}>
               <div
@@ -413,7 +390,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 playsInline
                 className="max-h-[70vh] max-w-full"
                 ref={(node) => setLightboxMediaNode(node)}
-                style={{ background: '#000', borderRadius: previewRadiusFor(current), filter: cssFilter(previewFilterFor(current)) }}
+                style={{ background: '#000', borderRadius: previewRadiusFor(current), filter: cssMediaDisplayFilter(previewFilterFor(current)) }}
               />
             ) : (
               <div className="flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center">
@@ -425,7 +402,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                   ref={(node) => setLightboxMediaNode(node)}
                   style={{
                     borderRadius: previewRadiusFor(current),
-                    filter: cssFilter(previewFilterFor(current)),
+                    filter: cssMediaDisplayFilter(previewFilterFor(current)),
                   }}
                   onError={() => markBroken(current.id)}
                 />
@@ -510,8 +487,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                   className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                   style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                 >
-                  <option value="global">Use global ({FILTER_OPTIONS.find((option) => option.value === (album.media_filter ?? 'none'))?.label ?? 'None'})</option>
-                  {FILTER_OPTIONS.map((option) => (
+                  <option value="global">Use global ({MEDIA_DISPLAY_FILTER_OPTIONS.find((option) => option.value === (album.media_filter ?? 'none'))?.label ?? 'None'})</option>
+                  {MEDIA_DISPLAY_FILTER_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>

@@ -18,6 +18,7 @@ const STOCK_BG_PREFIX = 'stock:'
 const FALLBACK_MEDIA_RADIUS_MAX = 144
 
 type AlbumUpdateOptions = {
+  forceGlobalRadius?: boolean
   resetRadiusOverrides?: boolean
   resetFilterOverrides?: boolean
 }
@@ -48,6 +49,7 @@ export default function AlbumPage() {
   const [isOwner, setIsOwner] = useState(false)
   const [userTier, setUserTier] = useState<Tier>('free')
   const [mediaRadiusMax, setMediaRadiusMax] = useState(FALLBACK_MEDIA_RADIUS_MAX)
+  const [forceGlobalRadius, setForceGlobalRadius] = useState(false)
   // Password-gate state. When the resolver says "password_required", we
   // stash the minimal summary it returned (id + title + random slug) and
   // show <PasswordGate> instead of the album.
@@ -151,12 +153,20 @@ export default function AlbumPage() {
 
   const handleAlbumUpdated = useCallback((patch: Partial<Album>, options: AlbumUpdateOptions = {}) => {
     setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))
+    if (patch.media_radius != null) {
+      setForceGlobalRadius(!!options.forceGlobalRadius)
+    }
     if (options.resetRadiusOverrides) {
       setPhotos((prev) => prev.map((photo) => ({ ...photo, display_radius: null })))
     }
     if (options.resetFilterOverrides) {
       setPhotos((prev) => prev.map((photo) => ({ ...photo, display_filter: null })))
     }
+  }, [])
+
+  const handlePhotoUpdated = useCallback((photoId: string, patch: Partial<Photo>) => {
+    if ('display_radius' in patch) setForceGlobalRadius(false)
+    setPhotos((prev) => prev.map((photo) => (photo.id === photoId ? { ...photo, ...patch } : photo)))
   }, [])
 
   if (loading) {
@@ -226,9 +236,10 @@ export default function AlbumPage() {
           isOwner={isOwner}
           slug={album.slug}
           ownerToken={ownerToken}
+          forceGlobalRadius={forceGlobalRadius}
           onRadiusMaxChange={setMediaRadiusMax}
           onPhotoDeleted={handlePhotoDeleted}
-          onPhotoUpdated={(photoId, patch) => setPhotos((prev) => prev.map((photo) => (photo.id === photoId ? { ...photo, ...patch } : photo)))}
+          onPhotoUpdated={handlePhotoUpdated}
         />
       </div>
     </main>

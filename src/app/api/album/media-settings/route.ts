@@ -1,14 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { MediaDisplayFilter } from '@/lib/supabase'
+import { clampMediaRadius, isMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
 import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-const MIN_RADIUS = 0
-const MAX_RADIUS = 10000
-const FILTERS = new Set<MediaDisplayFilter>(['none', 'warm', 'cool', 'mono', 'vintage', 'soft'])
 
 export async function POST(req: Request) {
   let body: {
@@ -28,9 +25,10 @@ export async function POST(req: Request) {
 
   const slug = String(body.slug ?? '').trim()
   const token = String(body.owner_token ?? '').trim()
-  const mediaRadius = clampRadius(body.media_radius)
+  const mediaRadius = clampMediaRadius(body.media_radius)
   const videoAutoplay = Boolean(body.video_autoplay)
-  const mediaFilter = FILTERS.has(body.media_filter ?? 'none') ? body.media_filter ?? 'none' : null
+  const rawMediaFilter = body.media_filter ?? 'none'
+  const mediaFilter = isMediaDisplayFilter(rawMediaFilter) ? rawMediaFilter : null
 
   if (!slug || !token) {
     return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
@@ -96,10 +94,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, ...updated }, { headers: NO_STORE })
-}
-
-function clampRadius(value: unknown): number | null {
-  const numeric = typeof value === 'number' ? value : Number(value)
-  if (!Number.isFinite(numeric)) return null
-  return Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, Math.round(numeric)))
 }
