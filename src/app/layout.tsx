@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Playfair_Display } from "next/font/google";
+import AppToastViewport from "@/components/AppToast";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -314,6 +315,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         {children}
+        <AppToastViewport />
       </body>
     </html>
   );

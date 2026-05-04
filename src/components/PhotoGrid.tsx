@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
-import { MEDIA_DISPLAY_FILTER_OPTIONS, cssMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
+import { cssMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
 import { formatDuration } from '@/lib/media'
+import { showAppToast } from '@/components/AppToast'
+import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import Image from 'next/image'
 import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Settings } from 'lucide-react'
 
@@ -18,8 +20,6 @@ type Props = {
   onPhotoDeleted: (id: string) => void
   onPhotoUpdated: (id: string, patch: Partial<Photo>) => void
 }
-
-type PhotoFilterChoice = MediaDisplayFilter | 'global'
 
 function radiusFor(photo: Photo, album: Album, forceGlobalRadius = false): number {
   return forceGlobalRadius ? album.media_radius ?? 12 : photo.display_radius ?? album.media_radius ?? 12
@@ -98,15 +98,19 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       }
       if (!res.ok) {
         setSettingsError(body.error ?? `Save failed (${res.status})`)
+        showAppToast(body.error ?? `Save failed (${res.status})`, 'error')
         return
       }
       onPhotoUpdated(settingsPhoto.id, {
         display_radius: body.display_radius ?? null,
         display_filter: body.display_filter ?? null,
       })
+      showAppToast('Media settings saved.')
       setSettingsPhoto(null)
     } catch (e) {
-      setSettingsError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setSettingsError(message)
+      showAppToast(message, 'error')
     } finally {
       setSettingsSaving(false)
     }
@@ -125,6 +129,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (res.ok) {
       onPhotoDeleted(photo.id)
       if (lightbox !== null) setLightbox(null)
+      showAppToast('Media deleted.')
+    } else {
+      showAppToast(`Delete failed (${res.status})`, 'error')
     }
 
     setDeleting(null)
@@ -431,76 +438,20 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       )}
 
       {settingsPhoto && isOwner && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6" style={{ background: 'rgba(26, 43, 26, 0.42)', backdropFilter: 'blur(8px)' }} onMouseDown={(e) => {
-          if (e.target === e.currentTarget) setSettingsPhoto(null)
-        }}>
-          <div className="hush-modal-pop w-full max-w-sm rounded-2xl shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
-            <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: '1px solid #E8E0D2' }}>
-              <div>
-                <h2 className="text-base font-semibold" style={{ color: '#254F22' }}>Media settings</h2>
-                <p className="text-xs" style={{ color: '#7C5C3E' }}>Only this item.</p>
-              </div>
-              <button type="button" onClick={() => setSettingsPhoto(null)} className="rounded-full p-2 transition hover:opacity-80" style={{ color: '#7C5C3E', background: '#F5F0E8' }} aria-label="Close media settings">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-4 p-5">
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Corner radius</label>
-                  <span className="text-xs font-mono" style={{ color: '#A89880' }}>{settingsRadius}px</span>
-                </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={radiusMaxFor(settingsPhoto)}
-                  value={settingsRadius}
-                  onChange={(e) => applySettingsRadius(Number(e.target.value))}
-                  className="w-full"
-                />
-                <input
-                  type="number"
-                  min={0}
-                  max={radiusMaxFor(settingsPhoto)}
-                  value={settingsRadius}
-                  onChange={(e) => applySettingsRadius(Number(e.target.value))}
-                  className="mt-2 w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                  style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
-                />
-                <button type="button" onClick={() => setSettingsRadius(album.media_radius ?? 12)} className="mt-2 text-xs" style={{ color: '#A89880' }}>
-                  Use global radius
-                </button>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Filter</label>
-                <select
-                  value={settingsFilter}
-                  onChange={(e) => setSettingsFilter(e.target.value as PhotoFilterChoice)}
-                  className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                  style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
-                >
-                  <option value="global">Use global ({MEDIA_DISPLAY_FILTER_OPTIONS.find((option) => option.value === (album.media_filter ?? 'none'))?.label ?? 'None'})</option>
-                  {MEDIA_DISPLAY_FILTER_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {settingsError && <p className="text-xs" style={{ color: '#C0392B' }}>{settingsError}</p>}
-              <button
-                type="button"
-                onClick={savePhotoSettings}
-                disabled={settingsSaving}
-                className="hush-press w-full rounded-lg py-2 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
-                style={{ background: '#254F22', color: '#FDFAF5' }}
-              >
-                {settingsSaving ? 'Saving...' : 'Save settings'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PhotoSettingsModal
+          album={album}
+          photo={settingsPhoto}
+          radius={settingsRadius}
+          filter={settingsFilter}
+          saving={settingsSaving}
+          error={settingsError}
+          radiusMax={radiusMaxFor(settingsPhoto)}
+          onClose={() => setSettingsPhoto(null)}
+          onRadiusChange={applySettingsRadius}
+          onRadiusReset={() => setSettingsRadius(album.media_radius ?? 12)}
+          onFilterChange={setSettingsFilter}
+          onSave={savePhotoSettings}
+        />
       )}
     </>
   )

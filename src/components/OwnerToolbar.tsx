@@ -8,6 +8,7 @@ import { type Album, type Photo } from '@/lib/supabase'
 import { MEDIA_DISPLAY_FILTER_OPTIONS, type MediaDisplayFilter } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
+import { showAppToast, storeAppToast } from '@/components/AppToast'
 import BackgroundLibraryModal from '@/components/owner-toolbar/BackgroundLibraryModal'
 import ShareMenu from '@/components/owner-toolbar/ShareMenu'
 import {
@@ -173,6 +174,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   async function copy(type: 'share' | 'owner') {
     await navigator.clipboard.writeText(type === 'share' ? shareUrl : ownerUrl)
     setCopied(type)
+    showAppToast(type === 'share' ? 'Share link copied.' : 'Owner link copied.')
     setTimeout(() => setCopied(null), 2000)
   }
 
@@ -188,13 +190,17 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       )
       if (!result.ok) {
         setCustomUrlError(result.error)
+        showAppToast(result.error, 'error')
         return
       }
       onAlbumUpdated({ custom_slug: result.custom_slug })
       setCustomUrlSaved(true)
+      showAppToast(action === 'clear' ? 'Custom URL cleared.' : 'Custom URL saved.')
       if (action === 'clear') setCustomUrlInput('')
     } catch (e) {
-      setCustomUrlError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setCustomUrlError(message)
+      showAppToast(message, 'error')
     } finally {
       setCustomUrlSaving(false)
     }
@@ -212,13 +218,17 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       )
       if (!result.ok) {
         setPasswordError(result.error)
+        showAppToast(result.error, 'error')
         return
       }
       onAlbumUpdated({ password_protected: result.password_protected })
       setPasswordSaved(true)
+      showAppToast(action === 'clear' ? 'Password removed.' : 'Password saved.')
       setPasswordInput('')
     } catch (e) {
-      setPasswordError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setPasswordError(message)
+      showAppToast(message, 'error')
     } finally {
       setPasswordSaving(false)
     }
@@ -234,13 +244,17 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       if (!result.ok) {
         onAlbumUpdated({ background_theme: previousBackground })
         setBackgroundError(result.error)
+        showAppToast(result.error, 'error')
         return false
       }
       onAlbumUpdated({ background_theme: result.background_theme })
+      showAppToast('Background saved.')
       return true
     } catch (e) {
       onAlbumUpdated({ background_theme: previousBackground })
-      setBackgroundError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setBackgroundError(message)
+      showAppToast(message, 'error')
       return false
     } finally {
       setBackgroundSaving(false)
@@ -265,6 +279,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       )
       if (!result.ok) {
         setMediaError(result.error)
+        showAppToast(result.error, 'error')
         return
       }
       setMediaRadius(result.media_radius)
@@ -277,8 +292,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         { forceGlobalRadius: false, resetRadiusOverrides, resetFilterOverrides },
       )
       setMediaSaved(true)
+      showAppToast('Media display saved.')
     } catch (e) {
-      setMediaError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setMediaError(message)
+      showAppToast(message, 'error')
     } finally {
       setMediaSaving(false)
     }
@@ -300,10 +318,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setBackgroundError('')
     if (!BACKGROUND_IMAGE_TYPES.has(file.type)) {
       setBackgroundError('Use a JPG, PNG, WebP, or AVIF image.')
+      showAppToast('Use a JPG, PNG, WebP, or AVIF image.', 'error')
       return
     }
     if (file.size > MAX_BACKGROUND_BYTES) {
-      setBackgroundError(`Background image must be ${formatFileSize(MAX_BACKGROUND_BYTES)} or smaller.`)
+      const message = `Background image must be ${formatFileSize(MAX_BACKGROUND_BYTES)} or smaller.`
+      setBackgroundError(message)
+      showAppToast(message, 'error')
       return
     }
 
@@ -312,11 +333,15 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const result = await uploadBackgroundRequest(album.slug, ownerToken, file)
       if (!result.ok) {
         setBackgroundError(result.error)
+        showAppToast(result.error, 'error')
         return
       }
       onAlbumUpdated({ background_theme: result.background_theme })
+      showAppToast('Background image uploaded.')
     } catch (e) {
-      setBackgroundError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setBackgroundError(message)
+      showAppToast(message, 'error')
     } finally {
       setBackgroundSaving(false)
       if (backgroundInputRef.current) backgroundInputRef.current.value = ''
@@ -337,6 +362,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       })
       if (!result.ok) {
         setCollectionError(result.error)
+        showAppToast(result.error, 'error')
         return
       }
       setCollectionUrl(`${window.location.origin}/c/${result.slug}`)
@@ -344,8 +370,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setCollectionDescription('')
       setCollectionSlug('')
       await loadCollections()
+      showAppToast('Collection created.')
     } catch (e) {
-      setCollectionError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setCollectionError(message)
+      showAppToast(message, 'error')
     } finally {
       setCollectionSaving(false)
     }
@@ -359,12 +388,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const result = await addAlbumToCollectionRequest(album.slug, ownerToken, collectionId)
       if (!result.ok) {
         setCollectionError(result.error)
+        showAppToast(result.error, 'error')
         return
       }
       setCollectionUrl(`${window.location.origin}/c/${result.slug}`)
       await loadCollections()
+      showAppToast('Album added to collection.')
     } catch (e) {
-      setCollectionError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setCollectionError(message)
+      showAppToast(message, 'error')
     } finally {
       setCollectionSaving(false)
     }
@@ -401,12 +434,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
 
     if (failed === photos.length) {
       setZipping(false)
+      showAppToast('Could not download album files.', 'error')
       return
     }
 
     const content = await zip.generateAsync({ type: 'blob' })
     saveAs(content, `${album.title}.zip`)
     setZipping(false)
+    showAppToast(failed > 0 ? `Download ready. ${failed} file${failed === 1 ? '' : 's'} skipped.` : 'Download ready.')
     setTimeout(() => setZipProgress(null), 2500)
   }
 
@@ -423,11 +458,15 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const result = await deleteAlbumRequest(album.slug, ownerToken)
       if (!result.ok) {
         setDeleteError(result.error)
+        showAppToast(result.error, 'error')
         return
       }
+      storeAppToast('Album deleted.')
       window.location.href = '/'
     } catch (e) {
-      setDeleteError(e instanceof Error ? e.message : 'Network error')
+      const message = e instanceof Error ? e.message : 'Network error'
+      setDeleteError(message)
+      showAppToast(message, 'error')
     } finally {
       setDeletingAlbum(false)
     }

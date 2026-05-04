@@ -5,11 +5,13 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:local": "node scripts/build-local.mjs",
     "cf:build": "opennextjs-cloudflare build",
     "deploy": "npm run cf:build && wrangler deploy",
     "preview": "npm run cf:build && wrangler dev",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@fontsource/playfair-display": "^5.2.8",

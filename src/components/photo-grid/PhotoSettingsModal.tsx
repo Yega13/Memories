@@ -1,0 +1,108 @@
+import { X } from 'lucide-react'
+import { MEDIA_DISPLAY_FILTER_OPTIONS, type MediaDisplayFilter } from '@/lib/media-display'
+import { type Album, type Photo } from '@/lib/supabase'
+
+export type PhotoFilterChoice = MediaDisplayFilter | 'global'
+
+type Props = {
+  album: Album
+  photo: Photo
+  radius: number
+  filter: PhotoFilterChoice
+  saving: boolean
+  error: string
+  radiusMax: number
+  onClose: () => void
+  onRadiusChange: (value: number) => void
+  onRadiusReset: () => void
+  onFilterChange: (value: PhotoFilterChoice) => void
+  onSave: () => void
+}
+
+export default function PhotoSettingsModal({
+  album,
+  photo,
+  radius,
+  filter,
+  saving,
+  error,
+  radiusMax,
+  onClose,
+  onRadiusChange,
+  onRadiusReset,
+  onFilterChange,
+  onSave,
+}: Props) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6" style={{ background: 'rgba(26, 43, 26, 0.42)', backdropFilter: 'blur(8px)' }} onMouseDown={(e) => {
+      if (e.target === e.currentTarget) onClose()
+    }}>
+      <div className="hush-modal-pop w-full max-w-sm rounded-2xl shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: '1px solid #E8E0D2' }}>
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: '#254F22' }}>Media settings</h2>
+            <p className="text-xs" style={{ color: '#7C5C3E' }}>{photo.caption || 'Only this item.'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-full p-2 transition hover:opacity-80" style={{ color: '#7C5C3E', background: '#F5F0E8' }} aria-label="Close media settings">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Corner radius</label>
+              <span className="text-xs font-mono" style={{ color: '#A89880' }}>{radius}px</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={radiusMax}
+              value={radius}
+              onChange={(e) => onRadiusChange(Number(e.target.value))}
+              className="w-full"
+            />
+            <input
+              type="number"
+              min={0}
+              max={radiusMax}
+              value={radius}
+              onChange={(e) => onRadiusChange(Number(e.target.value))}
+              className="mt-2 w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+              style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+            />
+            <button type="button" onClick={onRadiusReset} className="mt-2 text-xs" style={{ color: '#A89880' }}>
+              Use global radius
+            </button>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Filter</label>
+            <select
+              value={filter}
+              onChange={(e) => onFilterChange(e.target.value as PhotoFilterChoice)}
+              className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+              style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+            >
+              <option value="global">Use global ({MEDIA_DISPLAY_FILTER_OPTIONS.find((option) => option.value === (album.media_filter ?? 'none'))?.label ?? 'None'})</option>
+              {MEDIA_DISPLAY_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {error && <p className="text-xs" style={{ color: '#C0392B' }}>{error}</p>}
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="hush-press w-full rounded-lg py-2 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
+            style={{ background: '#254F22', color: '#FDFAF5' }}
+          >
+            {saving ? 'Saving...' : 'Save settings'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

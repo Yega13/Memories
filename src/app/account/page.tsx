@@ -8,7 +8,6 @@ import { hasAccountAccess } from '@/lib/access'
 import { isAccountAdmin } from '@/lib/auth'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
-import AccountToastViewport from './AccountToastViewport'
 import CollectionActions from './CollectionActions'
 import DeleteAlbumButton from './DeleteAlbumButton'
 import SignOutButton from './SignOutButton'
@@ -228,7 +227,6 @@ export default async function AccountPage({ searchParams }: Props) {
   return (
     <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
       <AccountNav />
-      <AccountToastViewport />
       <main className="px-4 py-10 sm:py-14">
         <div className="hush-container">
           <section

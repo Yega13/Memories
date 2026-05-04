@@ -11,6 +11,7 @@ import {
   type MediaKind,
 } from '@/lib/media'
 import { formatFileSize } from '@/lib/utils'
+import { showAppToast } from '@/components/AppToast'
 import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
 type R2UploadResult = { storage_path: string; url: string }
@@ -135,8 +136,13 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       })
     })
 
-    if (rejected.length) setUploadError(rejected.join(' Â· '))
-    else setUploadError('')
+    if (rejected.length) {
+      const message = rejected.join(' Â· ')
+      setUploadError(message)
+      showAppToast(message, 'error')
+    } else {
+      setUploadError('')
+    }
     setPending((prev) => [...prev, ...next])
   }
 
@@ -186,7 +192,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           storageBackend = 'r2'
         } catch (e) {
           console.error('R2 video upload failed:', e)
-          setUploadError(`Upload failed: ${(e as Error).message}`)
+          const message = `Upload failed: ${(e as Error).message}`
+          setUploadError(message)
+          showAppToast(message, 'error')
           setCurrentStatus('Upload failed', 0)
           setUploading(false)
           return
@@ -200,7 +208,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
         if (storageError) {
           console.error('Storage error:', storageError)
-          setUploadError(`Upload failed: ${storageError.message}`)
+          const message = `Upload failed: ${storageError.message}`
+          setUploadError(message)
+          showAppToast(message, 'error')
           setCurrentStatus('Upload failed', 0)
           setUploading(false)
           return
@@ -212,7 +222,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         const reachable = await verifyPublicImageUrl(publicUrl)
         if (!reachable) {
           await supabase.storage.from('Photos').remove([path])
-          setUploadError('Upload failed: the uploaded photo could not be loaded from storage. Please try again.')
+          const message = 'Upload failed: the uploaded photo could not be loaded from storage. Please try again.'
+          setUploadError(message)
+          showAppToast(message, 'error')
           setCurrentStatus('Upload failed', 0)
           setUploading(false)
           return
@@ -259,7 +271,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
       if (dbError) {
         console.error('DB error:', dbError)
-        setUploadError(`Save failed: ${dbError.message}`)
+        const message = `Save failed: ${dbError.message}`
+        setUploadError(message)
+        showAppToast(message, 'error')
         setCurrentStatus('Save failed', 0)
         setUploading(false)
         return
@@ -272,6 +286,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     setPending([])
     setUploading(false)
     setUploadStatus(null)
+    showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
     onPhotoAdded()
   }
 
