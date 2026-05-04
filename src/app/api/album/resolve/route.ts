@@ -31,8 +31,8 @@ type FullAlbum = {
   title: string
   description: string | null
   background_theme: string | null
-  media_radius: number
-  video_autoplay: boolean
+  media_radius?: number | null
+  video_autoplay?: boolean | null
   created_at: string
   retired_at: string | null
   user_id: string | null
@@ -42,6 +42,7 @@ type FullAlbum = {
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
 
 const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, created_at, retired_at, user_id, password_hash'
+const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -57,11 +58,7 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
 
   // Random-slug lookup first. The vast majority of URLs hit this branch.
-  const { data: byRandom } = await admin
-    .from('albums')
-    .select(SELECT_COLUMNS)
-    .eq('slug', slug)
-    .maybeSingle<FullAlbum>()
+  const byRandom = await lookupAlbum(admin, 'slug', slug)
 
   if (byRandom) {
     if (byRandom.retired_at) {
@@ -71,11 +68,7 @@ export async function GET(req: Request) {
   }
 
   // Custom-slug lookup. Tier-gated.
-  const { data: byCustom } = await admin
-    .from('albums')
-    .select(SELECT_COLUMNS)
-    .eq('custom_slug', slug)
-    .maybeSingle<FullAlbum>()
+  const byCustom = await lookupAlbum(admin, 'custom_slug', slug)
 
   if (!byCustom) {
     return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
@@ -141,14 +134,47 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     title: album.title,
     description: album.description,
     background_theme: album.background_theme,
-    media_radius: album.media_radius,
-    video_autoplay: album.video_autoplay,
+    media_radius: album.media_radius ?? 12,
+    video_autoplay: !!album.video_autoplay,
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,
   }
   await touchAlbumActivity(album.id)
   return NextResponse.json({ album: safe }, { headers: NO_STORE })
+}
+
+async function lookupAlbum(
+  admin: ReturnType<typeof createAdminClient>,
+  column: 'slug' | 'custom_slug',
+  value: string,
+): Promise<FullAlbum | null> {
+  const { data, error } = await admin
+    .from('albums')
+    .select(SELECT_COLUMNS)
+    .eq(column, value)
+    .maybeSingle<FullAlbum>()
+
+  if (data || !error) return data ?? null
+
+  // Backward compatibility for deployments where the app has updated before
+  // the media display migration has reached Supabase.
+  if (error.message.includes('media_radius') || error.message.includes('video_autoplay')) {
+    console.warn('[album/resolve] media settings columns missing; using legacy album projection')
+    const { data: legacy, error: legacyError } = await admin
+      .from('albums')
+      .select(LEGACY_SELECT_COLUMNS)
+      .eq(column, value)
+      .maybeSingle<Omit<FullAlbum, 'media_radius' | 'video_autoplay'>>()
+    if (legacyError) {
+      console.error('[album/resolve] legacy album lookup failed:', legacyError.message)
+      return null
+    }
+    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false } : null
+  }
+
+  console.error('[album/resolve] album lookup failed:', error.message)
+  return null
 }
 
 async function touchAlbumActivity(albumId: string) {

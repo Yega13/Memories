@@ -237,7 +237,7 @@ export default function Home() {
               <button
                 onClick={createAlbum}
                 disabled={loading}
-                className="hush-press hush-home-button w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
+                className="hush-home-button w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 disabled:opacity-50"
                 style={{ background: '#254F22', color: '#FDFAF5' }}
               >
                 {loading ? 'Creating your album...' : <>Create Album <ArrowRight className="w-4 h-4" /></>}
