@@ -44,7 +44,7 @@ function cssFilter(filter: MediaDisplayFilter | null | undefined): string {
 }
 
 function radiusFor(photo: Photo, album: Album): number {
-  return photo.display_radius ?? album.media_radius ?? 12
+  return album.media_radius ?? photo.display_radius ?? 12
 }
 
 function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
@@ -331,15 +331,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, on
                 style={{ background: '#000', borderRadius: previewRadiusFor(current), filter: cssFilter(previewFilterFor(current)) }}
               />
             ) : (
-              <div className="relative w-[min(92vw,1100px)] h-[70vh] overflow-hidden" style={{ borderRadius: previewRadiusFor(current) }}>
-                <Image
+              <div className="flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={current.url}
                   alt={current.caption || ''}
-                  fill
-                  sizes="100vw"
-                  className="object-contain"
-                  style={{ filter: cssFilter(previewFilterFor(current)) }}
-                  unoptimized
+                  className="block max-h-full max-w-full object-contain"
+                  style={{
+                    borderRadius: previewRadiusFor(current),
+                    filter: cssFilter(previewFilterFor(current)),
+                  }}
                   onError={() => markBroken(current.id)}
                 />
               </div>
