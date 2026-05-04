@@ -13,6 +13,7 @@ const eslintConfig = [
   {
     ignores: [
       ".next/**",
+      ".next-dev-local*/**",
       ".next-local*/**",
       ".open-next/**",
       ".wrangler/**",

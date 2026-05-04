@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -11,6 +11,16 @@ import AccountNavLink from '@/components/AccountNavLink'
 import FaqList from '@/components/FaqList'
 
 const NATURE_IMG = 'https://live.staticflickr.com/8731/17080622367_6c7109db98_h.jpg'
+
+const ALBUM_PLACEHOLDERS = [
+  'Wedding in Yerevan',
+  'Maya birthday night',
+  'Summer in Tuscany',
+  'Aram and Ani wedding',
+  'Family weekend in Dilijan',
+  'Graduation of Narek',
+  'Friends trip to Sevan',
+]
 
 const homeFaq = [
   {
@@ -98,8 +108,13 @@ const homeFaq = [
 export default function Home() {
   const router = useRouter()
   const [title, setTitle] = useState('')
+  const [albumPlaceholder, setAlbumPlaceholder] = useState(ALBUM_PLACEHOLDERS[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    setAlbumPlaceholder(ALBUM_PLACEHOLDERS[Math.floor(Math.random() * ALBUM_PLACEHOLDERS.length)])
+  }, [])
 
   async function createAlbum() {
     if (!title.trim()) { setError('Please give your album a name'); return }
@@ -194,7 +209,7 @@ export default function Home() {
               className="hush-home-eyebrow text-xs sm:text-sm font-medium uppercase mb-4 sm:mb-5 text-[#F3E0BC] lg:text-[#8B6F4E]"
               style={{ letterSpacing: '0.15em' }}
             >
-              No account Â· No friction
+              No account - No friction
             </p>
             <h1
               className="hush-home-title text-[#FDFAF5] lg:text-[#254F22] [text-shadow:0_2px_18px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
@@ -207,7 +222,7 @@ export default function Home() {
               className="hush-home-copy text-base sm:text-lg leading-relaxed mb-8 sm:mb-10 text-[#FBF4E4] lg:text-[#6B5A4E] [text-shadow:0_1px_10px_rgba(0,0,0,0.35)] lg:[text-shadow:none]"
               style={{ maxWidth: '420px' }}
             >
-              Create a shared album and let anyone add photos with just a link â€” no sign-up, no app download.
+              Create a shared album and let anyone add photos with just a link - no sign-up, no app download.
             </p>
 
             <div className="hush-album-create-card rounded-2xl hush-fluid-card" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.10)', maxWidth: '430px' }}>
@@ -216,7 +231,7 @@ export default function Home() {
               </label>
               <input
                 type="text"
-                placeholder="e.g. Summer in Tuscany Â· 2031"
+                placeholder={albumPlaceholder}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && createAlbum()}
@@ -242,7 +257,7 @@ export default function Home() {
           <div className="hush-home-visuals relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(460px, 36vw, 600px)' }}>
 
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '-4%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike â€” a Hushare album photo" fill sizes="200px" className="object-cover" draggable={false} />
+              <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike - a Hushare album photo" fill sizes="200px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
               </div>
@@ -256,14 +271,14 @@ export default function Home() {
             </div>
 
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '1deg', animationDelay: '-3.2s', top: '38%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
-              <Image src="/card3.jpg" alt="Quiet lake at dusk â€” a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" draggable={false} />
+              <Image src="/card3.jpg" alt="Quiet lake at dusk - a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
               </div>
             </div>
 
             <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-2deg', animationDelay: '-4.6s', bottom: '-6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
-              <Image src="/children.avif" alt="Children exploring outdoors â€” photo from a shared Hushare family album" fill sizes="190px" className="object-cover" draggable={false} />
+              <Image src="/children.avif" alt="Children exploring outdoors - photo from a shared Hushare family album" fill sizes="190px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>
               </div>
@@ -295,7 +310,7 @@ export default function Home() {
               captionColor: '#7C4A2D',
               caption: '"Name it."',
               label: 'First',
-              desc: 'Give your album a name. You get a private link you own â€” no account, no app.',
+              desc: 'Give your album a name. You get a private link you own - no account, no app.',
               image: 'https://i.pinimg.com/736x/86/28/a9/8628a90f3228558f5961af600d479b28.jpg',
               alt: 'Photo card representing a newly named Hushare album',
             },
@@ -317,7 +332,7 @@ export default function Home() {
               captionColor: '#1B3A6B',
               caption: '"Keep it."',
               label: 'As long as you want',
-              desc: 'Photos flow in from everyone who came. Free albums stay put â€” untouched for a year, they quietly retire. Active ones live on.',
+              desc: 'Photos flow in from everyone who came. Free albums stay put - untouched for a year, they quietly retire. Active ones live on.',
               image: 'https://i.pinimg.com/736x/23/97/bc/2397bc85b02c33168976049f3192fe46.jpg',
               alt: 'Photo card representing a kept Hushare album',
             },
@@ -426,7 +441,7 @@ export default function Home() {
               q: 'Do guests need an account to add photos?',
               a: (
                 <>
-                  No. Anyone with your album link can view and add photos â€” <strong className="font-semibold" style={{ color: '#254F22' }}>no sign-up</strong>, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.
+                  No. Anyone with your album link can view and add photos - <strong className="font-semibold" style={{ color: '#254F22' }}>no sign-up</strong>, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.
                 </>
               ),
             },
@@ -474,7 +489,7 @@ export default function Home() {
               q: 'Can I download all the photos at once?',
               a: (
                 <>
-                  Yes. From the owner view of your album, you can download the full collection as a single <strong className="font-semibold" style={{ color: '#254F22' }}>ZIP</strong> file â€” <strong className="font-semibold" style={{ color: '#254F22' }}>originals</strong>, not compressed thumbnails.
+                  Yes. From the owner view of your album, you can download the full collection as a single <strong className="font-semibold" style={{ color: '#254F22' }}>ZIP</strong> file - <strong className="font-semibold" style={{ color: '#254F22' }}>originals</strong>, not compressed thumbnails.
                 </>
               ),
             },
@@ -482,7 +497,7 @@ export default function Home() {
               q: 'Who can see my album?',
               a: (
                 <>
-                  Only people with the link. Albums are <strong className="font-semibold" style={{ color: '#254F22' }}>unlisted</strong> â€” they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.
+                  Only people with the link. Albums are <strong className="font-semibold" style={{ color: '#254F22' }}>unlisted</strong> - they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.
                 </>
               ),
             },
@@ -640,7 +655,7 @@ export default function Home() {
                     className="text-[10px] tracking-[0.2em] uppercase"
                     style={{ color: '#7C4A2D', fontFamily: 'var(--font-serif)' }}
                   >
-                    Kept Â· 2026
+                    Kept - 2026
                   </span>
                 </div>
 
@@ -648,7 +663,7 @@ export default function Home() {
                   className="text-[11px] uppercase mb-3"
                   style={{ color: '#8B6F4E', letterSpacing: '0.22em', fontWeight: 600 }}
                 >
-                  To â€” the keeper of moments
+                  To - the keeper of moments
                 </p>
 
                 <h2
@@ -698,7 +713,7 @@ export default function Home() {
                     fontFamily: 'var(--font-serif)',
                   }}
                 >
-                  â€” with love, from Yerevan
+                  - with love, from Yerevan
                 </p>
               </div>
             </div>
@@ -729,7 +744,7 @@ export default function Home() {
           <Link href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</Link>
           <Link href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</Link>
           <Link href="/terms" style={{ color: '#7C5C3E' }} className="hover:underline">Terms</Link>
-          <span style={{ color: '#B0A090' }}>Â© {new Date().getFullYear()} â€” your moments, always.</span>
+          <span style={{ color: '#B0A090' }}>(c) {new Date().getFullYear()} - your moments, always.</span>
         </div>
       </footer>
     </main>

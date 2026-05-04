@@ -2,8 +2,9 @@
   "name": "husher",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
+    "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/dev-local.mjs",
     "build": "next build",
     "build:local": "node scripts/build-local.mjs",
     "cf:build": "opennextjs-cloudflare build",

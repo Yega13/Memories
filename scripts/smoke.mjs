@@ -19,12 +19,21 @@ if (cronSecret) {
 
 let failed = 0
 
+console.log(`Smoke target: ${baseUrl}`)
+
 for (const check of checks) {
-  const res = await fetch(`${baseUrl}${check.path}`, {
-    method: check.method,
-    headers: check.headers,
-    cache: 'no-store',
-  })
+  let res
+  try {
+    res = await fetch(`${baseUrl}${check.path}`, {
+      method: check.method,
+      headers: check.headers,
+      cache: 'no-store',
+    })
+  } catch {
+    console.error(`FAIL ${check.name}: could not connect to ${baseUrl}`)
+    console.error('Start the app first with `npm run dev`, or set SMOKE_BASE_URL to the URL printed by Next.js.')
+    process.exit(1)
+  }
   const contentType = res.headers.get('content-type') || ''
   const okType = check.expect === 'json'
     ? contentType.includes('application/json')

@@ -86,7 +86,7 @@ export default function PasswordGate({ slug, title, onUnlocked }: Props) {
             className="w-full font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: '#FDFAF5', color: '#254F22' }}
           >
-            {submitting ? 'Checkingâ€¦' : 'Unlock album'}
+            {submitting ? 'Checking...' : 'Unlock album'}
           </button>
         </form>
       </div>

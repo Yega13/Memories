@@ -137,7 +137,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     })
 
     if (rejected.length) {
-      const message = rejected.join(' Â· ')
+      const message = rejected.join(' - ')
       setUploadError(message)
       showAppToast(message, 'error')
     } else {
@@ -310,7 +310,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           Drop photos or videos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
         </p>
         <p className="hush-upload-hint text-xs mt-1" style={{ color: '#A89880' }}>
-          JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} Â· MP4, MOV, WebM up to {formatFileSize(caps.video)}
+          JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} - MP4, MOV, WebM up to {formatFileSize(caps.video)}
         </p>
         <p className="mt-3 text-[11px] leading-relaxed" style={{ color: '#8B6F4E' }}>
           By uploading, you agree to the{' '}
@@ -415,10 +415,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
             <div className="rounded-xl p-3" style={{ background: '#F5F0E8', border: '1px solid #DDD5C5' }}>
               <div className="flex items-center justify-between gap-3 text-xs mb-2" style={{ color: '#7C5C3E' }}>
                 <span className="truncate">
-                  {uploadStatus.phase} Â· {uploadStatus.fileName}
+                  {uploadStatus.phase} - {uploadStatus.fileName}
                 </span>
                 <span className="flex-none">
-                  {uploadStatus.index}/{uploadStatus.total} Â· {uploadStatus.percent}%
+                  {uploadStatus.index}/{uploadStatus.total} - {uploadStatus.percent}%
                 </span>
               </div>
               <div className="h-2 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>

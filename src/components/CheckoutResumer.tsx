@@ -34,7 +34,7 @@ export default function CheckoutResumer() {
           className="text-base"
           style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
         >
-          Resuming your checkoutâ€¦
+          Resuming your checkout...
         </p>
       </div>
     </>
