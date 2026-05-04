@@ -11,7 +11,15 @@ const MAX_RADIUS = 10000
 const FILTERS = new Set<MediaDisplayFilter>(['none', 'warm', 'cool', 'mono', 'vintage', 'soft'])
 
 export async function POST(req: Request) {
-  let body: { slug?: string; owner_token?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter }
+  let body: {
+    slug?: string
+    owner_token?: string
+    media_radius?: number
+    video_autoplay?: boolean
+    media_filter?: MediaDisplayFilter
+    reset_radius_overrides?: boolean
+    reset_filter_overrides?: boolean
+  }
   try {
     body = await req.json()
   } catch {
@@ -72,13 +80,19 @@ export async function POST(req: Request) {
     )
   }
 
-  const { error: resetError } = await admin
-    .from('photos')
-    .update({ display_radius: null, display_filter: null })
-    .eq('album_id', album.id)
+  const resetPatch: { display_radius?: null; display_filter?: null } = {}
+  if (body.reset_radius_overrides) resetPatch.display_radius = null
+  if (body.reset_filter_overrides) resetPatch.display_filter = null
 
-  if (resetError) {
-    console.error('[album/media-settings] reset photo overrides failed:', resetError.message)
+  if (Object.keys(resetPatch).length > 0) {
+    const { error: resetError } = await admin
+      .from('photos')
+      .update(resetPatch)
+      .eq('album_id', album.id)
+
+    if (resetError) {
+      console.error('[album/media-settings] reset photo overrides failed:', resetError.message)
+    }
   }
 
   return NextResponse.json({ ok: true, ...updated }, { headers: NO_STORE })

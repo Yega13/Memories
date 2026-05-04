@@ -146,8 +146,11 @@ export default function AlbumPage() {
 
   const handleAlbumUpdated = (patch: Partial<Album>) => {
     setAlbum((prev) => (prev ? { ...prev, ...patch } : prev))
-    if (patch.media_radius != null || patch.media_filter != null) {
-      setPhotos((prev) => prev.map((photo) => ({ ...photo, display_radius: null, display_filter: null })))
+    if (patch.media_radius != null) {
+      setPhotos((prev) => prev.map((photo) => ({ ...photo, display_radius: null })))
+    }
+    if (patch.media_filter != null) {
+      setPhotos((prev) => prev.map((photo) => ({ ...photo, display_filter: null })))
     }
   }
 

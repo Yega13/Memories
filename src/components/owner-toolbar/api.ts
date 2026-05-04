@@ -63,6 +63,8 @@ export async function saveMediaSettingsRequest(
   mediaRadius: number,
   videoAutoplay: boolean,
   mediaFilter: MediaDisplayFilter,
+  resetRadiusOverrides: boolean,
+  resetFilterOverrides: boolean,
 ): Promise<{ ok: true; media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter } | { ok: false; error: string }> {
   const res = await fetch('/api/album/media-settings', {
     method: 'POST',
@@ -73,6 +75,8 @@ export async function saveMediaSettingsRequest(
       media_radius: mediaRadius,
       video_autoplay: videoAutoplay,
       media_filter: mediaFilter,
+      reset_radius_overrides: resetRadiusOverrides,
+      reset_filter_overrides: resetFilterOverrides,
     }),
   })
   const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter }>(res)

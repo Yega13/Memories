@@ -241,7 +241,17 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setMediaError('')
     setMediaSaved(false)
     try {
-      const result = await saveMediaSettingsRequest(album.slug, ownerToken, nextRadius, nextAutoplay, nextFilter)
+      const resetRadiusOverrides = nextRadius !== (album.media_radius ?? 12)
+      const resetFilterOverrides = nextFilter !== (album.media_filter ?? 'none')
+      const result = await saveMediaSettingsRequest(
+        album.slug,
+        ownerToken,
+        nextRadius,
+        nextAutoplay,
+        nextFilter,
+        resetRadiusOverrides,
+        resetFilterOverrides,
+      )
       if (!result.ok) {
         setMediaError(result.error)
         return
