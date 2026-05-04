@@ -40,13 +40,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const lightboxHistoryRef = useRef(false)
-  const longPressTimerRef = useRef<number | null>(null)
-  const suppressNextClickRef = useRef(false)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeAnimating, setSwipeAnimating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [deletePromptPhoto, setDeletePromptPhoto] = useState<Photo | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
   const [tileRadiusMaxById, setTileRadiusMaxById] = useState<Record<string, number>>({})
   const [lightboxMediaNode, setLightboxMediaNode] = useState<HTMLElement | null>(null)
@@ -103,31 +100,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       window.history.pushState({ hushLightbox: true }, '', window.location.href)
       lightboxHistoryRef.current = true
     }
-  }
-
-  function clearLongPressTimer() {
-    if (longPressTimerRef.current != null) {
-      window.clearTimeout(longPressTimerRef.current)
-      longPressTimerRef.current = null
-    }
-  }
-
-  function startLongPress(photo: Photo) {
-    if (!isOwner || !ownerToken) return
-    clearLongPressTimer()
-    longPressTimerRef.current = window.setTimeout(() => {
-      longPressTimerRef.current = null
-      suppressNextClickRef.current = true
-      setDeletePromptPhoto(photo)
-    }, 560)
-  }
-
-  function handleTileClick(index: number) {
-    if (suppressNextClickRef.current) {
-      suppressNextClickRef.current = false
-      return
-    }
-    openLightbox(index)
   }
 
   async function savePhotoSettings() {
@@ -292,8 +264,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  useEffect(() => () => clearLongPressTimer(), [])
-
   const current = lightbox !== null ? photos[lightbox] : null
 
   useEffect(() => {
@@ -392,17 +362,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 className={`${hover === 'lift' ? 'hush-hover-lift ' : ''}hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer`}
                 data-photo-id={photo.id}
                 style={{ background: '#EDE7DB', borderRadius: mediaRadius }}
-                onClick={() => handleTileClick(index)}
-                onTouchStart={() => startLongPress(photo)}
-                onTouchMove={clearLongPressTimer}
-                onTouchEnd={clearLongPressTimer}
-                onTouchCancel={clearLongPressTimer}
-                onMouseDown={() => startLongPress(photo)}
-                onMouseLeave={clearLongPressTimer}
-                onMouseUp={clearLongPressTimer}
-                onContextMenu={(e) => {
-                  if (isOwner) e.preventDefault()
-                }}
+                onClick={() => openLightbox(index)}
               >
                 {thumbSrc && !isBroken ? (
                   <Image
@@ -470,36 +430,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           )
         })}
       </div>
-
-      {deletePromptPhoto && isOwner && (
-        <div className="fixed inset-x-3 bottom-4 z-[70] mx-auto max-w-sm rounded-2xl p-3 shadow-2xl" style={{ background: '#FDFAF5', border: '1px solid #DDD5C5' }}>
-          <p className="px-1 text-sm font-semibold" style={{ color: '#254F22' }}>Delete this media?</p>
-          <p className="mt-1 px-1 text-xs" style={{ color: '#7C5C3E' }}>This removes only the selected picture or video.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              className="hush-press rounded-xl py-2 text-sm font-semibold"
-              style={{ background: '#F5F0E8', border: '1px solid #DDD5C5', color: '#254F22' }}
-              onClick={() => setDeletePromptPhoto(null)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={deleting === deletePromptPhoto.id}
-              className="hush-press rounded-xl py-2 text-sm font-semibold disabled:opacity-50"
-              style={{ background: '#C0392B', border: '1px solid #C0392B', color: '#FDFAF5' }}
-              onClick={() => {
-                const target = deletePromptPhoto
-                setDeletePromptPhoto(null)
-                void deletePhoto(target)
-              }}
-            >
-              {deleting === deletePromptPhoto.id ? 'Deleting...' : 'Delete'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {current && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={closeLightbox}>

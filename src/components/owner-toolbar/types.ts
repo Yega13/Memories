@@ -1,4 +1,4 @@
-export type SettingsSection = 'customization' | 'media' | 'files' | 'customUrl' | 'password' | 'collection'
+export type SettingsSection = 'customization' | 'media' | 'files' | 'danger' | 'customUrl' | 'password' | 'collection'
 
 export type CollectionSummary = {
   id: string

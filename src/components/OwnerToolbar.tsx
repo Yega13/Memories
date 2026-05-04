@@ -838,6 +838,21 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       <Download className="w-4 h-4" />
                       {zipping ? 'Zipping...' : `Download all (${photos.length})`}
                     </button>
+                  </div>
+                )}
+              </section>
+
+              <section style={settingsSectionStyle}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('danger')}>
+                  <Trash2 className="w-4 h-4" style={{ color: '#C0392B' }} />
+                  <span style={sectionTitle}>Delete album</span>
+                  <ChevronDown
+                    className="ml-auto w-4 h-4 transition-transform"
+                    style={{ color: '#A89880', transform: openSection === 'danger' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {openSection === 'danger' && (
+                  <div className="px-4 pb-4">
                     <div className="rounded-xl p-3" style={{ background: '#FFF7F4', border: '1px solid rgba(192,57,43,0.25)' }}>
                       <p className="text-xs leading-relaxed mb-3" style={{ color: '#7A2A1F' }}>
                         Delete this album, its photos and videos, and remove it from collections.

@@ -122,7 +122,16 @@ export default function Home() {
     setError('')
     const slug = generateSlug()
     const ownerToken = generateOwnerToken()
-    const { error: dbError } = await supabase.from('albums').insert({ slug, owner_token: ownerToken, title: title.trim() })
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    const baseAlbumRow = { slug, owner_token: ownerToken, title: title.trim() }
+    const albumRow = user ? { ...baseAlbumRow, user_id: user.id } : baseAlbumRow
+    let { error: dbError } = await supabase.from('albums').insert(albumRow)
+    if (dbError && user) {
+      const retry = await supabase.from('albums').insert(baseAlbumRow)
+      dbError = retry.error
+    }
     if (dbError) { setError('Something went wrong. Please try again.'); setLoading(false); return }
     router.push(`/${slug}?owner=${ownerToken}`)
   }

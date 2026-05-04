@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
@@ -29,14 +30,24 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('albums')
-    .select('owner_token')
+    .select('id, owner_token, user_id')
     .eq('slug', slug)
-    .maybeSingle<{ owner_token: string }>()
+    .maybeSingle<{ id: string; owner_token: string; user_id: string | null }>()
 
   if (error || !data) {
     return NextResponse.json({ isOwner: false }, { headers: NO_STORE })
   }
 
   const isOwner = timingSafeEqual(token, data.owner_token)
+  if (isOwner && !data.user_id) {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (user) {
+      await admin.from('albums').update({ user_id: user.id }).eq('id', data.id).is('user_id', null)
+    }
+  }
+
   return NextResponse.json({ isOwner }, { headers: NO_STORE })
 }
