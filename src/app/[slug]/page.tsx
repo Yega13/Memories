@@ -186,7 +186,7 @@ export default function AlbumPage() {
         </h1>
         <p className="opacity-90">This link may be invalid or the album was deleted.</p>
         <Link href="/" className="underline underline-offset-4 hover:opacity-80 transition">
-          Create a new album â†’
+          Create a new album
         </Link>
       </div>
     )

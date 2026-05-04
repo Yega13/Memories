@@ -1,5 +1,5 @@
 import type { CollectionSummary } from '@/components/owner-toolbar/types'
-import type { MediaDisplayFilter } from '@/lib/media-display'
+import type { MediaDisplayFilter, MediaHoverEffect } from '@/lib/media-display'
 
 async function jsonBody<T>(res: Response): Promise<T> {
   return (await res.json().catch(() => ({}))) as T
@@ -63,9 +63,10 @@ export async function saveMediaSettingsRequest(
   mediaRadius: number,
   videoAutoplay: boolean,
   mediaFilter: MediaDisplayFilter,
+  mediaHover: MediaHoverEffect,
   resetRadiusOverrides: boolean,
   resetFilterOverrides: boolean,
-): Promise<{ ok: true; media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter } | { ok: false; error: string }> {
+): Promise<{ ok: true; media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect } | { ok: false; error: string }> {
   const res = await fetch('/api/album/media-settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -75,15 +76,16 @@ export async function saveMediaSettingsRequest(
       media_radius: mediaRadius,
       video_autoplay: videoAutoplay,
       media_filter: mediaFilter,
+      media_hover: mediaHover,
       reset_radius_overrides: resetRadiusOverrides,
       reset_filter_overrides: resetFilterOverrides,
     }),
   })
-  const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter }>(res)
-  if (!res.ok || body.media_radius == null || body.video_autoplay == null || !body.media_filter) {
+  const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter; media_hover?: MediaHoverEffect }>(res)
+  if (!res.ok || body.media_radius == null || body.video_autoplay == null || !body.media_filter || !body.media_hover) {
     return { ok: false, error: body.error ?? `Save failed (${res.status})` }
   }
-  return { ok: true, media_radius: body.media_radius, video_autoplay: body.video_autoplay, media_filter: body.media_filter }
+  return { ok: true, media_radius: body.media_radius, video_autoplay: body.video_autoplay, media_filter: body.media_filter, media_hover: body.media_hover }
 }
 
 export async function uploadBackgroundRequest(

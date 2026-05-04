@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Lock } from 'lucide-react'
 
 type Props = {
@@ -13,6 +13,19 @@ export default function PasswordGate({ slug, title, onUnlocked }: Props) {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const clearedAutofillRef = useRef(false)
+  const passwordInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    function clearPaintedAutofill() {
+      if (!passwordInputRef.current || password) return
+      passwordInputRef.current.value = ''
+    }
+
+    clearPaintedAutofill()
+    const timers = [50, 250, 800].map((delay) => window.setTimeout(clearPaintedAutofill, delay))
+    return () => timers.forEach((timer) => window.clearTimeout(timer))
+  }, [password, slug])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -62,11 +75,24 @@ export default function PasswordGate({ slug, title, onUnlocked }: Props) {
         </h1>
 
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          <input type="text" name="username" autoComplete="username" value={slug} readOnly hidden />
           <input
-            type="password"
+            type={password ? 'password' : 'text'}
             autoFocus
+            ref={passwordInputRef}
+            name={`hush-visitor-password-${slug}`}
+            autoComplete="new-password"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
             placeholder="Enter password"
             value={password}
+            onFocus={(e) => {
+              if (clearedAutofillRef.current) return
+              clearedAutofillRef.current = true
+              e.currentTarget.value = ''
+              setPassword('')
+            }}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full rounded-xl px-4 py-3 focus:outline-none text-base"
             style={{

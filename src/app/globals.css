@@ -62,9 +62,6 @@ a:hover,
   text-decoration-line: none !important;
 }
 
-/* Custom scrollbar — Hushare palette. Applied to the root scroller and any
-   nested overflow regions so styling stays consistent. Firefox uses
-   scrollbar-* properties; Chromium/WebKit use the ::-webkit-scrollbar tree. */
 @layer utilities {
   .hush-motion {
     transition:

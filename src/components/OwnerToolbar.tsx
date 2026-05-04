@@ -5,7 +5,7 @@ import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, Lo
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
-import { MEDIA_DISPLAY_FILTER_OPTIONS, type MediaDisplayFilter } from '@/lib/media-display'
+import { MEDIA_DISPLAY_FILTER_OPTIONS, MEDIA_HOVER_EFFECT_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
 import { showAppToast, storeAppToast } from '@/components/AppToast'
@@ -87,6 +87,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [videoAutoplay, setVideoAutoplay] = useState(!!album.video_autoplay)
   const [mediaFilter, setMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
   const [savedMediaFilter, setSavedMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
+  const [mediaHover, setMediaHover] = useState<MediaHoverEffect>(album.media_hover ?? 'none')
   const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
   const [mediaSaved, setMediaSaved] = useState(false)
@@ -148,13 +149,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setVideoAutoplay(!!album.video_autoplay)
       setMediaFilter(album.media_filter ?? 'none')
       setSavedMediaFilter(album.media_filter ?? 'none')
+      setMediaHover(album.media_hover ?? 'none')
       setMediaError('')
       setMediaSaved(false)
       setOpenSection(null)
       setDeleteConfirm(false)
       setDeleteError('')
     }
-  }, [album.custom_slug, album.media_filter, album.media_radius, album.video_autoplay, showSettings])
+  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.video_autoplay, showSettings])
 
   useEffect(() => {
     if (showSettings && canUseCollections) void loadCollections()
@@ -263,7 +265,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter) {
+  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter, nextHover = mediaHover) {
     setMediaSaving(true)
     setMediaError('')
     setMediaSaved(false)
@@ -276,6 +278,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         nextRadius,
         nextAutoplay,
         nextFilter,
+        nextHover,
         resetRadiusOverrides,
         resetFilterOverrides,
       )
@@ -289,8 +292,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setVideoAutoplay(result.video_autoplay)
       setMediaFilter(result.media_filter)
       setSavedMediaFilter(result.media_filter)
+      setMediaHover(result.media_hover)
       onAlbumUpdated(
-        { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter },
+        { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter, media_hover: result.media_hover },
         { forceGlobalRadius: false, resetRadiusOverrides, resetFilterOverrides },
       )
       setMediaSaved(true)
@@ -741,6 +745,25 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                         style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                       >
                         {MEDIA_DISPLAY_FILTER_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Hover effect</label>
+                      <select
+                        value={mediaHover}
+                        onChange={(e) => {
+                          const nextHover = e.target.value as MediaHoverEffect
+                          setMediaHover(nextHover)
+                          onAlbumUpdated({ media_hover: nextHover })
+                          setMediaSaved(false)
+                        }}
+                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                        style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+                      >
+                        {MEDIA_HOVER_EFFECT_OPTIONS.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>

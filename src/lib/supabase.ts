@@ -1,7 +1,7 @@
 ﻿import { createBrowserClient } from '@supabase/ssr'
-import type { MediaDisplayFilter } from '@/lib/media-display'
+import type { MediaDisplayFilter, MediaHoverEffect } from '@/lib/media-display'
 
-export type { MediaDisplayFilter } from '@/lib/media-display'
+export type { MediaDisplayFilter, MediaHoverEffect } from '@/lib/media-display'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
@@ -18,6 +18,7 @@ export type Album = {
   media_radius?: number
   video_autoplay?: boolean
   media_filter?: MediaDisplayFilter
+  media_hover?: MediaHoverEffect
   password_protected?: boolean
   upload_caps?: { image: number; video: number }
   created_at: string

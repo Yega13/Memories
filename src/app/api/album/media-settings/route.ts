@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { clampMediaRadius, isMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
+import { clampMediaRadius, isMediaDisplayFilter, isMediaHoverEffect, type MediaDisplayFilter, type MediaHoverEffect } from '@/lib/media-display'
 import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
@@ -14,6 +14,7 @@ export async function POST(req: Request) {
     media_radius?: number
     video_autoplay?: boolean
     media_filter?: MediaDisplayFilter
+    media_hover?: MediaHoverEffect
     reset_radius_overrides?: boolean
     reset_filter_overrides?: boolean
   }
@@ -29,6 +30,8 @@ export async function POST(req: Request) {
   const videoAutoplay = Boolean(body.video_autoplay)
   const rawMediaFilter = body.media_filter ?? 'none'
   const mediaFilter = isMediaDisplayFilter(rawMediaFilter) ? rawMediaFilter : null
+  const rawMediaHover = body.media_hover ?? 'none'
+  const mediaHover = isMediaHoverEffect(rawMediaHover) ? rawMediaHover : null
 
   if (!slug || !token) {
     return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
@@ -38,6 +41,9 @@ export async function POST(req: Request) {
   }
   if (!mediaFilter) {
     return NextResponse.json({ error: 'Invalid filter' }, { status: 400, headers: NO_STORE })
+  }
+  if (!mediaHover) {
+    return NextResponse.json({ error: 'Invalid hover effect' }, { status: 400, headers: NO_STORE })
   }
 
   const admin = createAdminClient()
@@ -56,10 +62,10 @@ export async function POST(req: Request) {
 
   const { data: updated, error } = await admin
     .from('albums')
-    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter })
+    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter, media_hover: mediaHover })
     .eq('id', album.id)
-    .select('media_radius, video_autoplay, media_filter')
-    .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter }>()
+    .select('media_radius, video_autoplay, media_filter, media_hover')
+    .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect }>()
 
   if (error) {
     console.error('[album/media-settings] update failed:', error.message)
@@ -67,6 +73,7 @@ export async function POST(req: Request) {
       error.message.includes('media_radius') ||
       error.message.includes('video_autoplay') ||
       error.message.includes('media_filter') ||
+      error.message.includes('media_hover') ||
       error.message.includes('schema cache')
     return NextResponse.json(
       {

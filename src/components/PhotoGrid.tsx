@@ -29,6 +29,14 @@ function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
   return photo.display_filter ?? album.media_filter ?? 'none'
 }
 
+function mediaImageClass(hover: Album['media_hover']): string {
+  const classes = ['object-cover']
+  if (hover !== 'none') classes.push('transition')
+  if (hover === 'zoom') classes.push('group-hover:scale-105')
+  if (hover === 'mono') classes.push('group-hover:grayscale')
+  return classes.join(' ')
+}
+
 export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const [lightbox, setLightbox] = useState<number | null>(null)
@@ -260,10 +268,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           const isBroken = broken.has(photo.id)
           const mediaRadius = previewRadiusFor(photo)
           const filter = cssMediaDisplayFilter(previewFilterFor(photo))
+          const hover = album.media_hover ?? 'none'
           return (
             <div key={photo.id}>
               <div
-                className="hush-hover-lift hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer"
+                className={`${hover === 'lift' ? 'hush-hover-lift ' : ''}hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer`}
                 data-photo-id={photo.id}
                 style={{ background: '#EDE7DB', borderRadius: mediaRadius }}
                 onClick={() => setLightbox(index)}
@@ -274,7 +283,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                     alt={photo.caption || ''}
                     fill
                     sizes="(min-width: 1536px) 16vw, (min-width: 1280px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
-                    className="object-cover transition group-hover:scale-105"
+                    className={mediaImageClass(hover)}
                     style={{ filter }}
                     unoptimized
                     onError={() => {
@@ -296,7 +305,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       className="absolute inset-0 flex items-center justify-center pointer-events-none"
                     >
                       <span
-                        className="rounded-full flex items-center justify-center transition group-hover:scale-110"
+                        className={`rounded-full flex items-center justify-center${hover === 'zoom' ? ' transition group-hover:scale-110' : ''}`}
                         style={{
                           width: 44,
                           height: 44,
@@ -319,11 +328,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   </>
                 )}
 
-                <div className="absolute inset-0 transition" style={{ background: 'rgba(0,0,0,0)' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,0,0,0.18)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'rgba(0,0,0,0)')}
-                />
-                {(photo.caption || photo.author_name) && (
+                {hover === 'fade' && (
+                  <div className="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none" style={{ background: 'rgba(0,0,0,0.18)' }} />
+                )}
+                {hover !== 'none' && (photo.caption || photo.author_name) && (
                   <div className="absolute bottom-0 left-0 right-0 p-2 translate-y-full group-hover:translate-y-0 transition"
                     style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.85), transparent)' }}>
                     {photo.caption && <p className="text-xs font-medium truncate" style={{ color: '#FDFAF5' }}>{photo.caption}</p>}
