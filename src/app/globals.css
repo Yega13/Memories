@@ -177,26 +177,22 @@ a:hover,
   .hush-reorder-ring::after {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: 2px;
     z-index: 3;
     border-radius: inherit;
-    padding: 3px;
     pointer-events: none;
-    background: repeating-conic-gradient(#254F22 0deg 9deg, transparent 9deg 18deg);
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    animation: hush-reorder-border 1.4s linear infinite;
+    background:
+      repeating-linear-gradient(90deg, #254F22 0 2px, transparent 2px 7px) top left / 200% 2px repeat-x,
+      repeating-linear-gradient(90deg, #254F22 0 2px, transparent 2px 7px) bottom right / 200% 2px repeat-x,
+      repeating-linear-gradient(0deg, #254F22 0 2px, transparent 2px 7px) left bottom / 2px 200% repeat-y,
+      repeating-linear-gradient(0deg, #254F22 0 2px, transparent 2px 7px) right top / 2px 200% repeat-y;
+    animation: hush-reorder-border 850ms linear infinite;
   }
 
   .hush-reorder-ring-solid::after {
-    padding: 0;
+    inset: 0;
     border: 3px solid #254F22;
     background: transparent;
-    -webkit-mask: none;
-    mask: none;
     animation: none;
   }
 
@@ -971,7 +967,11 @@ html {
 
 @keyframes hush-reorder-border {
   to {
-    transform: rotate(360deg);
+    background-position:
+      14px 0,
+      -14px 100%,
+      0 -14px,
+      100% 14px;
   }
 }
 
