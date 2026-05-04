@@ -38,6 +38,7 @@ function mediaImageClass(hover: Album['media_hover']): string {
 
 export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
+  const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
@@ -168,6 +169,28 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const next = useCallback(() => {
     setLightbox((cur) => (cur === null ? null : cur === photos.length - 1 ? 0 : cur + 1))
   }, [photos.length])
+
+  function handleSwipeStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length !== 1) return
+    const touch = e.touches[0]
+    swipeRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() }
+  }
+
+  function handleSwipeEnd(e: React.TouchEvent<HTMLDivElement>) {
+    const start = swipeRef.current
+    swipeRef.current = null
+    if (!start || e.changedTouches.length !== 1) return
+
+    const touch = e.changedTouches[0]
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    const elapsed = Date.now() - start.time
+    const isHorizontalSwipe = Math.abs(deltaX) >= 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25
+    if (!isHorizontalSwipe || elapsed > 900) return
+
+    if (deltaX < 0) next()
+    else prev()
+  }
 
   useEffect(() => {
     if (lightbox === null) return
@@ -386,7 +409,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
             <ChevronRight className="w-8 h-8" />
           </button>
 
-          <div className="hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4"
+            style={{ touchAction: 'pan-y' }}
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleSwipeStart}
+            onTouchEnd={handleSwipeEnd}
+          >
             {broken.has(current.id) ? (
               <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }}>
                 <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
