@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
-import { generateSlug, generateOwnerToken } from '@/lib/utils'
 import { ArrowRight } from 'lucide-react'
 import AccountNavLink from '@/components/AccountNavLink'
 import FaqList from '@/components/FaqList'
@@ -120,20 +118,23 @@ export default function Home() {
     if (!title.trim()) { setError('Please give your album a name'); return }
     setLoading(true)
     setError('')
-    const slug = generateSlug()
-    const ownerToken = generateOwnerToken()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    const baseAlbumRow = { slug, owner_token: ownerToken, title: title.trim() }
-    const albumRow = user ? { ...baseAlbumRow, user_id: user.id } : baseAlbumRow
-    let { error: dbError } = await supabase.from('albums').insert(albumRow)
-    if (dbError && user) {
-      const retry = await supabase.from('albums').insert(baseAlbumRow)
-      dbError = retry.error
+    try {
+      const res = await fetch('/api/album/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim() }),
+      })
+      const body = await res.json().catch(() => ({})) as { slug?: string; owner_token?: string; error?: string }
+      if (!res.ok || !body.slug || !body.owner_token) {
+        setError(body.error ?? 'Something went wrong. Please try again.')
+        setLoading(false)
+        return
+      }
+      router.push(`/${body.slug}?owner=${body.owner_token}`)
+    } catch {
+      setError('Something went wrong. Please try again.')
+      setLoading(false)
     }
-    if (dbError) { setError('Something went wrong. Please try again.'); setLoading(false); return }
-    router.push(`/${slug}?owner=${ownerToken}`)
   }
 
   return (
