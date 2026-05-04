@@ -118,6 +118,7 @@ export default function AlbumPage() {
       .from('photos')
       .select('*')
       .eq('album_id', albumId)
+      .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
 
     setPhotos(data || [])
@@ -151,6 +152,10 @@ export default function AlbumPage() {
   const handlePhotoUpdated = useCallback((photoId: string, patch: Partial<Photo>) => {
     if ('display_radius' in patch) setForceGlobalRadius(false)
     setPhotos((prev) => prev.map((photo) => (photo.id === photoId ? { ...photo, ...patch } : photo)))
+  }, [])
+
+  const handlePhotosReordered = useCallback((nextPhotos: Photo[]) => {
+    setPhotos(nextPhotos)
   }, [])
 
   if (loading) {
@@ -221,6 +226,7 @@ export default function AlbumPage() {
           onRadiusMaxChange={setMediaRadiusMax}
           onPhotoDeleted={handlePhotoDeleted}
           onPhotoUpdated={handlePhotoUpdated}
+          onPhotosReordered={handlePhotosReordered}
         />
       </div>
     </main>

@@ -43,4 +43,5 @@ export type Photo = {
   duration_seconds: number | null
   display_radius: number | null
   display_filter: MediaDisplayFilter | null
+  sort_order: number | null
 }

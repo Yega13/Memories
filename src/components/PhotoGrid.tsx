@@ -19,6 +19,7 @@ type Props = {
   onRadiusMaxChange: (max: number) => void
   onPhotoDeleted: (id: string) => void
   onPhotoUpdated: (id: string, patch: Partial<Photo>) => void
+  onPhotosReordered: (photos: Photo[]) => void
 }
 
 function radiusFor(photo: Photo, album: Album, forceGlobalRadius = false): number {
@@ -36,22 +37,58 @@ function mediaImageClass(hover: Album['media_hover']): string {
   return classes.join(' ')
 }
 
+type Point = { x: number; y: number }
+
 function touchDistance(touches: React.TouchList): number {
   const first = touches[0]
   const second = touches[1]
   return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY)
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated }: Props) {
+function touchMidpoint(touches: React.TouchList): Point {
+  const first = touches[0]
+  const second = touches[1]
+  return {
+    x: (first.clientX + second.clientX) / 2,
+    y: (first.clientY + second.clientY) / 2,
+  }
+}
+
+function pointFromEvent(e: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>): Point | null {
+  if ('touches' in e) {
+    const touch = e.changedTouches[0] ?? e.touches[0]
+    return touch ? { x: touch.clientX, y: touch.clientY } : null
+  }
+  return { x: e.clientX, y: e.clientY }
+}
+
+function pointRelativeToCenter(point: Point, node: HTMLElement): Point {
+  const rect = node.getBoundingClientRect()
+  return {
+    x: point.x - (rect.left + rect.width / 2),
+    y: point.y - (rect.top + rect.height / 2),
+  }
+}
+
+export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const lightboxHistoryRef = useRef(false)
-  const pinchRef = useRef<{ distance: number; scale: number } | null>(null)
+  const pinchRef = useRef<{ distance: number; scale: number; pan: Point; center: Point } | null>(null)
+  const panGestureRef = useRef<{ point: Point; pan: Point; moved: boolean } | null>(null)
+  const panRef = useRef<Point>({ x: 0, y: 0 })
+  const reorderTimerRef = useRef<number | null>(null)
+  const reorderDragIdRef = useRef<string | null>(null)
+  const reorderSuppressedClickRef = useRef(false)
   const lastTapRef = useRef(0)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [zoomScale, setZoomScale] = useState(1)
+  const [zoomPan, setZoomPan] = useState<Point>({ x: 0, y: 0 })
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeAnimating, setSwipeAnimating] = useState(false)
+  const [reorderDraggingId, setReorderDraggingId] = useState<string | null>(null)
+  const [reorderTargetId, setReorderTargetId] = useState<string | null>(null)
+  const [reorderSaving, setReorderSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
   const [tileRadiusMaxById, setTileRadiusMaxById] = useState<Record<string, number>>({})
@@ -95,6 +132,25 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setSettingsRadius(Math.max(0, Math.min(max, Math.round(value))))
   }
 
+  const setZoomPanValue = useCallback((nextPan: Point) => {
+    panRef.current = nextPan
+    setZoomPan(nextPan)
+  }, [])
+
+  const resetZoom = useCallback(() => {
+    setZoomScale(1)
+    setZoomPanValue({ x: 0, y: 0 })
+    pinchRef.current = null
+    panGestureRef.current = null
+  }, [setZoomPanValue])
+
+  function clearReorderTimer() {
+    if (reorderTimerRef.current != null) {
+      window.clearTimeout(reorderTimerRef.current)
+      reorderTimerRef.current = null
+    }
+  }
+
   const closeLightbox = useCallback(() => {
     setLightbox(null)
     if (lightboxHistoryRef.current) {
@@ -111,17 +167,32 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }
   }
 
-  function toggleZoom() {
-    setZoomScale((currentScale) => (currentScale > 1 ? 1 : 2))
+  function toggleZoom(e?: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>) {
+    const mediaNode = lightboxMediaNode
+    if (zoomScale > 1 || !mediaNode) {
+      resetZoom()
+      return
+    }
+
+    const point = e ? pointFromEvent(e) : null
+    const nextScale = 2
+    setZoomScale(nextScale)
+    if (point) {
+      const relative = pointRelativeToCenter(point, mediaNode)
+      setZoomPanValue({
+        x: -relative.x * (nextScale - 1),
+        y: -relative.y * (nextScale - 1),
+      })
+    }
   }
 
   function mediaZoomStyle(photo: Photo): React.CSSProperties {
     return {
       borderRadius: previewRadiusFor(photo),
       filter: cssMediaDisplayFilter(previewFilterFor(photo)),
-      transform: `scale(${zoomScale})`,
+      transform: `translate3d(${zoomPan.x}px, ${zoomPan.y}px, 0) scale(${zoomScale})`,
       transformOrigin: 'center',
-      transition: 'transform 160ms ease, filter 180ms ease',
+      transition: pinchRef.current || panGestureRef.current ? 'filter 180ms ease' : 'transform 160ms ease, filter 180ms ease',
       touchAction: zoomScale > 1 ? 'none' : 'pan-y',
       cursor: zoomScale > 1 ? 'zoom-out' : 'zoom-in',
     }
@@ -130,24 +201,76 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function handleMediaTouchStart(e: React.TouchEvent<HTMLElement>) {
     if (e.touches.length === 2) {
       e.stopPropagation()
-      pinchRef.current = { distance: touchDistance(e.touches), scale: zoomScale }
+      const mediaNode = e.currentTarget
+      pinchRef.current = {
+        distance: touchDistance(e.touches),
+        scale: zoomScale,
+        pan: panRef.current,
+        center: pointRelativeToCenter(touchMidpoint(e.touches), mediaNode),
+      }
+      panGestureRef.current = null
       return
     }
-    if (zoomScale > 1) e.stopPropagation()
+    if (zoomScale > 1) {
+      e.stopPropagation()
+      if (e.cancelable) e.preventDefault()
+      const touch = e.touches[0]
+      if (touch) panGestureRef.current = { point: { x: touch.clientX, y: touch.clientY }, pan: panRef.current, moved: false }
+    }
   }
 
   function handleMediaTouchMove(e: React.TouchEvent<HTMLElement>) {
-    if (!pinchRef.current || e.touches.length !== 2) return
-    e.stopPropagation()
-    if (e.cancelable) e.preventDefault()
-    const nextScale = pinchRef.current.scale * (touchDistance(e.touches) / pinchRef.current.distance)
-    setZoomScale(Math.max(1, Math.min(4, nextScale)))
+    if (pinchRef.current && e.touches.length === 2) {
+      e.stopPropagation()
+      if (e.cancelable) e.preventDefault()
+      const nextScale = Math.max(1, Math.min(4, pinchRef.current.scale * (touchDistance(e.touches) / pinchRef.current.distance)))
+      const ratio = nextScale / Math.max(1, pinchRef.current.scale)
+      const startPan = pinchRef.current.pan
+      const center = pinchRef.current.center
+      setZoomScale(nextScale)
+      setZoomPanValue({
+        x: center.x - (center.x - startPan.x) * ratio,
+        y: center.y - (center.y - startPan.y) * ratio,
+      })
+      return
+    }
+
+    if (panGestureRef.current && e.touches.length === 1 && zoomScale > 1) {
+      e.stopPropagation()
+      if (e.cancelable) e.preventDefault()
+      const touch = e.touches[0]
+      const deltaX = touch.clientX - panGestureRef.current.point.x
+      const deltaY = touch.clientY - panGestureRef.current.point.y
+      if (Math.hypot(deltaX, deltaY) > 6) panGestureRef.current.moved = true
+      setZoomPanValue({
+        x: panGestureRef.current.pan.x + deltaX,
+        y: panGestureRef.current.pan.y + deltaY,
+      })
+    }
   }
 
   function handleMediaTouchEnd(e: React.TouchEvent<HTMLElement>) {
     if (pinchRef.current) {
       e.stopPropagation()
       if (e.touches.length < 2) pinchRef.current = null
+      if (zoomScale <= 1.02) resetZoom()
+      return
+    }
+
+    if (panGestureRef.current) {
+      e.stopPropagation()
+      const wasTap = !panGestureRef.current.moved
+      panGestureRef.current = null
+      if (wasTap) {
+        const now = Date.now()
+        if (now - lastTapRef.current < 280) {
+          if (e.cancelable) e.preventDefault()
+          toggleZoom(e)
+          lastTapRef.current = 0
+        } else {
+          lastTapRef.current = now
+        }
+      }
       return
     }
 
@@ -155,11 +278,37 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (now - lastTapRef.current < 280) {
       e.stopPropagation()
       if (e.cancelable) e.preventDefault()
-      toggleZoom()
+      toggleZoom(e)
       lastTapRef.current = 0
       return
     }
     lastTapRef.current = now
+  }
+
+  function handleMediaMouseDown(e: React.MouseEvent<HTMLElement>) {
+    if (zoomScale <= 1) return
+    e.stopPropagation()
+    e.preventDefault()
+    panGestureRef.current = { point: { x: e.clientX, y: e.clientY }, pan: panRef.current, moved: false }
+  }
+
+  function handleMediaMouseMove(e: React.MouseEvent<HTMLElement>) {
+    if (!panGestureRef.current || zoomScale <= 1) return
+    e.stopPropagation()
+    e.preventDefault()
+    if (Math.hypot(e.clientX - panGestureRef.current.point.x, e.clientY - panGestureRef.current.point.y) > 6) {
+      panGestureRef.current.moved = true
+    }
+    setZoomPanValue({
+      x: panGestureRef.current.pan.x + e.clientX - panGestureRef.current.point.x,
+      y: panGestureRef.current.pan.y + e.clientY - panGestureRef.current.point.y,
+    })
+  }
+
+  function handleMediaMouseUp(e: React.MouseEvent<HTMLElement>) {
+    if (!panGestureRef.current) return
+    e.stopPropagation()
+    panGestureRef.current = null
   }
 
   async function savePhotoSettings() {
@@ -241,6 +390,96 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     })
   }
 
+  async function savePhotoOrder(nextPhotos: Photo[]) {
+    if (!ownerToken) return
+    const previousPhotos = photos
+    onPhotosReordered(nextPhotos)
+    setReorderSaving(true)
+
+    try {
+      const res = await fetch('/api/album/photos/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, owner_token: ownerToken, photo_ids: nextPhotos.map((photo) => photo.id) }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        onPhotosReordered(previousPhotos)
+        showAppToast(body.error ?? `Could not save order (${res.status})`, 'error')
+      } else {
+        showAppToast('Media order saved.')
+      }
+    } catch (e) {
+      onPhotosReordered(previousPhotos)
+      showAppToast(e instanceof Error ? e.message : 'Could not save order', 'error')
+    } finally {
+      setReorderSaving(false)
+    }
+  }
+
+  function movePhoto(dragId: string, targetId: string) {
+    if (dragId === targetId) return
+    const fromIndex = photos.findIndex((photo) => photo.id === dragId)
+    const toIndex = photos.findIndex((photo) => photo.id === targetId)
+    if (fromIndex < 0 || toIndex < 0) return
+
+    const nextPhotos = [...photos]
+    const [dragged] = nextPhotos.splice(fromIndex, 1)
+    nextPhotos.splice(toIndex, 0, dragged)
+    void savePhotoOrder(nextPhotos.map((photo, index) => ({ ...photo, sort_order: index })))
+  }
+
+  function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
+    if (!isOwner || !ownerToken || reorderSaving) return
+    clearReorderTimer()
+    const tile = e.currentTarget
+    const pointerId = e.pointerId
+    reorderDragIdRef.current = photo.id
+    reorderTimerRef.current = window.setTimeout(() => {
+      reorderTimerRef.current = null
+      reorderSuppressedClickRef.current = true
+      setReorderDraggingId(photo.id)
+      setReorderTargetId(photo.id)
+      try {
+        if (tile.isConnected) tile.setPointerCapture(pointerId)
+      } catch {
+      }
+    }, 520)
+  }
+
+  function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!reorderDragIdRef.current || !reorderDraggingId) return
+    e.preventDefault()
+    const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-photo-id]')
+    const targetId = target?.dataset.photoId
+    if (targetId) setReorderTargetId(targetId)
+  }
+
+  function finishReorder(e: React.PointerEvent<HTMLDivElement>) {
+    clearReorderTimer()
+    const dragId = reorderDraggingId
+    const targetId = reorderTargetId
+    reorderDragIdRef.current = null
+    setReorderDraggingId(null)
+    setReorderTargetId(null)
+    if (dragId) {
+      e.preventDefault()
+      reorderSuppressedClickRef.current = true
+      window.setTimeout(() => {
+        reorderSuppressedClickRef.current = false
+      }, 0)
+      if (targetId) movePhoto(dragId, targetId)
+    }
+  }
+
+  function handleTileClick(index: number) {
+    if (reorderSuppressedClickRef.current) {
+      reorderSuppressedClickRef.current = false
+      return
+    }
+    openLightbox(index)
+  }
+
   const prev = useCallback(() => {
     setLightbox((cur) => (cur === null ? null : cur === 0 ? photos.length - 1 : cur - 1))
   }, [photos.length])
@@ -250,6 +489,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }, [photos.length])
 
   function handleSwipeStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (zoomScale > 1 || e.touches.length !== 1) {
+      swipeRef.current = null
+      return
+    }
     if (e.touches.length !== 1) return
     const touch = e.touches[0]
     swipeRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() }
@@ -258,6 +501,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function handleSwipeMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (zoomScale > 1 || e.touches.length !== 1) return
     const start = swipeRef.current
     if (!start || e.touches.length !== 1) return
 
@@ -270,6 +514,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function handleSwipeEnd(e: React.TouchEvent<HTMLDivElement>) {
+    if (zoomScale > 1) {
+      swipeRef.current = null
+      setSwipeOffset(0)
+      return
+    }
     const start = swipeRef.current
     swipeRef.current = null
     if (!start || e.changedTouches.length !== 1) {
@@ -324,6 +573,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
+  useEffect(() => () => clearReorderTimer(), [])
+
   const current = lightbox !== null ? photos[lightbox] : null
 
   useEffect(() => {
@@ -360,11 +611,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   useEffect(() => {
     setLightboxMediaNode(null)
     setLightboxRadiusMax(null)
-    setZoomScale(1)
-    pinchRef.current = null
+    resetZoom()
     setSwipeAnimating(false)
     setSwipeOffset(0)
-  }, [current?.id])
+    lastTapRef.current = 0
+  }, [current?.id, resetZoom])
 
   useEffect(() => {
     const maybeMediaNode = lightboxMediaNode
@@ -418,13 +669,31 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           const mediaRadius = previewRadiusFor(photo)
           const filter = cssMediaDisplayFilter(previewFilterFor(photo))
           const hover = album.media_hover ?? 'none'
+          const isReorderDragging = reorderDraggingId === photo.id
+          const isReorderTarget = reorderDraggingId != null && reorderTargetId === photo.id && reorderDraggingId !== photo.id
           return (
             <div key={photo.id}>
               <div
                 className={`${hover === 'lift' ? 'hush-hover-lift ' : ''}hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer`}
                 data-photo-id={photo.id}
-                style={{ background: '#EDE7DB', borderRadius: mediaRadius }}
-                onClick={() => openLightbox(index)}
+                style={{
+                  background: '#EDE7DB',
+                  borderRadius: mediaRadius,
+                  opacity: isReorderDragging ? 0.58 : 1,
+                  outline: isReorderTarget ? '3px solid #254F22' : '0 solid transparent',
+                  outlineOffset: 3,
+                  touchAction: reorderDraggingId ? 'none' : 'manipulation',
+                  cursor: isOwner ? (reorderDraggingId ? 'grabbing' : 'grab') : 'pointer',
+                }}
+                onClick={() => handleTileClick(index)}
+                onPointerDown={(e) => startReorderPress(photo, e)}
+                onPointerMove={handleReorderMove}
+                onPointerUp={finishReorder}
+                onPointerCancel={finishReorder}
+                onPointerLeave={(e) => {
+                  if (!reorderDraggingId) clearReorderTimer()
+                  else handleReorderMove(e)
+                }}
               >
                 {thumbSrc && !isBroken ? (
                   <Image
@@ -567,7 +836,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 ref={(node) => setLightboxMediaNode(node)}
                 style={{ background: '#000', ...mediaZoomStyle(current) }}
                 onClick={(e) => e.stopPropagation()}
-                onDoubleClick={(e) => { e.stopPropagation(); toggleZoom() }}
+                onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
+                onMouseDown={handleMediaMouseDown}
+                onMouseMove={handleMediaMouseMove}
+                onMouseUp={handleMediaMouseUp}
+                onMouseLeave={handleMediaMouseUp}
                 onTouchStart={handleMediaTouchStart}
                 onTouchMove={handleMediaTouchMove}
                 onTouchEnd={handleMediaTouchEnd}
@@ -583,7 +856,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   style={mediaZoomStyle(current)}
                   onError={() => markBroken(current.id)}
                   onClick={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => { e.stopPropagation(); toggleZoom() }}
+                  onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
+                  onMouseDown={handleMediaMouseDown}
+                  onMouseMove={handleMediaMouseMove}
+                  onMouseUp={handleMediaMouseUp}
+                  onMouseLeave={handleMediaMouseUp}
                   onTouchStart={handleMediaTouchStart}
                   onTouchMove={handleMediaTouchMove}
                   onTouchEnd={handleMediaTouchEnd}
