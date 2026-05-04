@@ -15,7 +15,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 // Rate-limiting policy. Tuned so a typo'ing legit user never hits the wall
 // (10 tries is generous), but a brute-force attempt still gets locked out fast.
 const WINDOW_SECONDS = 5 * 60        // sliding window we count failures in
-const MAX_FAILURES_PER_WINDOW = 10   // ≥ this many failed guesses → lockout
+const MAX_FAILURES_PER_WINDOW = 10   // >= this many failed guesses -> lockout
 const LOCKOUT_SECONDS = 5 * 60       // how long the gate stays closed
 
 // Verify a guest-supplied password. Sets an HttpOnly per-album access cookie
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
     .eq('slug', slug)
     .maybeSingle<{ id: string; password_hash: string | null }>()
 
-  // Don't reveal whether the album exists — both bad-password and unknown
+  // Don't reveal whether the album exists - both bad-password and unknown
   // slug return the same "Incorrect password" shape.
   if (!album || !album.password_hash) {
     return NextResponse.json({ error: 'Incorrect password' }, { status: 401, headers: NO_STORE })
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
 
 // Cloudflare exposes the real client IP in `cf-connecting-ip`. Fall back to
 // the leftmost x-forwarded-for entry, then to null. Truncated to keep
-// stored values bounded — IP isn't a primary key, just an audit hint.
+// stored values bounded - IP isn't a primary key, just an audit hint.
 function clientIp(req: Request): string | null {
   const cf = req.headers.get('cf-connecting-ip')
   if (cf) return cf.slice(0, 64)

@@ -31,14 +31,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
   }
 
-  // 1. Auth — must be signed in to claim a custom URL.
+  // 1. Auth - must be signed in to claim a custom URL.
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.json({ error: 'Sign in to set a custom URL' }, { status: 401, headers: NO_STORE })
   }
 
-  // 2. Tier — must be Pro or Studio. Pass the full user so the admin
+  // 2. Tier - must be Pro or Studio. Pass the full user so the admin
   // override in getUserTier kicks in for in-house testing.
   const gate = await requireTier(user, 'pro')
   if (gate) {
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
   const admin = createAdminClient()
 
-  // 3. Ownership — find the album by random slug and timing-safely compare
+  // 3. Ownership - find the album by random slug and timing-safely compare
   // the supplied owner_token. Use admin so column-level GRANTs don't hide
   // owner_token from us here.
   const { data: album, error: lookupError } = await admin
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, custom_slug: null }, { headers: NO_STORE })
   }
 
-  // Set path — validate format first.
+  // Set path - validate format first.
   const validation = validateCustomSlug(rawCustom)
   if (!validation.ok) {
     return NextResponse.json({ error: validation.reason }, { status: 400, headers: NO_STORE })

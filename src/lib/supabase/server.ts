@@ -20,7 +20,7 @@ export async function createClient() {
             cookieStore.set(name, value, options)
           })
         } catch {
-          // Server Components can't write cookies — safely ignored when the
+          // Server Components can't write cookies - safely ignored when the
           // middleware is also running, which refreshes the session there.
         }
       },

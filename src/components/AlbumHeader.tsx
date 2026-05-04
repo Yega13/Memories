@@ -30,11 +30,11 @@ export default function AlbumHeader({ album, photoCount, isOwner }: Props) {
           <h1 className="hush-album-title text-xl font-bold truncate" style={{ color: '#254F22' }}>{album.title}</h1>
           <p className="hush-album-meta text-xs mt-0.5" style={{ color: '#7C5C3E' }}>
             <span>{photoCount} photo{photoCount !== 1 ? 's' : ''}</span>
-            <span aria-hidden="true">·</span>
+            <span aria-hidden="true">-</span>
             <span>Created {formatDate(album.created_at)}</span>
             {isOwner && (
               <>
-                <span className="hush-owner-dot" aria-hidden="true">·</span>
+                <span className="hush-owner-dot" aria-hidden="true">-</span>
                 <span className="hush-owner-pill font-semibold" style={{ color: '#1B3A6B' }}>Owner view</span>
               </>
             )}

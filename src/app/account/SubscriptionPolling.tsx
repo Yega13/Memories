@@ -33,7 +33,7 @@ export default function SubscriptionPolling({ email }: { email: string }) {
           }
         }
       } catch {
-        // Network blip — try again next tick.
+        // Network blip - try again next tick.
       }
       if (pollsRef.current >= MAX_POLLS && !cancelled) {
         window.clearInterval(id)
@@ -75,7 +75,7 @@ export default function SubscriptionPolling({ email }: { email: string }) {
           </h1>
           <p className="text-sm leading-relaxed mb-5" style={{ color: '#5C4A3C' }}>
             Your payment went through, but our system is taking a moment to catch
-            up. This usually clears within a minute or two — try refreshing this
+            up. This usually clears within a minute or two - try refreshing this
             page shortly. If it&apos;s still not showing in 5 minutes, email{' '}
             <a
               href="mailto:support@hushare.space"
@@ -132,10 +132,10 @@ export default function SubscriptionPolling({ email }: { email: string }) {
           className="text-xl font-bold mb-2"
           style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
         >
-          Confirming your subscription…
+          Confirming your subscription...
         </h1>
         <p className="text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>
-          Thanks for subscribing. We&apos;re finalising things on our end — this
+          Thanks for subscribing. We&apos;re finalising things on our end - this
           usually takes a few seconds.
         </p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

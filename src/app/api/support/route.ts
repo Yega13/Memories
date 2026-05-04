@@ -38,7 +38,7 @@ type Body = {
   turnstileToken?: string;
 };
 
-// RFC 5322 "looks-like-an-email"; rejects whitespace and requires a TLD ≥ 2 chars.
+// RFC 5322 "looks-like-an-email"; rejects whitespace and requires a TLD >= 2 chars.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
@@ -52,7 +52,7 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-// Strip control chars and collapse whitespace — defends against header-injection
+// Strip control chars and collapse whitespace - defends against header-injection
 // in single-line fields (subject, name) and keeps Resend's API happy.
 function sanitizeLine(str: string): string {
   return str.replace(/[\x00-\x1F\x7F]/g, " ").replace(/\s+/g, " ").trim();
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
   }
 
   // Turnstile verification: if a secret is configured, the token must verify.
-  // If no secret is set, skip — keeps local/preview deployments working.
+  // If no secret is set, skip - keeps local/preview deployments working.
   const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
   if (turnstileSecret) {
     const token = (body.turnstileToken ?? "").trim();
@@ -113,7 +113,7 @@ export async function POST(req: Request) {
       const result = (await verify.json()) as { success: boolean; "error-codes"?: string[] };
       if (!result.success) {
         console.warn("[support] Turnstile failed:", result["error-codes"]);
-        return json(403, { error: "Verification failed — please try again" });
+        return json(403, { error: "Verification failed - please try again" });
       }
     } catch (err) {
       console.error("[support] Turnstile verify request failed:", err);
@@ -123,7 +123,7 @@ export async function POST(req: Request) {
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    console.error("[support] RESEND_API_KEY not set — message dropped");
+    console.error("[support] RESEND_API_KEY not set - message dropped");
     return json(503, { error: "Our message system isn't configured yet" });
   }
 
@@ -132,7 +132,7 @@ export async function POST(req: Request) {
   const toAddress = domainVerified ? VERIFIED_TO : FALLBACK_TO;
 
   const safeName = name || "(no name)";
-  const subjectLine = subject || "Hushare support — new message";
+  const subjectLine = subject || "Hushare support - new message";
 
   const text = [
     "New support message",

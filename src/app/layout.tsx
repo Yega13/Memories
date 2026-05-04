@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Playfair_Display } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
+import SiteFooter from "@/components/SiteFooter";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -20,13 +21,13 @@ const SITE_URL = "https://hushare.space";
 const SITE_NAME = "Hushare";
 const TAGLINE = "Shared photo albums from one link";
 const DESCRIPTION =
-  "Create a shared photo album in seconds. Guests add photos from one link — no app, no sign-up. Perfect for weddings, trips, reunions, and every moment worth keeping.";
+  "Create a shared photo album in seconds. Guests add photos from one link - no app, no sign-up. Perfect for weddings, trips, reunions, and every moment worth keeping.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — ${TAGLINE}`,
-    template: `%s · ${SITE_NAME}`,
+    default: `${SITE_NAME} - ${TAGLINE}`,
+    template: `%s - ${SITE_NAME}`,
   },
   description: DESCRIPTION,
   applicationName: SITE_NAME,
@@ -58,7 +59,7 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: `${SITE_NAME} — ${TAGLINE}`,
+    title: `${SITE_NAME} - ${TAGLINE}`,
     description: DESCRIPTION,
     locale: "en_US",
     images: [
@@ -67,13 +68,13 @@ export const metadata: Metadata = {
         width: 700,
         height: 1052,
         alt:
-          "Hushare — shared photo album for weddings, trips, and the moments worth keeping",
+          "Hushare - shared photo album for weddings, trips, and the moments worth keeping",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} — ${TAGLINE}`,
+    title: `${SITE_NAME} - ${TAGLINE}`,
     description: DESCRIPTION,
     images: ["/wedding.jpg"],
   },
@@ -173,7 +174,7 @@ const jsonLd = {
       "@id": `${SITE_URL}#howto`,
       name: "How to create a shared photo album with Hushare",
       description:
-        "Create a shared album, share the link, and let everyone add photos — in three steps, no account required.",
+        "Create a shared album, share the link, and let everyone add photos - in three steps, no account required.",
       totalTime: "PT1M",
       tool: [{ "@type": "HowToTool", name: "Any web browser" }],
       step: [
@@ -181,7 +182,7 @@ const jsonLd = {
           "@type": "HowToStep",
           position: 1,
           name: "Name your album",
-          text: "Give your album a name on the Hushare home page. You instantly receive a private link only you control — no sign-up, no app.",
+          text: "Give your album a name on the Hushare home page. You instantly receive a private link only you control - no sign-up, no app.",
           url: `${SITE_URL}#step-name`,
         },
         {
@@ -204,7 +205,7 @@ const jsonLd = {
       "@type": "WebPage",
       "@id": `${SITE_URL}#webpage`,
       url: SITE_URL,
-      name: `${SITE_NAME} — ${TAGLINE}`,
+      name: `${SITE_NAME} - ${TAGLINE}`,
       description: DESCRIPTION,
       inLanguage: "en",
       isPartOf: { "@id": `${SITE_URL}#website` },
@@ -235,7 +236,7 @@ const jsonLd = {
           name: "Do guests need an account to add photos?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "No. Anyone with your album link can view and add photos — no sign-up, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.",
+            text: "No. Anyone with your album link can view and add photos - no sign-up, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.",
           },
         },
         {
@@ -267,7 +268,7 @@ const jsonLd = {
           name: "Can I download all the photos at once?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Yes. From the owner view of your album, you can download the full collection as a single ZIP file — originals, not compressed thumbnails.",
+            text: "Yes. From the owner view of your album, you can download the full collection as a single ZIP file - originals, not compressed thumbnails.",
           },
         },
         {
@@ -275,7 +276,7 @@ const jsonLd = {
           name: "Who can see my album?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "Only people with the link. Albums are unlisted — they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.",
+            text: "Only people with the link. Albums are unlisted - they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.",
           },
         },
         {
@@ -315,6 +316,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         {children}
+        <SiteFooter />
         <AppToastViewport />
       </body>
     </html>

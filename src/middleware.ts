@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   })
 
   // Touching getUser() forces a token refresh if needed. Don't put logic
-  // between createServerClient and this call — the cookies need to flow.
+  // between createServerClient and this call - the cookies need to flow.
   await supabase.auth.getUser()
 
   return response

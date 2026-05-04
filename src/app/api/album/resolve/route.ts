@@ -13,17 +13,17 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // Resolve a URL slug to an album. Three concerns layered together:
 //
-//   1. Slug type — random slug always resolves; custom slug only resolves
+//   1. Slug type - random slug always resolves; custom slug only resolves
 //      while the binding user has Pro+. On downgrade the custom URL silently
 //      stops working (per the pricing FAQ).
 //
-//   2. Password gate — if the album has a password set AND the owner is
+//   2. Password gate - if the album has a password set AND the owner is
 //      Pro+, we return only minimal info (`{ album: null, password_required:
 //      true, summary: { id, title } }`) unless the visitor's per-album cookie
 //      proves they've already entered the password. The owner's flow is
 //      handled separately via the `?owner=` query param on the page.
 //
-//   3. Safety — never return owner_token, password_hash, or user_id to the
+//   3. Safety - never return owner_token, password_hash, or user_id to the
 //      browser. The internal lookup needs them; the response shape filters.
 type FullAlbum = {
   id: string
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const slug = (searchParams.get('slug') ?? '').trim()
   // Owners pass their owner_token along so the resolver can skip the
-  // password gate for them. Same trust model as the rest of the site —
+  // password gate for them. Same trust model as the rest of the site -
   // whoever holds the token is the owner.
   const ownerToken = (searchParams.get('owner_token') ?? '').trim()
   if (!slug) {
@@ -103,7 +103,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
   const ownerTier = await getUserTierById(album.user_id)
   const upload_caps = uploadCapsForTier(ownerTier)
 
-  // Password enforcement is conditional on the OWNER's tier — if they've
+  // Password enforcement is conditional on the OWNER's tier - if they've
   // lapsed below Pro, the password "is removed" (per the FAQ promise) and
   // the album becomes openly viewable again. We still keep the hash on the
   // row so re-upgrading restores it.

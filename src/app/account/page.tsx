@@ -13,7 +13,7 @@ import DeleteAlbumButton from './DeleteAlbumButton'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
 
-// Sticky page nav — matches /pricing, /support, /privacy. Logo links home.
+// Sticky page nav - matches /pricing, /support, /privacy. Logo links home.
 function AccountNav() {
   return (
     <nav
@@ -101,7 +101,7 @@ export default async function AccountPage({ searchParams }: Props) {
   if (!(await hasAccountAccess(user))) {
     // Customers freshly redirected from Polar checkout (?welcome=1) might
     // arrive before our webhook has had a chance to upsert their row.
-    // Show a polling state instead of a bare 403 — the row almost always
+    // Show a polling state instead of a bare 403 - the row almost always
     // arrives within a few seconds.
     if (welcome === '1') {
       return <SubscriptionPolling email={user.email ?? ''} />
@@ -122,7 +122,7 @@ export default async function AccountPage({ searchParams }: Props) {
               className="text-xs uppercase mb-3"
               style={{ color: '#8B6F4E', letterSpacing: '0.18em', fontWeight: 600 }}
             >
-              403 — Forbidden
+              403 - Forbidden
             </p>
             <h1
               className="text-2xl font-bold mb-3"
@@ -220,7 +220,7 @@ export default async function AccountPage({ searchParams }: Props) {
   const dashboardStats = [
     ['Albums', String((accountAlbums ?? []).length), 'Claimed to this account'],
     ['Collections', String(collectionsWithCounts.length), `${collectionLinks?.length ?? 0} album link${(collectionLinks?.length ?? 0) === 1 ? '' : 's'}`],
-    ['Media', String(mediaTotal), `${photoTotal} photo${photoTotal === 1 ? '' : 's'} · ${videoTotal} video${videoTotal === 1 ? '' : 's'}`],
+    ['Media', String(mediaTotal), `${photoTotal} photo${photoTotal === 1 ? '' : 's'} - ${videoTotal} video${videoTotal === 1 ? '' : 's'}`],
     ['Custom URLs', String(customUrlTotal), 'Short branded album links'],
   ]
 
@@ -456,7 +456,7 @@ export default async function AccountPage({ searchParams }: Props) {
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold" style={{ color: '#254F22' }}>{album.title}</span>
                         <span className="block text-xs" style={{ color: '#8B6F4E' }}>
-                          {album.media_count} item{album.media_count === 1 ? '' : 's'} · Created {formatDate(album.created_at)}
+                          {album.media_count} item{album.media_count === 1 ? '' : 's'} - Created {formatDate(album.created_at)}
                         </span>
                       </span>
                     </Link>

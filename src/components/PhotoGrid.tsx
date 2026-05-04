@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -30,10 +30,9 @@ function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
 }
 
 function mediaImageClass(hover: Album['media_hover']): string {
-  const classes = ['object-cover']
-  if (hover !== 'none') classes.push('transition')
-  if (hover === 'zoom') classes.push('group-hover:scale-105')
-  if (hover === 'mono') classes.push('group-hover:grayscale')
+  const classes = ['hush-media-img', 'object-cover']
+  if (hover === 'zoom') classes.push('hush-media-hover-zoom')
+  if (hover === 'mono') classes.push('hush-media-hover-mono')
   return classes.join(' ')
 }
 
@@ -284,7 +283,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                     fill
                     sizes="(min-width: 1536px) 16vw, (min-width: 1280px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
                     className={mediaImageClass(hover)}
-                    style={{ filter }}
+                    style={{ '--hush-media-filter': filter } as React.CSSProperties}
                     unoptimized
                     onError={() => {
                       if (!isVideo) markBroken(photo.id)

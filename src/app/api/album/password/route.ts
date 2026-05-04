@@ -11,7 +11,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // Set or clear the album password. Requires:
 //   1. Signed-in (we bind albums.user_id like the custom-URL flow does).
-//   2. Live tier ≥ Pro (with the admin override from getUserTier).
+//   2. Live tier >= Pro (with the admin override from getUserTier).
 //   3. Ownership via slug + owner_token.
 //
 // Body: { slug, owner_token, password: string | null }

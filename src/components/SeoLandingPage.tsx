@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check, QrCode, ShieldCheck } from "lucide-react";
+import FaqList from "@/components/FaqList";
 
 type SeoLandingPageProps = {
   eyebrow: string;
@@ -152,23 +153,32 @@ export default function SeoLandingPage({
       </section>
 
       <section className="hush-readable pb-20">
-        <h2
-          className="mb-5 text-center"
-          style={{ color: "#254F22", fontFamily: "var(--font-serif)", fontSize: "2rem", fontWeight: 700 }}
+        <div className="mb-8 flex items-center gap-6">
+          <div className="h-px flex-1" style={{ background: "#E8E0D0" }} />
+          <h2
+            style={{
+              color: "#254F22",
+              fontFamily: "var(--font-serif)",
+              fontSize: "1.4rem",
+              fontWeight: 700,
+              letterSpacing: "0.22em",
+              lineHeight: 1,
+              whiteSpace: "nowrap",
+            }}
+          >
+            FAQ
+          </h2>
+          <div className="h-px flex-1" style={{ background: "#E8E0D0" }} />
+        </div>
+        <div
+          className="hush-reveal rounded-[8px] px-6 py-2 sm:px-10 sm:py-4"
+          style={{
+            background: "#FBF4E4",
+            border: "1px solid rgba(196,166,120,0.35)",
+            boxShadow: "0 10px 36px rgba(37,79,34,0.08)",
+          }}
         >
-          Questions people ask
-        </h2>
-        <div className="rounded-[8px] px-6 py-3" style={{ background: "#FFFFFF", border: "1px solid #E8E0D0" }}>
-          {faq.map((item) => (
-            <details key={item.q} className="border-b border-[#E8E0D0] last:border-b-0">
-              <summary className="cursor-pointer list-none py-5 font-semibold" style={{ color: "#254F22" }}>
-                {item.q}
-              </summary>
-              <p className="pb-5 text-sm leading-relaxed" style={{ color: "#5C4A3C" }}>
-                {item.a}
-              </p>
-            </details>
-          ))}
+          <FaqList items={faq.map((item) => ({ q: item.q, a: item.a }))} compactCount={6} plusSize={26} />
         </div>
       </section>
     </main>

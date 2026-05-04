@@ -14,13 +14,13 @@ export const metadata: Metadata = {
     title,
     description,
     url: `${SITE_URL}/shared-photo-album`,
-    images: [{ url: "/card3.jpg", width: 1200, height: 900, alt: title }],
+    images: [{ url: "/shared-album.jpg", width: 1200, height: 900, alt: title }],
   },
   twitter: {
     card: "summary_large_image",
     title,
     description,
-    images: ["/card3.jpg"],
+    images: ["/shared-album.jpg"],
   },
 };
 
@@ -45,7 +45,7 @@ export default function SharedPhotoAlbumPage() {
       eyebrow="Shared photo album"
       title={title}
       intro={description}
-      image="/card3.jpg"
+      image="/shared-album.jpg"
       imageAlt="A shared Hushare photo album from one private link"
       useCases={[
         "Use one private link for trips, families, birthdays, teams, and group memories.",

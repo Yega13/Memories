@@ -1,4 +1,4 @@
-﻿
+
 const PROD_BASE = 'https://api.polar.sh'
 const SANDBOX_BASE = 'https://sandbox-api.polar.sh'
 

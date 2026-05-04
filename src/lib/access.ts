@@ -1,4 +1,4 @@
-﻿import { isAccountAdmin } from './auth'
+import { isAccountAdmin } from './auth'
 import { isActiveSubscriber } from './subscriptions'
 
 export async function hasAccountAccess(

@@ -6,7 +6,7 @@ import { Send, CheckCircle2, AlertCircle } from 'lucide-react'
 
 type Status = 'idle' | 'sending' | 'sent' | 'error'
 
-// Public Cloudflare Turnstile site key — visible in every page's HTML by design.
+// Public Cloudflare Turnstile site key - visible in every page's HTML by design.
 const TURNSTILE_SITE_KEY = '0x4AAAAAADDt-DJyOH-4lnVV'
 
 declare global {
@@ -28,7 +28,7 @@ export default function SupportForm() {
     const form = e.currentTarget
     const data = new FormData(form)
 
-    // Honeypot — bots fill this, real users don't see it. Pretend success.
+    // Honeypot - bots fill this, real users don't see it. Pretend success.
     if (data.get('website')) {
       setStatus('sent')
       form.reset()
@@ -70,7 +70,7 @@ export default function SupportForm() {
     } catch (err) {
       setStatus('error')
       setErrorMsg(err instanceof Error ? err.message : 'Something went wrong')
-      // Reset the widget on error too — the previous token is single-use,
+      // Reset the widget on error too - the previous token is single-use,
       // so without a fresh one the next attempt would fail with the same 403.
       window.turnstile?.reset()
     }
@@ -93,7 +93,7 @@ export default function SupportForm() {
           Message sent
         </h3>
         <p className="text-sm" style={{ color: '#5C4A3C' }}>
-          Thanks — we&apos;ll reply to your inbox within one business day.
+          Thanks - we&apos;ll reply to your inbox within one business day.
         </p>
         <button
           type="button"
@@ -124,7 +124,7 @@ export default function SupportForm() {
           boxShadow: '0 4px 32px rgba(37,79,34,0.10)',
         }}
       >
-        {/* Honeypot — hidden from real users and assistive tech */}
+        {/* Honeypot - hidden from real users and assistive tech */}
         <div
           aria-hidden="true"
           style={{ position: 'absolute', left: '-9999px', height: 0, overflow: 'hidden' }}

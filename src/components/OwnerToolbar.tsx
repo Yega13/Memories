@@ -512,7 +512,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
             style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
           >
             Downloading {zipProgress.done}/{zipProgress.total}
-            {zipProgress.failed > 0 ? ` · ${zipProgress.failed} skipped` : ''}
+            {zipProgress.failed > 0 ? ` - ${zipProgress.failed} skipped` : ''}
           </div>
         )}
 
@@ -1000,7 +1000,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                               <span className="min-w-0">
                                 <span className="block truncate font-semibold">{collection.name}</span>
                                 <span className="block truncate" style={{ color: '#8B6F4E' }}>
-                                  /c/{collection.slug} · {collection.album_count} album{collection.album_count === 1 ? '' : 's'}
+                                  /c/{collection.slug} - {collection.album_count} album{collection.album_count === 1 ? '' : 's'}
                                 </span>
                               </span>
                               <span className="shrink-0 font-semibold" style={{ color: collection.contains_album ? '#254F22' : '#7C5C3E' }}>

@@ -6,7 +6,7 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Block cross-site abuse — only our pages (or same-origin previews) can post.
+// Block cross-site abuse - only our pages (or same-origin previews) can post.
 const ALLOWED_ORIGIN_HOSTS = new Set(['hushare.space', 'www.hushare.space'])
 const ALLOWED_ORIGIN_SUFFIXES = ['.workers.dev', '.pages.dev']
 

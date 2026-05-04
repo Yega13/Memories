@@ -9,7 +9,7 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Absolute ceiling regardless of tier — protects against any future bug
+// Absolute ceiling regardless of tier - protects against any future bug
 // that raises caps unintentionally. Currently matches the Pro/Studio cap.
 const HARD_MAX_BYTES = PRO_VIDEO_BYTES
 
@@ -33,7 +33,7 @@ const FILENAME_RE = /^[a-z0-9._-]{1,128}$/i
 // Browser sends a multipart form: { file, albumId, filename, kind }.
 // Returns the object's storage_path (R2 key) and the public URL.
 //
-// Auth model: matches the existing Supabase Storage flow — anyone with the
+// Auth model: matches the existing Supabase Storage flow - anyone with the
 // album link can upload. We don't require an owner_token because adding
 // photos is intentionally guest-friendly. The albumId scopes the key so
 // uploads can't write outside their own album folder.
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
   }
   const ownerTier = await getUserTierById(ownerRow.user_id)
   const caps = uploadCapsForTier(ownerTier)
-  // Posters are auto-generated thumbnails — they ride alongside videos
+  // Posters are auto-generated thumbnails - they ride alongside videos
   // and are tiny in practice, so the video cap is the natural ceiling for
   // both. No separate poster limit needed.
   if (file.size > caps.video) {

@@ -1,4 +1,4 @@
-﻿
+
 const HASH_VERSION = 'hmac-sha256-v1'
 const KEY_BITS = 256
 const MIN_VERIFY_ITERATIONS = 50_000

@@ -1,4 +1,4 @@
-﻿
+
 export type R2HttpMetadata = {
   contentType?: string
   contentLanguage?: string

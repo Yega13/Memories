@@ -12,7 +12,7 @@ const SITE_URL = "https://hushare.space";
 
 const PAGE_TITLE = "Pricing";
 const PAGE_DESCRIPTION =
-  "Hushare pricing — a generous free tier, plus Pro and Studio plans for password-protected albums, custom URLs, HD video, and no inactivity expiry.";
+  "Hushare pricing - a generous free tier, plus Pro and Studio plans for password-protected albums, custom URLs, HD video, and no inactivity expiry.";
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -21,14 +21,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: `${SITE_URL}/pricing`,
-    title: `${PAGE_TITLE} · Hushare`,
+    title: `${PAGE_TITLE} - Hushare`,
     description: PAGE_DESCRIPTION,
     siteName: "Hushare",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: `${PAGE_TITLE} · Hushare`,
+    title: `${PAGE_TITLE} - Hushare`,
     description: PAGE_DESCRIPTION,
   },
   robots: {
@@ -90,19 +90,19 @@ const tiers: Tier[] = [
     tagline: "For people who keep coming back",
     price: "$4",
     cadence: "per month",
-    annual: "$40 / year — save 2 months",
+    annual: "$40 / year - save 2 months",
     promo: "First month $1.99",
     cta: "Get Pro",
     monthlyProductId: POLAR_PRO_MONTHLY,
     yearlyProductId: POLAR_PRO_YEARLY,
     highlight: true,
     features: [
-      "Everything in Free, plus —",
+      "Everything in Free, plus -",
       "Password-protect your albums",
       "Custom album URLs (e.g. hushare.space/anna-and-david)",
-      "No 12-month inactivity expiry — albums live forever",
+      "No 12-month inactivity expiry - albums live forever",
       "HD video uploads (MP4, MOV)",
-      "Larger file sizes — up to 200 MB per upload",
+      "Larger file sizes - up to 200 MB per upload",
       "Account dashboard to manage your subscription",
     ],
   },
@@ -111,18 +111,18 @@ const tiers: Tier[] = [
     tagline: "For photographers & event planners",
     price: "$10",
     cadence: "per month",
-    annual: "$100 / year — save 2 months",
+    annual: "$100 / year - save 2 months",
     promo: "First month $6.99",
     cta: "Get Studio",
     monthlyProductId: POLAR_STUDIO_MONTHLY,
     yearlyProductId: POLAR_STUDIO_YEARLY,
     highlight: false,
     features: [
-      "Everything in Pro, plus —",
+      "Everything in Pro, plus -",
       "Manage many albums from one dashboard",
       "Custom branding (logo, colours, cover image)",
       "Client-ready download links",
-      "Priority support — replies within 24 hrs",
+      "Priority support - replies within 24 hrs",
       "Account dashboard to manage your subscription",
     ],
   },
@@ -131,15 +131,15 @@ const tiers: Tier[] = [
 const billingFaq = [
   {
     q: "Do I need a Hushare account for Pro or Studio?",
-    a: "Yes — paid plans need a free Hushare account so we can attach your subscription to a stable identity (and so you can manage or cancel it anytime). Sign in with your email at the top of any page; no password needed, just a magic link. Your account is free forever; only Pro and Studio cost money.",
+    a: "Yes - paid plans need a free Hushare account so we can attach your subscription to a stable identity (and so you can manage or cancel it anytime). Sign in with your email at the top of any page; no password needed, just a magic link. Your account is free forever; only Pro and Studio cost money.",
   },
   {
     q: "Why does Free not need an account?",
-    a: "Free albums are designed for the moment — share a link, everyone adds photos, done. We do not want sign-up to be a barrier for one-off events. Pro and Studio need an account because subscriptions need to belong to someone.",
+    a: "Free albums are designed for the moment - share a link, everyone adds photos, done. We do not want sign-up to be a barrier for one-off events. Pro and Studio need an account because subscriptions need to belong to someone.",
   },
   {
     q: "What happens to my free albums if I cancel Pro or Studio?",
-    a: "Nothing changes for guests. Your albums revert to Free behaviour — the password and custom URL are removed, the album becomes accessible by its original random link, and the 12-month inactivity rule applies again.",
+    a: "Nothing changes for guests. Your albums revert to Free behaviour - the password and custom URL are removed, the album becomes accessible by its original random link, and the 12-month inactivity rule applies again.",
   },
   {
     q: "What do Studio Collections do?",
@@ -159,11 +159,11 @@ const billingFaq = [
   },
   {
     q: "Do you offer annual pricing?",
-    a: "Yes — Pro is $40/year and Studio is $100/year, both with two months free compared to paying month-by-month. Choose annual at checkout. Want to lock it in before launch? Email us and we'll honour the annual price for your first year.",
+    a: "Yes - Pro is $40/year and Studio is $100/year, both with two months free compared to paying month-by-month. Choose annual at checkout. Want to lock it in before launch? Email us and we'll honour the annual price for your first year.",
   },
   {
     q: "Is there a first-month discount?",
-    a: "Yes — Pro is $1.99 for the first month, then $4/month after. Studio is $6.99 for the first month, then $10/month. The discount applies once per account, on monthly plans, and renews at the standard rate from month two.",
+    a: "Yes - Pro is $1.99 for the first month, then $4/month after. Studio is $6.99 for the first month, then $10/month. The discount applies once per account, on monthly plans, and renews at the standard rate from month two.",
   },
   {
     q: "Which currencies do you accept?",
@@ -194,7 +194,7 @@ const jsonLd = {
       "@type": "WebPage",
       "@id": `${SITE_URL}/pricing#webpage`,
       url: `${SITE_URL}/pricing`,
-      name: `${PAGE_TITLE} · Hushare`,
+      name: `${PAGE_TITLE} - Hushare`,
       description: PAGE_DESCRIPTION,
       inLanguage: "en",
       isPartOf: { "@id": `${SITE_URL}#website` },
@@ -330,7 +330,7 @@ export default function PricingPage() {
           className="text-xs sm:text-sm font-medium uppercase mb-4"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
         >
-          Pricing — Pro & Studio launching soon
+          Pricing - Pro & Studio launching soon
         </p>
         <h1
           style={{
@@ -438,7 +438,7 @@ export default function PricingPage() {
                       padding: 0,
                     }}
                   >
-                    or <span style={{ fontWeight: 600 }}>{t.annual}</span> →
+                    or <span style={{ fontWeight: 600 }}>{t.annual}</span>
                   </button>
                 </form>
               ) : (
@@ -478,7 +478,7 @@ export default function PricingPage() {
 
               <ul className="flex-1 space-y-3 mb-8">
                 {t.features.map((f, i) => {
-                  const isHeader = f.endsWith(" —");
+                  const isHeader = f.endsWith(" -");
                   return (
                     <li
                       key={i}
@@ -578,10 +578,10 @@ export default function PricingPage() {
             className="text-[0.98rem] leading-relaxed"
             style={{ color: "#5C4A3C" }}
           >
-            A wedding, a birthday, a one-week trip — these belong on the free tier
+            A wedding, a birthday, a one-week trip - these belong on the free tier
             forever. But a wedding photographer running ten albums a month, or a
             family that wants a single album to live for twenty years with a name
-            you can actually remember — that costs us in storage and bandwidth, and
+            you can actually remember - that costs us in storage and bandwidth, and
             it costs you a little to keep it. No ads. No selling your photos.
             Just a small subscription that pays for the servers and our coffee.
           </p>
@@ -689,43 +689,6 @@ export default function PricingPage() {
         </p>
       </section>
 
-      <footer
-        className="hush-footer py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm"
-        style={{ borderTop: "1px solid #E8E0D0" }}
-      >
-        <Link href="/" className="flex items-center" aria-label="Hushare home">
-          <Image
-            src="/logo/logo-dark-transparent.png"
-            alt="Hushare"
-            width={618}
-            height={146}
-            className="hush-logo"
-            style={{ width: "auto" }}
-          />
-        </Link>
-        <div className="hush-footer-links">
-          <Link href="/" style={{ color: "#7C5C3E" }} className="hover:underline">
-            Home
-          </Link>
-          <Link
-            href="/support"
-            style={{ color: "#7C5C3E" }}
-            className="hover:underline"
-          >
-            Support
-          </Link>
-          <Link
-            href="/privacy"
-            style={{ color: "#7C5C3E" }}
-            className="hover:underline"
-          >
-            Privacy
-          </Link>
-          <span style={{ color: "#B0A090" }}>
-            © {new Date().getFullYear()} — your moments, always.
-          </span>
-        </div>
-      </footer>
     </main>
   );
 }

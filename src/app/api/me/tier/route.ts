@@ -6,9 +6,9 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Returns the current user's tier. Anonymous (not signed in) → 'free'. The
+// Returns the current user's tier. Anonymous (not signed in) -> 'free'. The
 // browser uses this to decide whether to show paid-tier UI like "Set custom
-// URL". Never make the gating decision on this response alone — every write
+// URL". Never make the gating decision on this response alone - every write
 // endpoint also re-checks tier server-side.
 export async function GET() {
   const supabase = await createClient()

@@ -1,4 +1,4 @@
-﻿
+
 const ADMIN_EMAILS = new Set<string>([
   'yeganyansuren13@gmail.com',
 ])

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -722,31 +722,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      <footer className="hush-footer py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm" style={{ borderTop: '1px solid #E8E0D0' }}>
-        <Link href="/" className="flex items-center" aria-label="Hushare home">
-          <Image
-            src="/logo/logo-dark-transparent.png"
-            alt="Hushare"
-            width={618}
-            height={146}
-            className="hush-logo"
-            style={{ width: 'auto' }}
-            draggable={false}
-          />
-        </Link>
-        <div className="hush-footer-links">
-          <Link href="/pricing" style={{ color: '#7C5C3E' }} className="hover:underline">Pricing</Link>
-          <Link href="/shared-photo-album" style={{ color: '#7C5C3E' }} className="hover:underline">Shared albums</Link>
-          <Link href="/wedding-photo-sharing" style={{ color: '#7C5C3E' }} className="hover:underline">Weddings</Link>
-          <Link href="/event-photo-sharing" style={{ color: '#7C5C3E' }} className="hover:underline">Events</Link>
-          <Link href="/qr-code-photo-album" style={{ color: '#7C5C3E' }} className="hover:underline">QR albums</Link>
-          <Link href="/support" style={{ color: '#7C5C3E' }} className="hover:underline">Support</Link>
-          <Link href="/privacy" style={{ color: '#7C5C3E' }} className="hover:underline">Privacy</Link>
-          <Link href="/terms" style={{ color: '#7C5C3E' }} className="hover:underline">Terms</Link>
-          <span style={{ color: '#B0A090' }}>(c) {new Date().getFullYear()} - your moments, always.</span>
-        </div>
-      </footer>
+
     </main>
   )
 }

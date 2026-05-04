@@ -8,7 +8,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 // Confirms whether a (slug, owner_token) pair is the real owner of an album.
 // We do this server-side so the owner_token never has to be returned to
-// the browser. The result is just a boolean — leak-free even on misuse.
+// the browser. The result is just a boolean - leak-free even on misuse.
 export async function POST(req: Request) {
   let body: { slug?: string; owner_token?: string }
   try {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const slug = String(body.slug ?? '').trim()
   const token = String(body.owner_token ?? '').trim()
 
-  // Anything missing → not an owner. We don't echo why; saves a tiny bit
+  // Anything missing -> not an owner. We don't echo why; saves a tiny bit
   // of probing surface.
   if (!slug || !token) {
     return NextResponse.json({ isOwner: false }, { headers: NO_STORE })

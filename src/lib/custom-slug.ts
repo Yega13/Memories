@@ -1,4 +1,4 @@
-﻿const RESERVED_SLUGS = new Set([
+const RESERVED_SLUGS = new Set([
   'account', 'admin', 'api', 'app', 'auth',
   'billing', 'c', 'callback', 'checkout', 'contact',
   'dashboard', 'faq', 'help', 'home', 'hushare',

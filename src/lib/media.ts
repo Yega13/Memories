@@ -1,4 +1,4 @@
-﻿
+
 import type { Tier } from '@/lib/subscriptions'
 
 export type MediaKind = 'image' | 'video'

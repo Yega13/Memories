@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   }
 
   // 3. Delete from storage first, then DB. If storage fails we still try the
-  // DB delete — an orphan storage object is recoverable; an orphan DB row is
+  // DB delete - an orphan storage object is recoverable; an orphan DB row is
   // a UI bug. Both errors are logged for observability.
   // Posters live in the same backend as their video (we upload them together).
   const paths = [photo.storage_path]

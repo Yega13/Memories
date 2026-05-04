@@ -10,7 +10,7 @@ const LAST_UPDATED_HUMAN = "April 25, 2026";
 
 const PAGE_TITLE = "Privacy Policy";
 const PAGE_DESCRIPTION =
-  "How Hushare handles your shared photo albums, uploaded media, and metadata. No tracking cookies, no ads, no selling of data — ever.";
+  "How Hushare handles your shared photo albums, uploaded media, and metadata. No tracking cookies, no ads, no selling of data - ever.";
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -21,14 +21,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "article",
     url: `${SITE_URL}/privacy`,
-    title: `${PAGE_TITLE} · Hushare`,
+    title: `${PAGE_TITLE} - Hushare`,
     description: PAGE_DESCRIPTION,
     siteName: "Hushare",
     locale: "en_US",
   },
   twitter: {
     card: "summary",
-    title: `${PAGE_TITLE} · Hushare`,
+    title: `${PAGE_TITLE} - Hushare`,
     description: PAGE_DESCRIPTION,
   },
   robots: {
@@ -67,7 +67,7 @@ const jsonLd = {
       "@type": "WebPage",
       "@id": `${SITE_URL}/privacy#webpage`,
       url: `${SITE_URL}/privacy`,
-      name: `${PAGE_TITLE} · Hushare`,
+      name: `${PAGE_TITLE} - Hushare`,
       description: PAGE_DESCRIPTION,
       inLanguage: "en",
       isPartOf: { "@id": `${SITE_URL}#website` },
@@ -149,7 +149,7 @@ export default function PrivacyPage() {
           className="text-sm font-medium uppercase mb-5"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
         >
-          Legal · Hushare
+          Legal - Hushare
         </p>
         <h1
           style={{
@@ -171,7 +171,7 @@ export default function PrivacyPage() {
 
         <p className="mt-8 text-lg leading-relaxed" style={BODY}>
           Hushare (&ldquo;we&rdquo;, &ldquo;us&rdquo;) helps anyone create a
-          shared photo album from a single link — no sign-up, no app. This
+          shared photo album from a single link - no sign-up, no app. This
           policy explains exactly what we store, why we store it, and the
           rights you have over it. We designed Hushare to collect as little as
           physically possible to run the service.
@@ -180,7 +180,7 @@ export default function PrivacyPage() {
         <Section id="what-we-collect" number={1} heading="What we collect">
           <ul className="list-disc pl-5 space-y-2">
             <li>
-              <strong style={INK}>Album title</strong> — the name you give
+              <strong style={INK}>Album title</strong> - the name you give
               your album.
             </li>
             <li>
@@ -188,12 +188,12 @@ export default function PrivacyPage() {
               or anyone you share the album link with.
             </li>
             <li>
-              <strong style={INK}>Owner token</strong> — a random string
+              <strong style={INK}>Owner token</strong> - a random string
               embedded in the private link you receive. It is how we recognise
               you as the album creator.
             </li>
             <li>
-              <strong style={INK}>Request metadata</strong> — IP address (kept
+              <strong style={INK}>Request metadata</strong> - IP address (kept
               briefly, for abuse prevention), user-agent string, timestamps.
             </li>
           </ul>
@@ -229,11 +229,11 @@ export default function PrivacyPage() {
           </p>
           <ul className="list-disc pl-5 space-y-2 mt-3">
             <li>
-              <strong style={INK}>Supabase</strong> — stores album metadata
+              <strong style={INK}>Supabase</strong> - stores album metadata
               and uploaded media.
             </li>
             <li>
-              <strong style={INK}>Cloudflare</strong> — hosting, content
+              <strong style={INK}>Cloudflare</strong> - hosting, content
               delivery, and DDoS protection.
             </li>
           </ul>
@@ -262,7 +262,7 @@ export default function PrivacyPage() {
             indexed by search engines, cannot be browsed from the site, and
             are only reachable by someone who has the link. You decide who
             receives that link. We do not sell, rent, or share your data with
-            advertisers — ever.
+            advertisers - ever.
           </p>
         </Section>
 
@@ -272,7 +272,7 @@ export default function PrivacyPage() {
             album sits untouched for <strong style={INK}>12 months</strong>,
             it is automatically retired and its media is permanently deleted.
             You may request deletion of your album at any time by emailing us
-            — see section 12.
+            - see section 12.
           </p>
         </Section>
 
@@ -304,7 +304,7 @@ export default function PrivacyPage() {
             >
               support@hushare.space
             </a>{" "}
-            from the address you used to contact us — or, if you never gave
+            from the address you used to contact us - or, if you never gave
             us one, include your album name and approximate creation date.
           </p>
         </Section>
@@ -352,7 +352,7 @@ export default function PrivacyPage() {
 
         <Section id="contact" number={12} heading="Contact">
           <p>
-            Questions, requests, complaints — all of it comes to one
+            Questions, requests, complaints - all of it comes to one
             address:{" "}
             <a
               href="mailto:support@hushare.space"
@@ -373,39 +373,10 @@ export default function PrivacyPage() {
           className="text-center text-sm mt-8 italic"
           style={{ color: "#8B6F4E", ...SERIF }}
         >
-          — with love, from Yerevan
+          - with love, from Yerevan
         </p>
       </article>
 
-      <footer
-        className="hush-footer py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm"
-        style={{ borderTop: "1px solid #E8E0D0" }}
-      >
-        <Link href="/" className="flex items-center gap-2">
-          <Image
-            src="/logo/logo-dark-transparent.png"
-            alt="Hushare"
-            width={618}
-            height={146}
-            className="hush-logo"
-            style={{ width: "auto" }}
-          />
-        </Link>
-        <div className="hush-footer-links">
-          <Link href="/pricing" style={{ color: "#7C5C3E" }} className="hover:underline">
-            Pricing
-          </Link>
-          <Link href="/support" style={{ color: "#7C5C3E" }} className="hover:underline">
-            Support
-          </Link>
-          <Link href="/privacy" style={{ color: "#7C5C3E" }} className="hover:underline">
-            Privacy
-          </Link>
-          <span style={{ color: "#B0A090" }}>
-            © {new Date().getFullYear()} — your moments, always.
-          </span>
-        </div>
-      </footer>
     </main>
   );
 }

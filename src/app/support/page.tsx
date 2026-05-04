@@ -11,7 +11,7 @@ const SUPPORT_EMAIL = "support@hushare.space";
 
 const PAGE_TITLE = "Support";
 const PAGE_DESCRIPTION =
-  "Get help with your Hushare album. Send a message, find answers to common questions, or email us directly — we usually reply within one business day.";
+  "Get help with your Hushare album. Send a message, find answers to common questions, or email us directly - we usually reply within one business day.";
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -20,14 +20,14 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     url: `${SITE_URL}/support`,
-    title: `${PAGE_TITLE} · Hushare`,
+    title: `${PAGE_TITLE} - Hushare`,
     description: PAGE_DESCRIPTION,
     siteName: "Hushare",
     locale: "en_US",
   },
   twitter: {
     card: "summary",
-    title: `${PAGE_TITLE} · Hushare`,
+    title: `${PAGE_TITLE} - Hushare`,
     description: PAGE_DESCRIPTION,
   },
   robots: {
@@ -61,7 +61,7 @@ const jsonLd = {
       "@type": "ContactPage",
       "@id": `${SITE_URL}/support#contactpage`,
       url: `${SITE_URL}/support`,
-      name: `${PAGE_TITLE} · Hushare`,
+      name: `${PAGE_TITLE} - Hushare`,
       description: PAGE_DESCRIPTION,
       inLanguage: "en",
       isPartOf: { "@id": `${SITE_URL}#website` },
@@ -76,7 +76,7 @@ const helpCards = [
   {
     icon: MessageCircle,
     title: "Common questions",
-    body: "Most answers — pricing, privacy, photo retention, lost owner links — live on the home page FAQ and the pricing page.",
+    body: "Most answers - pricing, privacy, photo retention, lost owner links - live on the home page FAQ and the pricing page.",
     href: "/#faq",
     cta: "Browse the FAQ",
   },
@@ -153,7 +153,7 @@ export default function SupportPage() {
           className="mt-5 text-base sm:text-lg leading-relaxed mx-auto"
           style={{ color: "#6B5A4E", maxWidth: "520px" }}
         >
-          Real humans, real replies. Send a message below or email us directly —
+          Real humans, real replies. Send a message below or email us directly -
           we usually answer within a business day.
         </p>
       </section>
@@ -200,7 +200,7 @@ export default function SupportPage() {
                 className="text-sm font-semibold hover:underline"
                 style={{ color: "#254F22" }}
               >
-                {cta} →
+                {cta}
               </Link>
             </article>
           ))}
@@ -239,43 +239,6 @@ export default function SupportPage() {
         </p>
       </section>
 
-      <footer
-        className="hush-footer py-6 flex flex-col md:flex-row items-center md:justify-between gap-3 text-sm"
-        style={{ borderTop: "1px solid #E8E0D0" }}
-      >
-        <Link href="/" className="flex items-center" aria-label="Hushare home">
-          <Image
-            src="/logo/logo-dark-transparent.png"
-            alt="Hushare"
-            width={618}
-            height={146}
-            className="hush-logo"
-            style={{ width: "auto" }}
-          />
-        </Link>
-        <div className="hush-footer-links">
-          <Link href="/" style={{ color: "#7C5C3E" }} className="hover:underline">
-            Home
-          </Link>
-          <Link
-            href="/pricing"
-            style={{ color: "#7C5C3E" }}
-            className="hover:underline"
-          >
-            Pricing
-          </Link>
-          <Link
-            href="/privacy"
-            style={{ color: "#7C5C3E" }}
-            className="hover:underline"
-          >
-            Privacy
-          </Link>
-          <span style={{ color: "#B0A090" }}>
-            © {new Date().getFullYear()} — your moments, always.
-          </span>
-        </div>
-      </footer>
     </main>
   );
 }

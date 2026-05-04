@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Not configured' }, { status: 503, headers: NO_STORE })
   }
 
-  // The signature is computed over the *raw* body bytes — read once and verify
+  // The signature is computed over the *raw* body bytes - read once and verify
   // before parsing. Re-parsing the same string into JSON below is fine.
   const rawBody = await req.text()
 
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
   }
 
   // We only act on subscription lifecycle events. Other events (e.g. order.created)
-  // are acknowledged with 200 so Polar doesn't retry them — they're not errors,
+  // are acknowledged with 200 so Polar doesn't retry them - they're not errors,
   // just outside this handler's scope.
   if (!event.type?.startsWith('subscription.')) {
     return NextResponse.json({ ok: true, ignored: event.type }, { headers: NO_STORE })
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   // user_id is set as metadata at checkout creation time. If it's missing,
-  // the row would be orphaned — log loudly and 200 so Polar doesn't retry.
+  // the row would be orphaned - log loudly and 200 so Polar doesn't retry.
   const userId = sub.metadata?.userId
   if (!userId) {
     console.error('[polar/webhook] subscription has no userId metadata:', sub.id)
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error('[polar/webhook] upsert failed:', error.message, 'event=', event.type)
-    // 500 so Polar retries this event later — likely a transient DB issue.
+    // 500 so Polar retries this event later - likely a transient DB issue.
     return NextResponse.json({ error: 'DB write failed' }, { status: 500, headers: NO_STORE })
   }
 

@@ -1,4 +1,4 @@
-﻿import { createBrowserClient } from '@supabase/ssr'
+import { createBrowserClient } from '@supabase/ssr'
 import type { MediaDisplayFilter, MediaHoverEffect } from '@/lib/media-display'
 
 export type { MediaDisplayFilter, MediaHoverEffect } from '@/lib/media-display'
