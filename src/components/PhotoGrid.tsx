@@ -260,7 +260,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   return (
     <>
-      <div ref={gridRef} className="hush-photo-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4">
+      <div
+        ref={gridRef}
+        className="hush-photo-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 xl:gap-4"
+        style={{ '--hush-mobile-grid-cols': album.mobile_grid_columns ?? 3 } as React.CSSProperties}
+      >
         {photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
           const thumbSrc = isVideo ? photo.poster_url || '' : photo.url

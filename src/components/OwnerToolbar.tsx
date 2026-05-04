@@ -5,7 +5,7 @@ import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, Lo
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
-import { MEDIA_DISPLAY_FILTER_OPTIONS, MEDIA_HOVER_EFFECT_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect } from '@/lib/media-display'
+import { MEDIA_DISPLAY_FILTER_OPTIONS, MEDIA_HOVER_EFFECT_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
 import { showAppToast, storeAppToast } from '@/components/AppToast'
@@ -88,6 +88,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [mediaFilter, setMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
   const [savedMediaFilter, setSavedMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
   const [mediaHover, setMediaHover] = useState<MediaHoverEffect>(album.media_hover ?? 'none')
+  const [mobileGridColumns, setMobileGridColumns] = useState<MobileGridColumns>(album.mobile_grid_columns ?? 3)
   const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
   const [mediaSaved, setMediaSaved] = useState(false)
@@ -150,13 +151,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setMediaFilter(album.media_filter ?? 'none')
       setSavedMediaFilter(album.media_filter ?? 'none')
       setMediaHover(album.media_hover ?? 'none')
+      setMobileGridColumns(album.mobile_grid_columns ?? 3)
       setMediaError('')
       setMediaSaved(false)
       setOpenSection(null)
       setDeleteConfirm(false)
       setDeleteError('')
     }
-  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.video_autoplay, showSettings])
+  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.mobile_grid_columns, album.video_autoplay, showSettings])
 
   useEffect(() => {
     if (showSettings && canUseCollections) void loadCollections()
@@ -265,7 +267,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter, nextHover = mediaHover) {
+  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter, nextHover = mediaHover, nextMobileGridColumns = mobileGridColumns) {
     setMediaSaving(true)
     setMediaError('')
     setMediaSaved(false)
@@ -279,6 +281,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         nextAutoplay,
         nextFilter,
         nextHover,
+        nextMobileGridColumns,
         resetRadiusOverrides,
         resetFilterOverrides,
       )
@@ -293,8 +296,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setMediaFilter(result.media_filter)
       setSavedMediaFilter(result.media_filter)
       setMediaHover(result.media_hover)
+      setMobileGridColumns(result.mobile_grid_columns)
       onAlbumUpdated(
-        { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter, media_hover: result.media_hover },
+        { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter, media_hover: result.media_hover, mobile_grid_columns: result.mobile_grid_columns },
         { forceGlobalRadius: false, resetRadiusOverrides, resetFilterOverrides },
       )
       setMediaSaved(true)
@@ -767,6 +771,37 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Mobile grid</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {MOBILE_GRID_COLUMN_OPTIONS.map((option) => {
+                          const selected = mobileGridColumns === option.value
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => {
+                                setMobileGridColumns(option.value)
+                                onAlbumUpdated({ mobile_grid_columns: option.value })
+                                setMediaSaved(false)
+                              }}
+                              className="hush-press rounded-lg py-2 text-sm font-semibold"
+                              style={{
+                                background: selected ? '#254F22' : '#FDFAF5',
+                                border: '1px solid #DDD5C5',
+                                color: selected ? '#FDFAF5' : '#254F22',
+                              }}
+                            >
+                              {option.value}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <p className="mt-2 text-xs" style={{ color: '#8B6F4E' }}>
+                        Mobile only. Desktop keeps the normal responsive grid.
+                      </p>
                     </div>
 
                     {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}

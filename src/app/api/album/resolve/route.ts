@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { MediaDisplayFilter, MediaHoverEffect } from '@/lib/media-display'
+import type { MediaDisplayFilter, MediaHoverEffect, MobileGridColumns } from '@/lib/media-display'
 import { getUserTierById } from '@/lib/subscriptions'
 import { cookieNameForAlbum, deriveAccessToken } from '@/lib/album-password'
 import { uploadCapsForTier } from '@/lib/media'
@@ -36,6 +36,7 @@ type FullAlbum = {
   video_autoplay?: boolean | null
   media_filter?: MediaDisplayFilter | null
   media_hover?: MediaHoverEffect | null
+  mobile_grid_columns?: MobileGridColumns | null
   created_at: string
   retired_at: string | null
   user_id: string | null
@@ -44,7 +45,7 @@ type FullAlbum = {
 
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, created_at, retired_at, user_id, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, created_at, retired_at, user_id, password_hash'
 const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
 
 export async function GET(req: Request) {
@@ -141,6 +142,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
     video_autoplay: !!album.video_autoplay,
     media_filter: album.media_filter ?? 'none',
     media_hover: album.media_hover ?? 'none',
+    mobile_grid_columns: album.mobile_grid_columns ?? 3,
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,
@@ -164,18 +166,18 @@ async function lookupAlbum(
 
   // Backward compatibility for deployments where the app has updated before
   // the media display migration has reached Supabase.
-  if (error.message.includes('media_radius') || error.message.includes('video_autoplay') || error.message.includes('media_filter') || error.message.includes('media_hover')) {
+  if (error.message.includes('media_radius') || error.message.includes('video_autoplay') || error.message.includes('media_filter') || error.message.includes('media_hover') || error.message.includes('mobile_grid_columns')) {
     console.warn('[album/resolve] media settings columns missing; using legacy album projection')
     const { data: legacy, error: legacyError } = await admin
       .from('albums')
       .select(LEGACY_SELECT_COLUMNS)
       .eq(column, value)
-      .maybeSingle<Omit<FullAlbum, 'media_radius' | 'video_autoplay' | 'media_filter' | 'media_hover'>>()
+      .maybeSingle<Omit<FullAlbum, 'media_radius' | 'video_autoplay' | 'media_filter' | 'media_hover' | 'mobile_grid_columns'>>()
     if (legacyError) {
       console.error('[album/resolve] legacy album lookup failed:', legacyError.message)
       return null
     }
-    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false, media_filter: 'none', media_hover: 'none' } : null
+    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3 } : null
   }
 
   console.error('[album/resolve] album lookup failed:', error.message)

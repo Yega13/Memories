@@ -1,5 +1,6 @@
 export type MediaDisplayFilter = 'none' | 'warm' | 'cool' | 'mono' | 'vintage' | 'soft'
 export type MediaHoverEffect = 'none' | 'mono' | 'fade' | 'zoom' | 'lift'
+export type MobileGridColumns = 3 | 4 | 5 | 6
 
 export const MIN_MEDIA_RADIUS = 0
 export const MAX_MEDIA_RADIUS = 10000
@@ -21,6 +22,13 @@ export const MEDIA_HOVER_EFFECT_OPTIONS: Array<{ value: MediaHoverEffect; label:
   { value: 'lift', label: 'Lift' },
 ]
 
+export const MOBILE_GRID_COLUMN_OPTIONS: Array<{ value: MobileGridColumns; label: string }> = [
+  { value: 3, label: '3 in a row' },
+  { value: 4, label: '4 in a row' },
+  { value: 5, label: '5 in a row' },
+  { value: 6, label: '6 in a row' },
+]
+
 const MEDIA_DISPLAY_FILTERS = new Set<MediaDisplayFilter>(
   MEDIA_DISPLAY_FILTER_OPTIONS.map((option) => option.value),
 )
@@ -35,6 +43,11 @@ export function isMediaDisplayFilter(value: unknown): value is MediaDisplayFilte
 
 export function isMediaHoverEffect(value: unknown): value is MediaHoverEffect {
   return typeof value === 'string' && MEDIA_HOVER_EFFECTS.has(value as MediaHoverEffect)
+}
+
+export function isMobileGridColumns(value: unknown): value is MobileGridColumns {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  return MOBILE_GRID_COLUMN_OPTIONS.some((option) => option.value === numeric)
 }
 
 export function clampMediaRadius(value: unknown): number | null {

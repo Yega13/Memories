@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { clampMediaRadius, isMediaDisplayFilter, isMediaHoverEffect, type MediaDisplayFilter, type MediaHoverEffect } from '@/lib/media-display'
+import { clampMediaRadius, isMediaDisplayFilter, isMediaHoverEffect, isMobileGridColumns, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns } from '@/lib/media-display'
 import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
@@ -15,6 +15,7 @@ export async function POST(req: Request) {
     video_autoplay?: boolean
     media_filter?: MediaDisplayFilter
     media_hover?: MediaHoverEffect
+    mobile_grid_columns?: MobileGridColumns
     reset_radius_overrides?: boolean
     reset_filter_overrides?: boolean
   }
@@ -32,6 +33,8 @@ export async function POST(req: Request) {
   const mediaFilter = isMediaDisplayFilter(rawMediaFilter) ? rawMediaFilter : null
   const rawMediaHover = body.media_hover ?? 'none'
   const mediaHover = isMediaHoverEffect(rawMediaHover) ? rawMediaHover : null
+  const rawMobileGridColumns = body.mobile_grid_columns ?? 3
+  const mobileGridColumns = isMobileGridColumns(rawMobileGridColumns) ? Number(rawMobileGridColumns) as MobileGridColumns : null
 
   if (!slug || !token) {
     return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
@@ -44,6 +47,9 @@ export async function POST(req: Request) {
   }
   if (!mediaHover) {
     return NextResponse.json({ error: 'Invalid hover effect' }, { status: 400, headers: NO_STORE })
+  }
+  if (!mobileGridColumns) {
+    return NextResponse.json({ error: 'Invalid mobile grid' }, { status: 400, headers: NO_STORE })
   }
 
   const admin = createAdminClient()
@@ -62,10 +68,10 @@ export async function POST(req: Request) {
 
   const { data: updated, error } = await admin
     .from('albums')
-    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter, media_hover: mediaHover })
+    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter, media_hover: mediaHover, mobile_grid_columns: mobileGridColumns })
     .eq('id', album.id)
-    .select('media_radius, video_autoplay, media_filter, media_hover')
-    .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect }>()
+    .select('media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns')
+    .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect; mobile_grid_columns: MobileGridColumns }>()
 
   if (error) {
     console.error('[album/media-settings] update failed:', error.message)
@@ -74,6 +80,7 @@ export async function POST(req: Request) {
       error.message.includes('video_autoplay') ||
       error.message.includes('media_filter') ||
       error.message.includes('media_hover') ||
+      error.message.includes('mobile_grid_columns') ||
       error.message.includes('schema cache')
     return NextResponse.json(
       {
