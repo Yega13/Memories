@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Playfair_Display } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
+import BackToTopButton from "@/components/BackToTopButton";
 import SiteFooter from "@/components/SiteFooter";
 import "./globals.css";
 
@@ -317,6 +318,7 @@ export default function RootLayout({
         />
         {children}
         <SiteFooter />
+        <BackToTopButton />
         <AppToastViewport />
       </body>
     </html>
