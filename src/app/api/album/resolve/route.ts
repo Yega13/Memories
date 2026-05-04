@@ -19,9 +19,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 //
 //   2. Password gate - if the album has a password set AND the owner is
 //      Pro+, we return only minimal info (`{ album: null, password_required:
-//      true, summary: { id, title } }`) unless the visitor's per-album cookie
-//      proves they've already entered the password. The owner's flow is
-//      handled separately via the `?owner=` query param on the page.
+//      true, summary: { id, title } }`) unless the per-album cookie proves
+//      the password has already been entered. The owner token does not skip
+//      this gate; after unlock, the same URL still enables owner settings.
 //
 //   3. Safety - never return owner_token, password_hash, or user_id to the
 //      browser. The internal lookup needs them; the response shape filters.
@@ -51,10 +51,6 @@ const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, backgr
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const slug = (searchParams.get('slug') ?? '').trim()
-  // Owners pass their owner_token along so the resolver can skip the
-  // password gate for them. Same trust model as the rest of the site -
-  // whoever holds the token is the owner.
-  const ownerToken = (searchParams.get('owner_token') ?? '').trim()
   if (!slug) {
     return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
   }
@@ -68,7 +64,7 @@ export async function GET(req: Request) {
     if (byRandom.retired_at) {
       return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
     }
-    return await buildResponse(byRandom, ownerToken)
+    return await buildResponse(byRandom)
   }
 
   // Custom-slug lookup. Tier-gated.
@@ -86,19 +82,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
   }
 
-  return await buildResponse(byCustom, ownerToken)
+  return await buildResponse(byCustom)
 }
 
-async function buildResponse(album: FullAlbum, ownerToken: string) {
-  // We need owner_token internally for two reasons: (1) timing-safe compare
-  // to short-circuit the password gate for the owner, (2) ensuring we don't
-  // leak it back to the caller. Re-fetch it through the same admin client
-  // so we don't have to add it to SELECT_COLUMNS (which is shared with the
-  // public projection and shouldn't grow).
-  const ownerMatches =
-    ownerToken.length > 0 &&
-    (await ownerTokenMatches(album.id, ownerToken))
-
+async function buildResponse(album: FullAlbum) {
   // Owner tier drives both the upload cap returned to the client AND the
   // password-enforcement decision. Compute it once.
   const ownerTier = await getUserTierById(album.user_id)
@@ -109,7 +96,7 @@ async function buildResponse(album: FullAlbum, ownerToken: string) {
   // the album becomes openly viewable again. We still keep the hash on the
   // row so re-upgrading restores it.
   let passwordEnforced = false
-  if (album.password_hash && !ownerMatches && ownerTier !== 'free') {
+  if (album.password_hash && ownerTier !== 'free') {
     passwordEnforced = true
   }
 
@@ -191,15 +178,4 @@ async function touchAlbumActivity(albumId: string) {
     .update({ last_activity_at: new Date().toISOString() })
     .eq('id', albumId)
   if (error) console.error('[album/resolve] activity touch failed:', error.message)
-}
-
-async function ownerTokenMatches(albumId: string, supplied: string): Promise<boolean> {
-  const admin = createAdminClient()
-  const { data } = await admin
-    .from('albums')
-    .select('owner_token')
-    .eq('id', albumId)
-    .maybeSingle<{ owner_token: string }>()
-  if (!data) return false
-  return timingSafeEqual(supplied, data.owner_token)
 }

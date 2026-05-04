@@ -40,6 +40,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const [lightbox, setLightbox] = useState<number | null>(null)
+  const [swipeOffset, setSwipeOffset] = useState(0)
+  const [swipeAnimating, setSwipeAnimating] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
   const [tileRadiusMaxById, setTileRadiusMaxById] = useState<Record<string, number>>({})
@@ -174,22 +176,52 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (e.touches.length !== 1) return
     const touch = e.touches[0]
     swipeRef.current = { x: touch.clientX, y: touch.clientY, time: Date.now() }
+    setSwipeAnimating(false)
+    setSwipeOffset(0)
+  }
+
+  function handleSwipeMove(e: React.TouchEvent<HTMLDivElement>) {
+    const start = swipeRef.current
+    if (!start || e.touches.length !== 1) return
+
+    const touch = e.touches[0]
+    const deltaX = touch.clientX - start.x
+    const deltaY = touch.clientY - start.y
+    if (Math.abs(deltaX) < 8 || Math.abs(deltaX) < Math.abs(deltaY)) return
+
+    setSwipeOffset(deltaX)
   }
 
   function handleSwipeEnd(e: React.TouchEvent<HTMLDivElement>) {
     const start = swipeRef.current
     swipeRef.current = null
-    if (!start || e.changedTouches.length !== 1) return
+    if (!start || e.changedTouches.length !== 1) {
+      setSwipeOffset(0)
+      return
+    }
 
     const touch = e.changedTouches[0]
     const deltaX = touch.clientX - start.x
     const deltaY = touch.clientY - start.y
     const elapsed = Date.now() - start.time
-    const isHorizontalSwipe = Math.abs(deltaX) >= 48 && Math.abs(deltaX) > Math.abs(deltaY) * 1.25
-    if (!isHorizontalSwipe || elapsed > 900) return
+    const velocity = Math.abs(deltaX) / Math.max(1, elapsed)
+    const isHorizontalSwipe = Math.abs(deltaX) >= 42 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15
+    if (!isHorizontalSwipe && velocity < 0.42) {
+      setSwipeAnimating(true)
+      setSwipeOffset(0)
+      window.setTimeout(() => setSwipeAnimating(false), 180)
+      return
+    }
 
-    if (deltaX < 0) next()
-    else prev()
+    const direction = deltaX < 0 ? -1 : 1
+    setSwipeAnimating(true)
+    setSwipeOffset(direction * window.innerWidth)
+    window.setTimeout(() => {
+      if (direction < 0) next()
+      else prev()
+      setSwipeAnimating(false)
+      setSwipeOffset(0)
+    }, 150)
   }
 
   useEffect(() => {
@@ -241,6 +273,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   useEffect(() => {
     setLightboxMediaNode(null)
     setLightboxRadiusMax(null)
+    setSwipeAnimating(false)
+    setSwipeOffset(0)
   }, [current?.id])
 
   useEffect(() => {
@@ -411,10 +445,21 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
           <div
             className="hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4"
-            style={{ touchAction: 'pan-y' }}
+            style={{
+              touchAction: 'pan-y',
+              transform: `translateX(${swipeOffset}px) scale(${Math.max(0.94, 1 - Math.min(Math.abs(swipeOffset), 180) / 1800)})`,
+              transition: swipeAnimating ? 'transform 150ms ease-out' : 'none',
+            }}
             onClick={(e) => e.stopPropagation()}
             onTouchStart={handleSwipeStart}
+            onTouchMove={handleSwipeMove}
             onTouchEnd={handleSwipeEnd}
+            onTouchCancel={() => {
+              swipeRef.current = null
+              setSwipeAnimating(true)
+              setSwipeOffset(0)
+              window.setTimeout(() => setSwipeAnimating(false), 180)
+            }}
           >
             {broken.has(current.id) ? (
               <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }}>

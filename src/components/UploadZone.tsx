@@ -78,13 +78,29 @@ type UploadStatus = {
   percent: number
 }
 
-async function verifyPublicImageUrl(url: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' })
-    return res.ok
-  } catch {
-    return false
-  }
+type PhotoInsertRow = {
+  album_id: string
+  storage_path: string
+  storage_backend: 'supabase'
+  url: string
+  caption: string | null
+  author_name: string | null
+  media_type: 'image'
+  poster_path: null
+  poster_url: null
+  duration_seconds: null
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+function isRetriableStorageError(message: string): boolean {
+  return /failed to fetch|network|timeout|abort/i.test(message)
+}
+
+function isExistingObjectError(message: string): boolean {
+  return /already exists|duplicate|resource already exists/i.test(message)
 }
 
 export default function UploadZone({ album, onPhotoAdded }: Props) {
@@ -154,12 +170,119 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     })
   }
 
+  async function uploadPhoto(item: PendingItem): Promise<PhotoInsertRow> {
+    const ext = extensionFor(item.file, item.kind)
+    const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
+    const filename = `${baseId}.${ext}`
+    const path = `${album.id}/${filename}`
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const { error } = await supabase.storage
+        .from('Photos')
+        .upload(path, item.file, { contentType: item.file.type || undefined })
+
+      if (!error || isExistingObjectError(error.message)) {
+        return {
+          album_id: album.id,
+          storage_path: path,
+          storage_backend: 'supabase',
+          url: supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl,
+          caption: item.caption.trim() || null,
+          author_name: item.author.trim() || null,
+          media_type: 'image',
+          poster_path: null,
+          poster_url: null,
+          duration_seconds: null,
+        }
+      }
+
+      if (!isRetriableStorageError(error.message) || attempt === 3) {
+        throw new Error(error.message)
+      }
+
+      await wait(450 * attempt)
+    }
+
+    throw new Error('Upload failed')
+  }
+
+  async function uploadPhotoBatch(queue: PendingItem[]) {
+    const rows: PhotoInsertRow[] = []
+    let completed = 0
+    let cursor = 0
+    const concurrency = Math.min(3, queue.length)
+
+    setUploadStatus({
+      fileName: `${queue.length} photos`,
+      index: 0,
+      total: queue.length,
+      phase: 'Uploading photos',
+      percent: 8,
+    })
+
+    async function worker() {
+      while (cursor < queue.length) {
+        const item = queue[cursor]
+        cursor += 1
+        const row = await uploadPhoto(item)
+        rows.push(row)
+        completed += 1
+        setUploadStatus({
+          fileName: item.file.name,
+          index: completed,
+          total: queue.length,
+          phase: completed === queue.length ? 'Saving to album' : 'Uploading photos',
+          percent: Math.round((completed / queue.length) * 88),
+        })
+      }
+    }
+
+    await Promise.all(Array.from({ length: concurrency }, () => worker()))
+
+    const { error: dbError } = await supabase.from('photos').insert(rows)
+    if (dbError) throw new Error(`Save failed: ${dbError.message}`)
+
+    queue.forEach((item) => URL.revokeObjectURL(item.preview))
+    setPending((prev) => prev.filter((item) => !queue.includes(item)))
+    setUploadStatus({
+      fileName: `${queue.length} photos`,
+      index: queue.length,
+      total: queue.length,
+      phase: 'Done',
+      percent: 100,
+    })
+  }
+
   async function uploadAll() {
     if (pending.length === 0) return
     const queue = [...pending]
     setUploading(true)
     setUploadError('')
     setUploadStatus(null)
+
+    if (queue.every((item) => item.kind === 'image')) {
+      try {
+        await uploadPhotoBatch(queue)
+        setPending([])
+        setUploading(false)
+        setUploadStatus(null)
+        showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
+        onPhotoAdded()
+      } catch (e) {
+        const message = `Upload failed: ${e instanceof Error ? e.message : 'Network error'}`
+        setUploadError(message)
+        showAppToast(message, 'error')
+        setUploadStatus({
+          fileName: `${queue.length} photos`,
+          index: 0,
+          total: queue.length,
+          phase: 'Upload failed',
+          percent: 0,
+        })
+        setUploading(false)
+      }
+      return
+    }
 
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i]
@@ -219,16 +342,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         storagePath = path
         publicUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
         storageBackend = 'supabase'
-        const reachable = await verifyPublicImageUrl(publicUrl)
-        if (!reachable) {
-          await supabase.storage.from('Photos').remove([path])
-          const message = 'Upload failed: the uploaded photo could not be loaded from storage. Please try again.'
-          setUploadError(message)
-          showAppToast(message, 'error')
-          setCurrentStatus('Upload failed', 0)
-          setUploading(false)
-          return
-        }
         setCurrentStatus('Photo uploaded', 82)
       }
 

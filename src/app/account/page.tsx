@@ -74,6 +74,7 @@ type AccountAlbum = {
   id: string
   slug: string
   custom_slug: string | null
+  owner_token: string
   title: string
   created_at: string
 }
@@ -188,7 +189,7 @@ export default async function AccountPage({ searchParams }: Props) {
 
   const { data: accountAlbums } = await admin
     .from('albums')
-    .select('id, slug, custom_slug, title, created_at')
+    .select('id, slug, custom_slug, owner_token, title, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .returns<AccountAlbum[]>()
@@ -436,7 +437,7 @@ export default async function AccountPage({ searchParams }: Props) {
                     className="rounded-xl p-3"
                     style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}
                   >
-                    <Link href={`/${album.custom_slug ?? album.slug}`} className="flex items-center gap-3 transition hover:opacity-80">
+                    <Link href={`/${album.slug}?owner=${album.owner_token}`} className="flex items-center gap-3 transition hover:opacity-80">
                       <span className="relative h-14 w-14 flex-none overflow-hidden rounded-lg" style={{ background: '#E8E0D2' }}>
                         {album.cover_url ? (
                           <Image
