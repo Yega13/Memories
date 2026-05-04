@@ -3,6 +3,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { R2Env } from '@/lib/r2'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { timingSafeEqual } from '@/lib/timing-safe'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
@@ -13,6 +14,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 // table using the service-role client. The DELETE policy on `photos` is now
 // closed, so this endpoint is the only path to deletion.
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { slug?: string; owner_token?: string; photo_id?: string }
   try {
     body = await req.json()

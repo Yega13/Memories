@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isValidAlbumBackground, normalizeAlbumBackground } from '@/lib/album-background'
 import { timingSafeEqual } from '@/lib/timing-safe'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { slug?: string; owner_token?: string; background_theme?: string | null }
   try {
     body = await req.json()

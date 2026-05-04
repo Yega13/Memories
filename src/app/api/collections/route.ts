@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { validateCustomSlug } from '@/lib/custom-slug'
 import { timingSafeEqual } from '@/lib/timing-safe'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
@@ -75,6 +76,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { slug?: string; owner_token?: string; name?: string; description?: string; collection_slug?: string; collection_id?: string }
   try {
     body = await req.json()

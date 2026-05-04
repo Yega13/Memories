@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { forbidCrossSiteRequest } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
@@ -6,29 +7,6 @@ const VERIFIED_FROM = "Hushare Support <support@hushare.space>";
 const VERIFIED_TO = "support@hushare.space";
 const FALLBACK_FROM = "Hushare Support <onboarding@resend.dev>";
 const FALLBACK_TO = "husharesupport@gmail.com";
-
-const ALLOWED_ORIGIN_HOSTS = new Set([
-  "hushare.space",
-  "www.hushare.space",
-]);
-// Cloudflare preview deployments live on *.workers.dev / *.pages.dev.
-const ALLOWED_ORIGIN_SUFFIXES = [".workers.dev", ".pages.dev"];
-
-function isAllowedOrigin(origin: string, host: string | null): boolean {
-  let url: URL;
-  try {
-    url = new URL(origin);
-  } catch {
-    return false;
-  }
-  // Same-origin (origin host matches the request's Host header) always allowed.
-  if (host && url.host === host) return true;
-  if (ALLOWED_ORIGIN_HOSTS.has(url.host)) return true;
-  if (ALLOWED_ORIGIN_SUFFIXES.some((s) => url.host.endsWith(s))) return true;
-  // localhost for `next dev` / preview.
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return true;
-  return false;
-}
 
 type Body = {
   name?: string;
@@ -63,12 +41,8 @@ function json(status: number, body: unknown) {
 }
 
 export async function POST(req: Request) {
-  // Block cross-site abuse: only our own pages (or same-origin previews) can POST here.
-  const origin = req.headers.get("origin");
-  const host = req.headers.get("host");
-  if (origin && !isAllowedOrigin(origin, host)) {
-    return json(403, { error: "Forbidden" });
-  }
+  const forbidden = forbidCrossSiteRequest(req);
+  if (forbidden) return forbidden;
 
   let body: Body;
   try {

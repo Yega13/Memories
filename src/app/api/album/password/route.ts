@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { hashPassword, MIN_PASSWORD_LEN, MAX_PASSWORD_LEN } from '@/lib/album-password'
 import { timingSafeEqual } from '@/lib/timing-safe'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
@@ -17,6 +18,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 // Body: { slug, owner_token, password: string | null }
 // Pass null/empty string to clear.
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { slug?: string; owner_token?: string; password?: string | null }
   try {
     body = await req.json()

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserTierById } from '@/lib/subscriptions'
 import { uploadCapsForTier, PRO_VIDEO_BYTES } from '@/lib/media'
 import type { R2Env } from '@/lib/r2'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
@@ -38,6 +39,9 @@ const FILENAME_RE = /^[a-z0-9._-]{1,128}$/i
 // photos is intentionally guest-friendly. The albumId scopes the key so
 // uploads can't write outside their own album folder.
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let form: FormData
   try {
     form = await req.formData()

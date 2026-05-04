@@ -314,7 +314,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           publicUrl = res.url
           storageBackend = 'r2'
         } catch (e) {
-          console.error('R2 video upload failed:', e)
           const message = `Upload failed: ${(e as Error).message}`
           setUploadError(message)
           showAppToast(message, 'error')
@@ -330,7 +329,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           .upload(path, item.file, { contentType: item.file.type || undefined })
 
         if (storageError) {
-          console.error('Storage error:', storageError)
           const message = `Upload failed: ${storageError.message}`
           setUploadError(message)
           showAppToast(message, 'error')
@@ -361,8 +359,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
             })
             posterPath = res.storage_path
             posterUrl = res.url
-          } catch (e) {
-            console.warn('Poster upload failed:', e)
+          } catch {
           }
           durationSeconds = poster.durationSeconds || null
         }
@@ -383,7 +380,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       })
 
       if (dbError) {
-        console.error('DB error:', dbError)
         const message = `Save failed: ${dbError.message}`
         setUploadError(message)
         showAppToast(message, 'error')

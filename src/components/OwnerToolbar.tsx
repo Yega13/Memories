@@ -435,9 +435,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
           ? `${i + 1}-${photo.caption.replace(/[^a-z0-9]/gi, '_')}.${ext}`
           : `${prefix}-${i + 1}.${ext}`
         folder.file(name, blob)
-      } catch (e) {
+      } catch {
         failed += 1
-        console.warn('[downloadZip] failed to fetch item:', photo.id, e)
       }
       setZipProgress({ done: i + 1, total: photos.length, failed })
     }

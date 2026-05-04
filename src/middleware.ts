@@ -4,8 +4,17 @@ import { NextResponse, type NextRequest } from 'next/server'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
 
-// Refreshes the auth session on every matching request so Server Components
-// always see the user's current state. Required by @supabase/ssr.
+function applySecurityHeaders(response: NextResponse, request: NextRequest) {
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
+  if (process.env.NODE_ENV === 'production' || request.nextUrl.protocol === 'https:') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  }
+  return response
+}
+
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request })
 
@@ -24,17 +33,12 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  // Touching getUser() forces a token refresh if needed. Don't put logic
-  // between createServerClient and this call - the cookies need to flow.
   await supabase.auth.getUser()
 
-  return response
+  return applySecurityHeaders(response, request)
 }
 
 export const config = {
-  // Skip Next.js internals, static assets, and webhook endpoints.
-  // Webhooks are server-to-server with no auth cookies, and we want the
-  // raw request body untouched for signature verification.
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],

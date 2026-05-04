@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { validateCustomSlug } from '@/lib/custom-slug'
 import { timingSafeEqual } from '@/lib/timing-safe'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
@@ -17,6 +18,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 // Body: { slug: string, owner_token: string, custom_slug: string | null }
 // Pass null/empty to clear an existing custom URL.
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { slug?: string; owner_token?: string; custom_slug?: string | null }
   try {
     body = await req.json()

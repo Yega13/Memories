@@ -7,6 +7,7 @@ import {
   PASSWORD_COOKIE_MAX_AGE_SECONDS,
   verifyPassword,
 } from '@/lib/album-password'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
@@ -22,6 +23,9 @@ const LOCKOUT_SECONDS = 5 * 60       // how long the gate stays closed
 // on success. Rate-limits per album (album_id is the brute-force target;
 // IP rotation by attackers wouldn't help because we don't key on IP).
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { slug?: string; password?: string }
   try {
     body = await req.json()

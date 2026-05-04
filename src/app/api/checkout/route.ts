@@ -1,38 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createCheckout, tierFromProduct } from '@/lib/polar'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Block cross-site abuse - only our pages (or same-origin previews) can post.
-const ALLOWED_ORIGIN_HOSTS = new Set(['hushare.space', 'www.hushare.space'])
-const ALLOWED_ORIGIN_SUFFIXES = ['.workers.dev', '.pages.dev']
-
-function isAllowedOrigin(origin: string, host: string | null): boolean {
-  let url: URL
-  try {
-    url = new URL(origin)
-  } catch {
-    return false
-  }
-  if (host && url.host === host) return true
-  if (ALLOWED_ORIGIN_HOSTS.has(url.host)) return true
-  if (ALLOWED_ORIGIN_SUFFIXES.some((s) => url.host.endsWith(s))) return true
-  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') return true
-  return false
-}
-
 export async function POST(req: Request) {
-  const origin = req.headers.get('origin')
-  const host = req.headers.get('host')
-  if (origin && !isAllowedOrigin(origin, host)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
 
-  // Accept either application/x-www-form-urlencoded (HTML form post)
-  // or application/json (programmatic). Both must yield a productId.
   let productId: string | null = null
   const contentType = req.headers.get('content-type') ?? ''
   if (contentType.includes('application/json')) {
