@@ -79,16 +79,15 @@ type UploadStatus = {
 }
 
 type PhotoInsertRow = {
-  album_id: string
   storage_path: string
-  storage_backend: 'supabase'
+  storage_backend: 'supabase' | 'r2'
   url: string
   caption: string | null
   author_name: string | null
-  media_type: 'image'
-  poster_path: null
-  poster_url: null
-  duration_seconds: null
+  media_type: 'image' | 'video'
+  poster_path: string | null
+  poster_url: string | null
+  duration_seconds: number | null
 }
 
 function wait(ms: number): Promise<void> {
@@ -183,7 +182,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
       if (!error || isExistingObjectError(error.message)) {
         return {
-          album_id: album.id,
           storage_path: path,
           storage_backend: 'supabase',
           url: supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl,
@@ -239,8 +237,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
     await Promise.all(Array.from({ length: concurrency }, () => worker()))
 
-    const { error: dbError } = await supabase.from('photos').insert(rows)
-    if (dbError) throw new Error(`Save failed: ${dbError.message}`)
+    await saveUploadedRows(rows)
 
     queue.forEach((item) => URL.revokeObjectURL(item.preview))
     setPending((prev) => prev.filter((item) => !queue.includes(item)))
@@ -366,8 +363,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       }
 
       setCurrentStatus('Saving to album', 95)
-      const { error: dbError } = await supabase.from('photos').insert({
-        album_id: album.id,
+      const row: PhotoInsertRow = {
         storage_path: storagePath,
         storage_backend: storageBackend,
         url: publicUrl,
@@ -377,10 +373,12 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         poster_path: posterPath,
         poster_url: posterUrl,
         duration_seconds: durationSeconds,
-      })
+      }
 
-      if (dbError) {
-        const message = `Save failed: ${dbError.message}`
+      try {
+        await saveUploadedRows([row])
+      } catch (e) {
+        const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded file'}`
         setUploadError(message)
         showAppToast(message, 'error')
         setCurrentStatus('Save failed', 0)
@@ -397,6 +395,16 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     setUploadStatus(null)
     showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
     onPhotoAdded()
+  }
+
+  async function saveUploadedRows(rows: PhotoInsertRow[]) {
+    const res = await fetch('/api/album/photos/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ album_id: album.id, photos: rows }),
+    })
+    const body = await res.json().catch(() => ({})) as { error?: string }
+    if (!res.ok) throw new Error(body.error ?? 'Could not save uploaded files')
   }
 
   return (
