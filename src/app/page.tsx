@@ -332,7 +332,7 @@ export default function Home() {
               caption: '"Share it."',
               label: 'Then',
               desc: 'Text it, print a QR for the table, drop it in the group chat. One link, everyone in.',
-              image: '/share.jpg',
+              image: '/shareit.jpg',
               alt: 'Photo card representing a shared Hushare album link',
             },
             {
@@ -732,7 +732,7 @@ export default function Home() {
           </div>
         </div>
       </section>
-
+
     </main>
   )
 }
