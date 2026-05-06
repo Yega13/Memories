@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { hasAccountAccess } from '@/lib/access'
 
 export const runtime = 'nodejs'
 
-// Magic-link landing route. The user clicks the link in their email,
-// Supabase redirects here with a `code` query param, we exchange that
-// for a session cookie and forward them on.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
+
+// Magic-link / OAuth landing route. Supabase redirects here with a `code`
+// query param after the user clicks the email link or completes the OAuth
+// consent screen. We exchange the code for a session cookie and forward on.
+//
+// We intentionally do NOT use the shared `createClient` helper here: that
+// helper writes session cookies via `cookies().set()`, and on Cloudflare
+// Workers (via OpenNext) those writes do not always attach to a
+// `NextResponse.redirect()` returned from a Route Handler. Writing cookies
+// directly onto the response object we return is the safe pattern.
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const code = url.searchParams.get('code')
@@ -19,7 +29,20 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL('/login?error=missing_code', url.origin))
   }
 
-  const supabase = await createClient()
+  const cookieStore = await cookies()
+  const pendingCookies: Array<{ name: string; value: string; options: CookieOptions }> = []
+
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        for (const c of cookiesToSet) pendingCookies.push(c)
+      },
+    },
+  })
+
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error) {
@@ -35,5 +58,9 @@ export async function GET(req: Request) {
     ? requestedNext ?? '/account'
     : requestedNext && requestedNext !== '/account' ? requestedNext : '/'
 
-  return NextResponse.redirect(new URL(target, url.origin))
+  const response = NextResponse.redirect(new URL(target, url.origin))
+  for (const { name, value, options } of pendingCookies) {
+    response.cookies.set(name, value, options)
+  }
+  return response
 }
