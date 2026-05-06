@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 
 export const metadata: Metadata = {
   title: 'Sign in',
-  description: 'Sign in to your Hushare account with a magic link — no password needed.',
+  description: 'Sign in to your Hushare account with Google or an email magic link — no password needed.',
   robots: { index: false, follow: false },
 }
 
@@ -46,7 +46,7 @@ export default async function LoginPage({ searchParams }: Props) {
             Sign in to Hushare
           </h1>
           <p className="text-sm" style={{ color: '#5C4A3C' }}>
-            We&apos;ll email you a magic link — no password needed.
+            Continue with Google or get a magic link by email.
           </p>
         </div>
 
