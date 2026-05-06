@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Send, CheckCircle2, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -25,6 +25,37 @@ export default function LoginForm() {
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [oauthBusy, setOauthBusy] = useState(false)
+
+  // While waiting on a magic link, poll for sign-in. The link opens in a new
+  // tab, but cookies are shared across tabs in the same browser, so this tab
+  // can detect the success and follow along instead of stranding the user on
+  // a dead "Check your inbox" view.
+  useEffect(() => {
+    if (status !== 'sent') return
+
+    let cancelled = false
+    async function check() {
+      try {
+        const res = await fetch('/api/me', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = (await res.json()) as { signedIn?: boolean; canAccessAccount?: boolean }
+        if (cancelled || !data.signedIn) return
+        const params = new URLSearchParams(window.location.search)
+        const rawNext = params.get('next') ?? ''
+        const safeNext = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : ''
+        window.location.href = safeNext || (data.canAccessAccount ? '/account' : '/')
+      } catch {
+        // Transient network errors are fine - the next tick will retry.
+      }
+    }
+
+    check()
+    const interval = setInterval(check, 2500)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [status])
 
   async function onGoogle() {
     if (oauthBusy || status === 'sending') return
@@ -90,7 +121,9 @@ export default function LoginForm() {
           We sent a sign-in link to <strong>{email}</strong>.
         </p>
         <p className="text-xs mt-3" style={{ color: '#8B6F4E' }}>
-          The link expires in 1 hour. If you don&apos;t see it, check your spam folder.
+          The link expires in 1 hour. Open it in this same browser — this tab
+          will follow you in automatically. If you don&apos;t see the email,
+          check your spam folder.
         </p>
       </div>
     )
