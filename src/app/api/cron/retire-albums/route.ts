@@ -17,12 +17,17 @@ type RetirementCandidate = {
 }
 
 export async function POST(req: Request) {
+  // Fail-closed: a missing secret in production means anyone could trigger
+  // mass deletion of inactive free albums. Refuse to run unless the secret
+  // is set AND the caller presents it.
   const secret = process.env.ALBUM_RETIREMENT_SECRET
-  if (secret) {
-    const auth = req.headers.get('authorization') ?? ''
-    if (auth !== `Bearer ${secret}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })
-    }
+  if (!secret) {
+    console.error('[retire-albums] ALBUM_RETIREMENT_SECRET not set; refusing to run')
+    return NextResponse.json({ error: 'Not configured' }, { status: 503, headers: NO_STORE })
+  }
+  const auth = req.headers.get('authorization') ?? ''
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })
   }
 
   const cutoff = new Date(Date.now() - RETIRE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString()

@@ -17,6 +17,7 @@
 /.next/
 /.next-dev-local*/
 /.next-local*/
+/.next-broken-*/
 /out/
 
 # opennext / cloudflare build output

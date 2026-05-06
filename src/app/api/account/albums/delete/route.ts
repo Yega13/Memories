@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { deleteAlbumAssetsAndRows } from '@/lib/album-delete'
+import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 export async function POST(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { album_id?: string }
   try {
     body = await req.json()

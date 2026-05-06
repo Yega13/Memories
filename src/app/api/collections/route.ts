@@ -142,6 +142,9 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { collection_id?: string; name?: string; description?: string; collection_slug?: string }
   try {
     body = await req.json()
@@ -208,6 +211,9 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   let body: { collection_id?: string }
   try {
     body = await req.json()
