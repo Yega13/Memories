@@ -20,7 +20,8 @@
       "Bash(git log *)",
       "Bash(node -e \"const l=require\\('lucide-react'\\); console.log\\('Lock:', typeof l.Lock, 'LockOpen:', typeof l.LockOpen, 'Unlock:', typeof l.Unlock\\)\")",
       "Bash(git rm *)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(node *)"
     ]
   }
 }

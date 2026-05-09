@@ -676,16 +676,7 @@ export default function PricingPage() {
           style={{ color: "#8B6F4E", fontFamily: "var(--font-serif)" }}
         >
           Other questions? Write to{" "}
-          <a
-            href="mailto:support@hushare.space"
-            style={{
-              color: "#254F22",
-              textDecoration: "underline",
-              textDecorationStyle: "dotted",
-            }}
-          >
-            support@hushare.space
-          </a>
+          <span style={{ color: "#254F22" }}>husharesupport@gmail.com</span>
         </p>
       </section>
 
