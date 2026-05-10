@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Script from 'next/script'
 import { Send, CheckCircle2, AlertCircle } from 'lucide-react'
 
@@ -20,6 +20,14 @@ declare global {
 export default function SupportForm() {
   const [status, setStatus] = useState<Status>('idle')
   const [errorMsg, setErrorMsg] = useState('')
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setSubject(params.get('subject') ?? '')
+    setMessage(params.get('message') ?? '')
+  }, [])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -32,6 +40,8 @@ export default function SupportForm() {
     if (data.get('website')) {
       setStatus('sent')
       form.reset()
+      setSubject('')
+      setMessage('')
       return
     }
 
@@ -65,6 +75,8 @@ export default function SupportForm() {
 
       setStatus('sent')
       form.reset()
+      setSubject('')
+      setMessage('')
       // Reset the widget so a follow-up message gets a fresh token.
       window.turnstile?.reset()
     } catch (err) {
@@ -187,6 +199,8 @@ export default function SupportForm() {
             type="text"
             maxLength={120}
             placeholder="e.g. I lost my owner link for an album"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
             className="w-full rounded-xl px-4 py-3 focus:outline-none transition text-base"
             style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
           />
@@ -207,6 +221,8 @@ export default function SupportForm() {
             rows={6}
             maxLength={4000}
             placeholder="Tell us what's going on. Album link, screenshots, anything that helps."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
             className="w-full rounded-xl px-4 py-3 focus:outline-none transition text-base resize-y"
             style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22', minHeight: '140px' }}
           />

@@ -424,10 +424,13 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       >
         <Upload className="hush-upload-icon w-8 h-8 mx-auto mb-3" style={{ color: '#A89880' }} />
         <p className="hush-upload-title font-medium" style={{ color: '#254F22' }}>
-          Drop photos or videos here or <span style={{ color: '#7C4A2D', textDecoration: 'underline' }}>browse</span>
+          Add photos or videos
+        </p>
+        <p className="text-sm mt-1" style={{ color: '#7C4A2D' }}>
+          Drop files here or <span style={{ textDecoration: 'underline' }}>browse</span>. No account needed.
         </p>
         <p className="hush-upload-hint text-xs mt-1" style={{ color: '#A89880' }}>
-          JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} - MP4, MOV, WebM up to {formatFileSize(caps.video)}
+          JPG, PNG, GIF, WebP, HEIC up to {formatFileSize(caps.image)} - MP4, MOV, WebM up to {formatFileSize(caps.video)}. Captions and names are optional.
         </p>
         <p className="mt-3 text-[11px] leading-relaxed" style={{ color: '#8B6F4E' }}>
           By uploading, you agree to the{' '}

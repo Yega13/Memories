@@ -330,7 +330,7 @@ export default function PricingPage() {
           className="text-xs sm:text-sm font-medium uppercase mb-4"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
         >
-          Pricing - Pro & Studio launching soon
+          Pricing
         </p>
         <h1
           style={{
@@ -676,7 +676,7 @@ export default function PricingPage() {
           style={{ color: "#8B6F4E", fontFamily: "var(--font-serif)" }}
         >
           Other questions? Write to{" "}
-          <span style={{ color: "#254F22" }}>husharesupport@gmail.com</span>
+          <a href="mailto:support@hushare.space" style={{ color: "#254F22", fontWeight: 600 }}>support@hushare.space</a>
         </p>
       </section>
 
