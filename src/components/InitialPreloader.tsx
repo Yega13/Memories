@@ -16,11 +16,11 @@ export default function InitialPreloader() {
 
     window.sessionStorage.setItem(SEEN_KEY, '1')
     setPhase('visible')
-    document.body.classList.add('hush-page-preloading')
+    document.body.classList.add('hush-page-preloading', 'hush-scroll-locked')
 
     const leaveTimeout = window.setTimeout(() => {
       setPhase('leaving')
-      document.body.classList.remove('hush-page-preloading')
+      document.body.classList.remove('hush-page-preloading', 'hush-scroll-locked')
       document.body.classList.add('hush-page-loaded')
     }, 1750)
     const hideTimeout = window.setTimeout(() => setPhase('hidden'), 2310)
@@ -28,7 +28,7 @@ export default function InitialPreloader() {
     return () => {
       window.clearTimeout(leaveTimeout)
       window.clearTimeout(hideTimeout)
-      document.body.classList.remove('hush-page-preloading')
+      document.body.classList.remove('hush-page-preloading', 'hush-scroll-locked')
     }
   }, [])
 

@@ -578,6 +578,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const current = lightbox !== null ? photos[lightbox] : null
 
   useEffect(() => {
+    if (!current) return
+    document.body.classList.add('hush-scroll-locked')
+    return () => {
+      document.body.classList.remove('hush-scroll-locked')
+    }
+  }, [current])
+
+  useEffect(() => {
     const maybeGrid = gridRef.current
     if (!maybeGrid) return
     const grid = maybeGrid
@@ -765,7 +773,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       </div>
 
       {current && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={closeLightbox}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden" onClick={closeLightbox} onWheel={(e) => e.preventDefault()}>
           <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.82)' }} />
 
           <button
