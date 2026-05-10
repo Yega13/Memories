@@ -10,6 +10,7 @@ import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
 import PasswordGate from '@/components/PasswordGate'
+import BrandPreloader from '@/components/BrandPreloader'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 
 const DEFAULT_BG = '#FDFAF5'
@@ -159,11 +160,7 @@ export default function AlbumPage() {
   }, [])
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={albumBackgroundStyle(DEFAULT_BG)}>
-        <div className="w-8 h-8 rounded-full animate-spin" style={{ border: '2px solid #DDD5C5', borderTopColor: '#254F22' }} />
-      </div>
-    )
+    return <BrandPreloader label="Loading album" />
   }
 
   if (passwordGate) {
