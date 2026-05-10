@@ -581,10 +581,7 @@ export default function Home() {
           className="text-center text-sm mt-8 italic"
           style={{ color: '#8B6F4E', fontFamily: 'var(--font-serif)' }}
         >
-          Still curious? Write to us at{' '}
-          <a href="mailto:support@hushare.space" style={{ color: '#254F22', textDecoration: 'underline', textDecorationStyle: 'dotted' }}>
-            support@hushare.space
-          </a>
+          Still curious? Write to us at <span style={{ color: '#254F22', fontWeight: 600 }}>husharesupport@gmail.com</span>
         </p>
       </section>
 

@@ -10,7 +10,6 @@ import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
 import PasswordGate from '@/components/PasswordGate'
-import BrandPreloader from '@/components/BrandPreloader'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 
 const DEFAULT_BG = '#FDFAF5'
@@ -52,7 +51,6 @@ export default function AlbumPage() {
   const [mediaRadiusMax, setMediaRadiusMax] = useState(FALLBACK_MEDIA_RADIUS_MAX)
   const [forceGlobalRadius, setForceGlobalRadius] = useState(false)
   const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
-  const [ownerLinkCopied, setOwnerLinkCopied] = useState(false)
 
   const fetchAlbum = useCallback(async () => {
     setPasswordGate(null)
@@ -161,7 +159,9 @@ export default function AlbumPage() {
   }, [])
 
   if (loading) {
-    return <BrandPreloader label="Loading album" />
+    return (
+      <div className="min-h-screen" style={{ background: DEFAULT_BG }} />
+    )
   }
 
   if (passwordGate) {
@@ -198,21 +198,9 @@ export default function AlbumPage() {
   const globalMediaRadiusMax = Math.max(1, mediaRadiusMax)
   const publicSlug = album.custom_slug || album.slug
   const publicAlbumUrl = `https://hushare.space/${publicSlug}`
-  const ownerLink = ownerToken
-    ? `${typeof window !== 'undefined' ? window.location.origin : 'https://hushare.space'}/${album.slug}?owner=${ownerToken}`
-    : ''
+
   const reportHref = `/support?subject=${encodeURIComponent(`Report album: ${album.title}`)}&message=${encodeURIComponent(`Album: ${album.title}\nLink: ${publicAlbumUrl}\n\nTell us what is wrong:`)}`
 
-  const handleCopyOwnerLink = async () => {
-    if (!ownerLink) return
-    try {
-      await navigator.clipboard.writeText(ownerLink)
-      setOwnerLinkCopied(true)
-      window.setTimeout(() => setOwnerLinkCopied(false), 1600)
-    } catch {
-      setOwnerLinkCopied(false)
-    }
-  }
 
   return (
     <main className="hush-album-page min-h-screen" style={albumBackgroundStyle(album.background_theme ?? DEFAULT_BG)}>
@@ -230,27 +218,6 @@ export default function AlbumPage() {
       )}
 
       <div className="hush-container pb-12">
-        {isOwner && ownerToken && (
-          <section
-            className="mt-6 rounded-2xl p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
-            style={{ background: 'rgba(253,250,245,0.92)', border: '1px solid #DDD5C5', color: '#254F22' }}
-          >
-            <div>
-              <p className="font-semibold">Save your owner link</p>
-              <p className="text-sm mt-1" style={{ color: '#7C5C3E' }}>
-                This private link lets you manage the album later without signing in. Bookmark it or copy it now.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleCopyOwnerLink}
-              className="hush-press rounded-xl px-4 py-2 font-semibold transition"
-              style={{ background: ownerLinkCopied ? '#EAF0E8' : '#254F22', color: ownerLinkCopied ? '#254F22' : '#FDFAF5', border: '1px solid #254F22' }}
-            >
-              {ownerLinkCopied ? 'Copied' : 'Copy owner link'}
-            </button>
-          </section>
-        )}
 
         <UploadZone album={album} onPhotoAdded={handlePhotoAdded} />
         <PhotoGrid

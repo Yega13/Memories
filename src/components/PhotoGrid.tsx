@@ -766,18 +766,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
       {current && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={closeLightbox}>
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `url(${current.media_type === 'video' ? (current.poster_url || '') : current.url})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              filter: 'blur(10px) saturate(1.05)',
-              transform: 'scale(1.05)',
-            }}
-          />
-          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.50)' }} />
+          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.82)' }} />
 
           <button
             type="button"
@@ -834,7 +823,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 controls
                 autoPlay={!!album.video_autoplay}
                 playsInline
-                className="max-h-[70vh] max-w-full"
+                className="block max-h-[70vh] max-w-[92vw] object-contain"
                 ref={(node) => setLightboxMediaNode(node)}
                 style={{ background: '#000', ...mediaZoomStyle(current) }}
                 onClick={(e) => e.stopPropagation()}
@@ -849,7 +838,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 onContextMenu={(e) => e.preventDefault()}
               />
             ) : (
-              <div className="flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center">
+              <div className="flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={current.url}
