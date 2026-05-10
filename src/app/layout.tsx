@@ -1,8 +1,9 @@
-import type { Metadata, Viewport } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import { Geist, Playfair_Display } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
 import BackToTopButton from "@/components/BackToTopButton";
 import SiteFooter from "@/components/SiteFooter";
+import InitialPreloader from "@/components/InitialPreloader";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -316,6 +317,7 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        <InitialPreloader />
         {children}
         <SiteFooter />
         <BackToTopButton />
@@ -324,3 +326,4 @@ export default function RootLayout({
     </html>
   );
 }
+

@@ -1,4 +1,4 @@
-import Image from 'next/image'
+﻿import Image from 'next/image'
 
 type Props = {
   label?: string
@@ -7,24 +7,25 @@ type Props = {
 export default function BrandPreloader({ label = 'Loading' }: Props) {
   return (
     <div className="hush-brand-preloader" role="status" aria-live="polite" aria-label={label}>
-      <div className="hush-brand-preloader-mark">
+      <div className="hush-logo-build" aria-hidden="true">
         <Image
-          src="/logo/logo-icon-dark-transparent.png"
+          src="/logo/logo-dark-transparent.png"
           alt=""
-          width={96}
-          height={96}
+          width={618}
+          height={146}
           priority
-          aria-hidden="true"
+          className="hush-logo-build-base"
         />
+        <Image
+          src="/logo/logo-dark-transparent.png"
+          alt=""
+          width={618}
+          height={146}
+          priority
+          className="hush-logo-build-fill"
+        />
+        <span className="hush-logo-build-line" />
       </div>
-      <Image
-        src="/logo/logo-dark-transparent.png"
-        alt="Hushare"
-        width={618}
-        height={146}
-        priority
-        className="hush-brand-preloader-logo"
-      />
       <span className="sr-only">{label}</span>
     </div>
   )
