@@ -86,6 +86,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const reorderDragIdRef = useRef<string | null>(null)
   const reorderSuppressedClickRef = useRef(false)
   const lastTapRef = useRef(0)
+  const nameLongPressTimerRef = useRef<number | null>(null)
+  const nameLongPressPointRef = useRef<Point | null>(null)
+  const nameLongPressTriggeredRef = useRef(false)
   const handledSlideshowRequestRef = useRef(0)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [zoomScale, setZoomScale] = useState(1)
@@ -123,7 +126,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const slideshowIntervalMs = album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS
   const slideshowAnimation: SlideshowAnimation = album.slideshow_animation ?? 'fade'
   const slideshowFrameClass = slideshowActive && slideshowAnimation !== 'none' ? ` hush-slideshow-frame hush-slideshow-${slideshowAnimation}` : ''
-  const lightboxFlipped = Boolean(current?.caption && flippedPhotoId === current.id)
+  const currentMediaName = current?.caption?.trim() || current?.author_name?.trim() || ''
+  const lightboxFlipped = Boolean(currentMediaName && current && flippedPhotoId === current.id)
 
   function openSettings(photo: Photo) {
     setSettingsPhoto(photo)
@@ -223,6 +227,28 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }
   }
 
+  function clearNameLongPress() {
+    if (nameLongPressTimerRef.current !== null) {
+      window.clearTimeout(nameLongPressTimerRef.current)
+      nameLongPressTimerRef.current = null
+    }
+    nameLongPressPointRef.current = null
+  }
+
+  function scheduleNameLongPress(e: React.TouchEvent<HTMLElement>) {
+    clearNameLongPress()
+    if (!current || !currentMediaName || zoomScale > 1 || e.touches.length !== 1) return
+    const touch = e.touches[0]
+    nameLongPressPointRef.current = { x: touch.clientX, y: touch.clientY }
+    nameLongPressTimerRef.current = window.setTimeout(() => {
+      resetZoom()
+      nameLongPressTriggeredRef.current = true
+      setFlippedPhotoId((id) => (id === current.id ? null : current.id))
+      nameLongPressTimerRef.current = null
+      nameLongPressPointRef.current = null
+    }, 560)
+  }
+
   function mediaZoomStyle(photo: Photo): React.CSSProperties {
     return {
       borderRadius: previewRadiusFor(photo),
@@ -237,6 +263,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function handleMediaTouchStart(e: React.TouchEvent<HTMLElement>) {
     if (e.touches.length === 2) {
+      clearNameLongPress()
       e.stopPropagation()
       const mediaNode = e.currentTarget
       pinchRef.current = {
@@ -249,14 +276,23 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       return
     }
     if (zoomScale > 1) {
+      clearNameLongPress()
       e.stopPropagation()
       if (e.cancelable) e.preventDefault()
       const touch = e.touches[0]
       if (touch) panGestureRef.current = { point: { x: touch.clientX, y: touch.clientY }, pan: panRef.current, moved: false }
+      return
     }
+    scheduleNameLongPress(e)
   }
 
   function handleMediaTouchMove(e: React.TouchEvent<HTMLElement>) {
+    const touch = e.touches[0]
+    const longPressPoint = nameLongPressPointRef.current
+    if (touch && longPressPoint && Math.hypot(touch.clientX - longPressPoint.x, touch.clientY - longPressPoint.y) > 12) {
+      clearNameLongPress()
+    }
+
     if (pinchRef.current && e.touches.length === 2) {
       e.stopPropagation()
       if (e.cancelable) e.preventDefault()
@@ -287,6 +323,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function handleMediaTouchEnd(e: React.TouchEvent<HTMLElement>) {
+    clearNameLongPress()
     if (pinchRef.current) {
       e.stopPropagation()
       if (e.touches.length < 2) pinchRef.current = null
@@ -546,7 +583,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function toggleLightboxBack(e: React.MouseEvent<HTMLElement>) {
     e.preventDefault()
     e.stopPropagation()
-    if (!current?.caption) return
+    if (nameLongPressTriggeredRef.current) {
+      nameLongPressTriggeredRef.current = false
+      return
+    }
+    if (!current || !currentMediaName) {
+      showAppToast('No name is set for this media yet.', 'error')
+      return
+    }
     resetZoom()
     setFlippedPhotoId((id) => (id === current.id ? null : current.id))
   }
@@ -948,12 +992,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           >
             <X className="w-5 h-5" />
           </button>
-          <button className="absolute left-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); prev() }}>
-            <ChevronLeft className="w-8 h-8" />
-          </button>
-          <button className="absolute right-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); next() }}>
-            <ChevronRight className="w-8 h-8" />
-          </button>
+          {!slideshowMode && (
+            <>
+              <button className="absolute left-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); prev() }}>
+                <ChevronLeft className="w-8 h-8" />
+              </button>
+              <button className="absolute right-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); next() }}>
+                <ChevronRight className="w-8 h-8" />
+              </button>
+            </>
+          )}
 
           <div
             className={`hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4${slideshowMode ? ' hush-slideshow-stage' : ''}`}
@@ -1017,7 +1065,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 {lightboxFlipped && (
                   <div className="hush-photo-back-overlay" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()} onContextMenu={toggleLightboxBack}>
                     <span className="hush-photo-back-hint">Video name</span>
-                    <strong className="hush-photo-back-title">{current.caption}</strong>
+                    <strong className="hush-photo-back-title">{currentMediaName}</strong>
                   </div>
                 )}
               </div>
@@ -1046,7 +1094,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 {lightboxFlipped && (
                   <div className="hush-photo-back-overlay" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()} onContextMenu={toggleLightboxBack}>
                     <span className="hush-photo-back-hint">Photo name</span>
-                    <strong className="hush-photo-back-title">{current.caption}</strong>
+                    <strong className="hush-photo-back-title">{currentMediaName}</strong>
                   </div>
                 )}
               </div>
