@@ -1275,7 +1275,7 @@ html {
   font-family: var(--font-hand), "Segoe Print", cursive;
   font-size: clamp(1.75rem, 4.25vw, 3.65rem);
   line-height: 0.98;
-  font-weight: 600;
+  font-weight: 400;
   color: #111111;
   transform: rotate(-2deg);
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.32);

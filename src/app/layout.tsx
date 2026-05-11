@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Caveat, Geist, Playfair_Display } from "next/font/google";
+import { Geist, Playfair_Display, Playwrite_GB_J_Guides } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
 import BackToTopButton from "@/components/BackToTopButton";
 import SiteFooter from "@/components/SiteFooter";
@@ -17,10 +17,10 @@ const playfair = Playfair_Display({
   style: ["normal", "italic"],
 });
 
-const caveat = Caveat({
+const handwriting = Playwrite_GB_J_Guides({
   variable: "--font-hand",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+  weight: "400",
+  adjustFontFallback: false,
 });
 
 export const runtime = "nodejs";
@@ -316,7 +316,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-        className={`${geistSans.variable} ${playfair.variable} ${caveat.variable} h-full antialiased`}
+        className={`${geistSans.variable} ${playfair.variable} ${handwriting.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <script
