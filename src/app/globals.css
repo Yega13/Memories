@@ -1233,21 +1233,52 @@ html {
   gap: 10px;
   padding: clamp(0.9rem, 3vw, 1.5rem);
   text-align: center;
-  background: #F8F1E6;
-  color: #254F22;
+  background:
+    linear-gradient(135deg, rgba(37, 79, 34, 0.06) 0 1px, transparent 1px 18px),
+    #F8F1E6;
+  color: #111111;
   border: 1px solid rgba(124, 92, 62, 0.24);
-  box-shadow: inset 0 0 0 7px rgba(255, 255, 255, 0.42);
+  box-shadow:
+    inset 0 0 0 7px rgba(255, 255, 255, 0.48),
+    inset 0 0 0 8px rgba(124, 92, 62, 0.10);
   pointer-events: none;
   animation: hush-photo-back-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hush-grid-photo-back::before,
+.hush-grid-photo-back::after {
+  content: "";
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.hush-grid-photo-back::before {
+  top: 13px;
+  left: 13px;
+  border-top: 1px solid #8B6F4E;
+  border-left: 1px solid #8B6F4E;
+}
+
+.hush-grid-photo-back::after {
+  right: 13px;
+  bottom: 13px;
+  border-right: 1px solid #8B6F4E;
+  border-bottom: 1px solid #8B6F4E;
 }
 
 .hush-photo-back-title {
   max-width: 90%;
   overflow-wrap: anywhere;
-  font-family: "Bradley Hand ITC", "Segoe Print", "Comic Sans MS", cursive;
-  font-size: clamp(1.35rem, 3.5vw, 3rem);
+  font-family: "Segoe Print", "Bradley Hand ITC", "Comic Sans MS", cursive;
+  font-size: clamp(1.45rem, 3.7vw, 3.15rem);
   line-height: 1.05;
-  color: #254F22;
+  font-weight: 600;
+  color: #111111;
+  transform: rotate(-2deg);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.32);
 }
 
 .hush-photo-back-hint {
@@ -1255,6 +1286,32 @@ html {
   color: #8B6F4E;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+}
+
+.hush-photo-back-brand,
+.hush-photo-back-date {
+  position: absolute;
+  color: rgba(37, 79, 34, 0.62);
+  font-family: var(--font-sans);
+  font-size: clamp(0.52rem, 1.15vw, 0.72rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.hush-photo-back-brand {
+  top: 17px;
+  right: 18px;
+  transform: rotate(5deg);
+}
+
+.hush-photo-back-date {
+  left: 18px;
+  bottom: 18px;
+  padding: 4px 7px;
+  border: 1px solid rgba(37, 79, 34, 0.34);
+  border-radius: 4px;
+  transform: rotate(-4deg);
 }
 
 @keyframes hush-photo-back-in {
