@@ -1233,9 +1233,7 @@ html {
   gap: 10px;
   padding: clamp(0.9rem, 3vw, 1.5rem);
   text-align: center;
-  background:
-    linear-gradient(135deg, rgba(37, 79, 34, 0.06) 0 1px, transparent 1px 18px),
-    #F8F1E6;
+  background: #F8F1E6;
   color: #111111;
   border: 1px solid rgba(124, 92, 62, 0.24);
   box-shadow:
@@ -1273,8 +1271,8 @@ html {
   max-width: 90%;
   overflow-wrap: anywhere;
   font-family: var(--font-hand), "Segoe Print", cursive;
-  font-size: clamp(1.75rem, 4.25vw, 3.65rem);
-  line-height: 0.98;
+  font-size: clamp(1.25rem, 3.15vw, 2.55rem);
+  line-height: 1.1;
   font-weight: 400;
   color: #111111;
   transform: rotate(-2deg);

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Playfair_Display, Playwrite_GB_J_Guides } from "next/font/google";
+import { Geist, Playfair_Display, Playwrite_GB_J } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
 import BackToTopButton from "@/components/BackToTopButton";
 import SiteFooter from "@/components/SiteFooter";
@@ -17,7 +17,7 @@ const playfair = Playfair_Display({
   style: ["normal", "italic"],
 });
 
-const handwriting = Playwrite_GB_J_Guides({
+const handwriting = Playwrite_GB_J({
   variable: "--font-hand",
   weight: "400",
   adjustFontFallback: false,
