@@ -947,7 +947,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 )}
                 {isGridFlipped && (
                   <div className="hush-grid-photo-back" style={{ borderRadius: mediaRadius }}>
-                    <span className="hush-photo-back-brand">Hushare print</span>
+                    <span className="hush-photo-back-stamp">Captured</span>
                     <span className="hush-photo-back-hint">{isVideo ? 'Video name' : 'Photo name'}</span>
                     <strong className="hush-photo-back-title">{mediaName}</strong>
                     <span className="hush-photo-back-date">{photoStampFor(photo)}</span>

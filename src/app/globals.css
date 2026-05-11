@@ -1272,9 +1272,9 @@ html {
 .hush-photo-back-title {
   max-width: 90%;
   overflow-wrap: anywhere;
-  font-family: "Segoe Print", "Bradley Hand ITC", "Comic Sans MS", cursive;
-  font-size: clamp(1.45rem, 3.7vw, 3.15rem);
-  line-height: 1.05;
+  font-family: var(--font-hand), "Segoe Print", cursive;
+  font-size: clamp(1.75rem, 4.25vw, 3.65rem);
+  line-height: 0.98;
   font-weight: 600;
   color: #111111;
   transform: rotate(-2deg);
@@ -1288,7 +1288,7 @@ html {
   letter-spacing: 0.12em;
 }
 
-.hush-photo-back-brand,
+.hush-photo-back-stamp,
 .hush-photo-back-date {
   position: absolute;
   color: rgba(37, 79, 34, 0.62);
@@ -1299,10 +1299,14 @@ html {
   text-transform: uppercase;
 }
 
-.hush-photo-back-brand {
-  top: 17px;
-  right: 18px;
-  transform: rotate(5deg);
+.hush-photo-back-stamp {
+  top: 15px;
+  right: 16px;
+  padding: 6px 8px;
+  border: 1px solid rgba(37, 79, 34, 0.32);
+  border-radius: 999px;
+  color: rgba(138, 0, 50, 0.72);
+  transform: rotate(7deg);
 }
 
 .hush-photo-back-date {

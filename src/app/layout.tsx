@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Playfair_Display } from "next/font/google";
+import { Caveat, Geist, Playfair_Display } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
 import BackToTopButton from "@/components/BackToTopButton";
 import SiteFooter from "@/components/SiteFooter";
@@ -15,6 +15,12 @@ const playfair = Playfair_Display({
   variable: "--font-serif",
   subsets: ["latin"],
   style: ["normal", "italic"],
+});
+
+const caveat = Caveat({
+  variable: "--font-hand",
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
 export const runtime = "nodejs";
@@ -310,7 +316,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${playfair.variable} h-full antialiased`}
+        className={`${geistSans.variable} ${playfair.variable} ${caveat.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <script
