@@ -66,6 +66,8 @@ img {
   position: relative;
   width: min(68vw, 24rem);
   padding-bottom: 0.85rem;
+  contain: layout paint;
+  transform: translateZ(0);
 }
 
 .hush-logo-build-base,
@@ -85,7 +87,9 @@ img {
   inset: 0 auto auto 0;
   opacity: 1;
   clip-path: inset(0 100% 0 0);
-  animation: hush-logo-build-fill 2200ms cubic-bezier(0.5, 0, 0.12, 1) infinite;
+  transform: translateZ(0);
+  will-change: clip-path, opacity;
+  animation: hush-logo-build-fill 2600ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 .hush-logo-build-line {
@@ -98,7 +102,8 @@ img {
   background: linear-gradient(90deg, transparent 0%, #750026 18%, #750026 82%, transparent 100%);
   transform: scaleX(0);
   transform-origin: left center;
-  animation: hush-logo-build-line 2200ms cubic-bezier(0.5, 0, 0.12, 1) infinite;
+  will-change: transform, opacity;
+  animation: hush-logo-build-line 2600ms cubic-bezier(0.22, 1, 0.36, 1) infinite;
 }
 
 body.hush-page-preloading > main,
@@ -128,7 +133,7 @@ body.hush-page-loaded [data-app-toast-viewport] {
 
 .hush-initial-preloader-leaving {
   pointer-events: none;
-  animation: hush-preloader-leave 560ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: hush-preloader-leave 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .hush-route-loading {
@@ -1085,16 +1090,16 @@ html {
 @keyframes hush-logo-build-fill {
   0% {
     clip-path: inset(0 100% 0 0);
-    opacity: 0.85;
+    opacity: 0.72;
   }
-  46%,
-  76% {
+  58%,
+  82% {
     clip-path: inset(0 0 0 0);
     opacity: 1;
   }
   100% {
     clip-path: inset(0 0 0 100%);
-    opacity: 0.85;
+    opacity: 0.72;
   }
 }
 
@@ -1104,11 +1109,11 @@ html {
     transform-origin: left center;
     opacity: 0;
   }
-  12% {
+  16% {
     opacity: 1;
   }
-  46%,
-  76% {
+  58%,
+  82% {
     transform: scaleX(1);
     transform-origin: left center;
     opacity: 1;
@@ -1136,12 +1141,10 @@ html {
   from {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0);
   }
   to {
     opacity: 0;
-    transform: scale(1.015);
-    filter: blur(4px);
+    transform: scale(1.008);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1210,6 +1213,58 @@ html {
 
 .hush-slideshow-overlay > [aria-hidden] {
   background: radial-gradient(circle at center, rgba(24, 31, 23, 0.82), rgba(5, 8, 5, 0.94)) !important;
+}
+.hush-photo-flip {
+  perspective: 1400px;
+}
+
+.hush-photo-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.hush-photo-flip.is-flipped .hush-photo-flip-inner {
+  transform: rotateY(180deg);
+}
+
+.hush-photo-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.hush-photo-back {
+  flex-direction: column;
+  gap: 14px;
+  padding: clamp(1.5rem, 4vw, 3.5rem);
+  text-align: center;
+  transform: rotateY(180deg);
+  background: #F8F1E6;
+  color: #254F22;
+  border: 1px solid rgba(124, 92, 62, 0.24);
+  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.42);
+}
+
+.hush-photo-back-title {
+  max-width: min(72vw, 680px);
+  font-family: "Bradley Hand ITC", "Segoe Print", "Comic Sans MS", cursive;
+  font-size: clamp(2rem, 5vw, 4.75rem);
+  line-height: 1.02;
+  color: #254F22;
+}
+
+.hush-photo-back-hint {
+  font-size: 0.78rem;
+  color: #8B6F4E;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
 }
 
 .hush-slideshow-stage {

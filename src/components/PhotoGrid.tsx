@@ -97,6 +97,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [slideshowPickerOpen, setSlideshowPickerOpen] = useState(false)
   const [slideshowSelectedIds, setSlideshowSelectedIds] = useState<Set<string>>(new Set())
   const [slideshowPhotoIds, setSlideshowPhotoIds] = useState<string[] | null>(null)
+  const [flippedPhotoId, setFlippedPhotoId] = useState<string | null>(null)
   const [reorderDraggingId, setReorderDraggingId] = useState<string | null>(null)
   const [reorderTargetId, setReorderTargetId] = useState<string | null>(null)
   const [reorderSaving, setReorderSaving] = useState(false)
@@ -122,6 +123,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const slideshowIntervalMs = album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS
   const slideshowAnimation: SlideshowAnimation = album.slideshow_animation ?? 'fade'
   const slideshowFrameClass = slideshowActive && slideshowAnimation !== 'none' ? ` hush-slideshow-frame hush-slideshow-${slideshowAnimation}` : ''
+  const lightboxFlipped = Boolean(current?.caption && flippedPhotoId === current.id)
 
   function openSettings(photo: Photo) {
     setSettingsPhoto(photo)
@@ -186,6 +188,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setSlideshowActive(false)
     setSlideshowPaused(false)
     setSlideshowPhotoIds(null)
+    setFlippedPhotoId(null)
     setLightbox(null)
     if (lightboxHistoryRef.current) {
       lightboxHistoryRef.current = false
@@ -528,13 +531,24 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function createSlideshow() {
     const selectedIds = photos.map((photo) => photo.id).filter((id) => slideshowSelectedIds.has(id))
-    if (selectedIds.length === 0) return
+    if (selectedIds.length < 2) {
+      showAppToast('Pick at least 2 photos or videos for a slideshow.', 'error')
+      return
+    }
     slideshowRemainingMsRef.current = slideshowIntervalMs
     setSlideshowPhotoIds(selectedIds)
     setSlideshowActive(selectedIds.length > 1)
     setSlideshowPaused(false)
     setSlideshowPickerOpen(false)
     setLightbox(0)
+  }
+
+  function toggleLightboxBack(e: React.MouseEvent<HTMLElement>) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!current?.caption) return
+    resetZoom()
+    setFlippedPhotoId((id) => (id === current.id ? null : current.id))
   }
 
   function toggleSlideshowPause() {
@@ -662,9 +676,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       showAppToast('Upload media before creating a slideshow.', 'error')
       return
     }
+    if (photos.length < 2) {
+      showAppToast('A slideshow needs at least 2 photos or videos.', 'error')
+      return
+    }
     setSlideshowSelectedIds(new Set(photos.map((photo) => photo.id)))
     setSlideshowPickerOpen(true)
   }, [isOwner, photos, slideshowRequestId])
+
+  useEffect(() => {
+    setFlippedPhotoId(null)
+  }, [current?.id])
 
   useEffect(() => {
     if (lightbox === null || current) return
@@ -964,55 +986,73 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
               </div>
             ) : current.media_type === 'video' ? (
-              <video
-                key={current.id}
-                src={current.url}
-                poster={current.poster_url || undefined}
-                controls
-                autoPlay={!!album.video_autoplay}
-                playsInline
-                className={`block max-h-[70vh] max-w-[92vw] object-contain${slideshowFrameClass}`}
-                ref={(node) => {
-                  lightboxVideoRef.current = node
-                  setLightboxMediaNode(node)
-                }}
-                style={{ background: '#000', ...mediaZoomStyle(current) }}
-                onClick={(e) => e.stopPropagation()}
-                onEnded={() => {
-                  if (slideshowActive && !slideshowPaused && viewerPhotos.length > 1) next()
-                }}
-                onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
-                onMouseDown={handleMediaMouseDown}
-                onMouseMove={handleMediaMouseMove}
-                onMouseUp={handleMediaMouseUp}
-                onMouseLeave={handleMediaMouseUp}
-                onTouchStart={handleMediaTouchStart}
-                onTouchMove={handleMediaTouchMove}
-                onTouchEnd={handleMediaTouchEnd}
-                onContextMenu={(e) => e.preventDefault()}
-              />
+              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${lightboxFlipped ? ' is-flipped' : ''}${slideshowFrameClass}`} key={current.id} onContextMenu={toggleLightboxBack}>
+                <div className="hush-photo-flip-inner">
+                  <div className="hush-photo-face">
+                    <video
+                      src={current.url}
+                      poster={current.poster_url || undefined}
+                      controls
+                      autoPlay={slideshowMode ? !slideshowPaused : !!album.video_autoplay}
+                      muted={slideshowMode}
+                      playsInline
+                      className="block max-h-full max-w-full object-contain"
+                      ref={(node) => {
+                        lightboxVideoRef.current = node
+                        setLightboxMediaNode(node)
+                      }}
+                      style={{ background: '#000', ...mediaZoomStyle(current) }}
+                      onClick={(e) => e.stopPropagation()}
+                      onEnded={() => {
+                        if (slideshowActive && !slideshowPaused && viewerPhotos.length > 1) next()
+                      }}
+                      onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
+                      onMouseDown={handleMediaMouseDown}
+                      onMouseMove={handleMediaMouseMove}
+                      onMouseUp={handleMediaMouseUp}
+                      onMouseLeave={handleMediaMouseUp}
+                      onTouchStart={handleMediaTouchStart}
+                      onTouchMove={handleMediaTouchMove}
+                      onTouchEnd={handleMediaTouchEnd}
+                      onContextMenu={toggleLightboxBack}
+                    />
+                  </div>
+                  <div className="hush-photo-face hush-photo-back" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
+                    <span className="hush-photo-back-hint">Video name</span>
+                    <strong className="hush-photo-back-title">{current.caption}</strong>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <div className={`flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center overflow-hidden${slideshowFrameClass}`} key={current.id}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={current.url}
-                  alt={current.caption || ''}
-                  className="block max-h-full max-w-full object-contain"
-                  ref={(node) => setLightboxMediaNode(node)}
-                  style={mediaZoomStyle(current)}
-                  onError={() => markBroken(current.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
-                  onMouseDown={handleMediaMouseDown}
-                  onMouseMove={handleMediaMouseMove}
-                  onMouseUp={handleMediaMouseUp}
-                  onMouseLeave={handleMediaMouseUp}
-                  onTouchStart={handleMediaTouchStart}
-                  onTouchMove={handleMediaTouchMove}
-                  onTouchEnd={handleMediaTouchEnd}
-                  onContextMenu={(e) => e.preventDefault()}
-                  onDragStart={(e) => e.preventDefault()}
-                />
+              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${lightboxFlipped ? ' is-flipped' : ''}${slideshowFrameClass}`} key={current.id} onContextMenu={toggleLightboxBack}>
+                <div className="hush-photo-flip-inner">
+                  <div className="hush-photo-face">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={current.url}
+                      alt={current.caption || ''}
+                      className="block max-h-full max-w-full object-contain"
+                      ref={(node) => setLightboxMediaNode(node)}
+                      style={mediaZoomStyle(current)}
+                      onError={() => markBroken(current.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
+                      onMouseDown={handleMediaMouseDown}
+                      onMouseMove={handleMediaMouseMove}
+                      onMouseUp={handleMediaMouseUp}
+                      onMouseLeave={handleMediaMouseUp}
+                      onTouchStart={handleMediaTouchStart}
+                      onTouchMove={handleMediaTouchMove}
+                      onTouchEnd={handleMediaTouchEnd}
+                      onContextMenu={toggleLightboxBack}
+                      onDragStart={(e) => e.preventDefault()}
+                    />
+                  </div>
+                  <div className="hush-photo-face hush-photo-back" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
+                    <span className="hush-photo-back-hint">Photo name</span>
+                    <strong className="hush-photo-back-title">{current.caption}</strong>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1028,21 +1068,25 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   {slideshowPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
                 </button>
               )}
-              {(current.caption || current.author_name) && (
+              {!slideshowMode && (current.caption || current.author_name) && (
                 <div className="text-center">
                   {current.caption && <p className="font-medium" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
                   {current.author_name && <p className="text-sm" style={{ color: '#C5D9C2' }}>by {current.author_name}</p>}
                 </div>
               )}
 
-              <button onClick={(e) => { e.stopPropagation(); downloadPhoto(current) }} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
-                <Download className="w-5 h-5" />
-              </button>
+              {!slideshowMode && (
+                <button onClick={(e) => { e.stopPropagation(); downloadPhoto(current) }} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
+                  <Download className="w-5 h-5" />
+                </button>
+              )}
               {isOwner && (
                 <>
-                  <button onClick={(e) => { e.stopPropagation(); openSettings(current) }} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Settings">
-                    <Settings className="w-5 h-5" />
-                  </button>
+                  {!slideshowMode && (
+                    <button onClick={(e) => { e.stopPropagation(); openSettings(current) }} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Settings">
+                      <Settings className="w-5 h-5" />
+                    </button>
+                  )}
                   <button onClick={(e) => { e.stopPropagation(); deletePhoto(current) }} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -1142,7 +1186,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               <button type="button" className="rounded-xl px-4 py-2 font-semibold transition hover:opacity-80" style={{ background: '#F5F0E8', color: '#7C5C3E' }} onClick={() => setSlideshowPickerOpen(false)}>
                 Cancel
               </button>
-              <button type="button" className="rounded-xl px-4 py-2 font-semibold transition hover:opacity-90 disabled:opacity-50" style={{ background: '#254F22', color: '#FDFAF5' }} disabled={slideshowSelectedIds.size === 0} onClick={createSlideshow}>
+              <button type="button" className="rounded-xl px-4 py-2 font-semibold transition hover:opacity-90" style={{ background: '#254F22', color: '#FDFAF5' }} onClick={createSlideshow}>
                 Create slideshow
               </button>
             </div>
