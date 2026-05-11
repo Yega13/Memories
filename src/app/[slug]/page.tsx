@@ -200,7 +200,7 @@ export default function AlbumPage() {
   const publicSlug = album.custom_slug || album.slug
   const publicAlbumUrl = `https://hushare.space/${publicSlug}`
 
-  const reportHref = `/support?subject=${encodeURIComponent(`Report album: ${album.title}`)}&message=${encodeURIComponent(`Album: ${album.title}\nLink: ${publicAlbumUrl}\n\nTell us what is wrong:`)}`
+  const reportHref = `/report?album=${encodeURIComponent(album.title)}&url=${encodeURIComponent(publicAlbumUrl)}&slug=${encodeURIComponent(publicSlug)}`
 
 
   return (

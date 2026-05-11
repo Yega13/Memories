@@ -1220,73 +1220,41 @@ html {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  perspective: 1400px;
 }
 
-.hush-photo-flip-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.hush-photo-flip.is-flipped .hush-photo-flip-inner {
-  transform: rotateY(180deg);
-}
-
-.hush-photo-face {
+.hush-grid-photo-back {
   position: absolute;
   inset: 0;
+  z-index: 6;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-}
-
-.hush-photo-back {
-  flex-direction: column;
-  gap: 14px;
-  padding: clamp(1.5rem, 4vw, 3.5rem);
+  gap: 10px;
+  padding: clamp(0.9rem, 3vw, 1.5rem);
   text-align: center;
-  transform: rotateY(180deg);
   background: #F8F1E6;
   color: #254F22;
   border: 1px solid rgba(124, 92, 62, 0.24);
-  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.42);
+  box-shadow: inset 0 0 0 7px rgba(255, 255, 255, 0.42);
+  pointer-events: none;
+  animation: hush-photo-back-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .hush-photo-back-title {
-  max-width: min(72vw, 680px);
+  max-width: 90%;
+  overflow-wrap: anywhere;
   font-family: "Bradley Hand ITC", "Segoe Print", "Comic Sans MS", cursive;
-  font-size: clamp(2rem, 5vw, 4.75rem);
-  line-height: 1.02;
+  font-size: clamp(1.35rem, 3.5vw, 3rem);
+  line-height: 1.05;
   color: #254F22;
 }
 
 .hush-photo-back-hint {
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: #8B6F4E;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-}
-.hush-photo-back-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: clamp(1.5rem, 4vw, 3.5rem);
-  text-align: center;
-  background: #F8F1E6;
-  color: #254F22;
-  border: 1px solid rgba(124, 92, 62, 0.24);
-  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.42);
-  animation: hush-photo-back-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes hush-photo-back-in {

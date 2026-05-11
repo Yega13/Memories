@@ -25,6 +25,7 @@ export default function robots(): MetadataRoute.Robots {
       "/event-photo-sharing",
       "/qr-code-photo-album",
       "/pricing",
+      "/report",
       "/support",
       "/privacy",
       "/terms",

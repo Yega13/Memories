@@ -3,7 +3,7 @@ const RESERVED_SLUGS = new Set([
   'billing', 'c', 'callback', 'checkout', 'contact',
   'dashboard', 'faq', 'help', 'home', 'hushare',
   'index', 'legal', 'login', 'logout', 'manifest',
-  'me', 'oauth', 'pricing', 'privacy', 'robots',
+  'me', 'oauth', 'pricing', 'privacy', 'report', 'robots',
   'signin', 'signout', 'signup', 'sitemap', 'support',
   'terms', 'tos', 'webhook', 'webhooks',
 ])
