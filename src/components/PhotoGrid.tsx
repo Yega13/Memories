@@ -986,73 +986,69 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
               </div>
             ) : current.media_type === 'video' ? (
-              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${lightboxFlipped ? ' is-flipped' : ''}${slideshowFrameClass}`} key={current.id} onContextMenu={toggleLightboxBack}>
-                <div className="hush-photo-flip-inner">
-                  <div className="hush-photo-face">
-                    <video
-                      src={current.url}
-                      poster={current.poster_url || undefined}
-                      controls
-                      autoPlay={slideshowMode ? !slideshowPaused : !!album.video_autoplay}
-                      muted={slideshowMode}
-                      playsInline
-                      className="block max-h-full max-w-full object-contain"
-                      ref={(node) => {
-                        lightboxVideoRef.current = node
-                        setLightboxMediaNode(node)
-                      }}
-                      style={{ background: '#000', ...mediaZoomStyle(current) }}
-                      onClick={(e) => e.stopPropagation()}
-                      onEnded={() => {
-                        if (slideshowActive && !slideshowPaused && viewerPhotos.length > 1) next()
-                      }}
-                      onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
-                      onMouseDown={handleMediaMouseDown}
-                      onMouseMove={handleMediaMouseMove}
-                      onMouseUp={handleMediaMouseUp}
-                      onMouseLeave={handleMediaMouseUp}
-                      onTouchStart={handleMediaTouchStart}
-                      onTouchMove={handleMediaTouchMove}
-                      onTouchEnd={handleMediaTouchEnd}
-                      onContextMenu={toggleLightboxBack}
-                    />
-                  </div>
-                  <div className="hush-photo-face hush-photo-back" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
+              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={toggleLightboxBack}>
+                <video
+                  src={current.url}
+                  poster={current.poster_url || undefined}
+                  controls
+                  autoPlay={slideshowMode ? !slideshowPaused : !!album.video_autoplay}
+                  muted={slideshowMode}
+                  playsInline
+                  className="block max-h-full max-w-full object-contain"
+                  ref={(node) => {
+                    lightboxVideoRef.current = node
+                    setLightboxMediaNode(node)
+                  }}
+                  style={{ background: '#000', ...mediaZoomStyle(current) }}
+                  onClick={(e) => e.stopPropagation()}
+                  onEnded={() => {
+                    if (slideshowActive && !slideshowPaused && viewerPhotos.length > 1) next()
+                  }}
+                  onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
+                  onMouseDown={handleMediaMouseDown}
+                  onMouseMove={handleMediaMouseMove}
+                  onMouseUp={handleMediaMouseUp}
+                  onMouseLeave={handleMediaMouseUp}
+                  onTouchStart={handleMediaTouchStart}
+                  onTouchMove={handleMediaTouchMove}
+                  onTouchEnd={handleMediaTouchEnd}
+                  onContextMenu={toggleLightboxBack}
+                />
+                {lightboxFlipped && (
+                  <div className="hush-photo-back-overlay" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()} onContextMenu={toggleLightboxBack}>
                     <span className="hush-photo-back-hint">Video name</span>
                     <strong className="hush-photo-back-title">{current.caption}</strong>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
-              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${lightboxFlipped ? ' is-flipped' : ''}${slideshowFrameClass}`} key={current.id} onContextMenu={toggleLightboxBack}>
-                <div className="hush-photo-flip-inner">
-                  <div className="hush-photo-face">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={current.url}
-                      alt={current.caption || ''}
-                      className="block max-h-full max-w-full object-contain"
-                      ref={(node) => setLightboxMediaNode(node)}
-                      style={mediaZoomStyle(current)}
-                      onError={() => markBroken(current.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
-                      onMouseDown={handleMediaMouseDown}
-                      onMouseMove={handleMediaMouseMove}
-                      onMouseUp={handleMediaMouseUp}
-                      onMouseLeave={handleMediaMouseUp}
-                      onTouchStart={handleMediaTouchStart}
-                      onTouchMove={handleMediaTouchMove}
-                      onTouchEnd={handleMediaTouchEnd}
-                      onContextMenu={toggleLightboxBack}
-                      onDragStart={(e) => e.preventDefault()}
-                    />
-                  </div>
-                  <div className="hush-photo-face hush-photo-back" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
+              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={toggleLightboxBack}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={current.url}
+                  alt={current.caption || ''}
+                  className="block max-h-full max-w-full object-contain"
+                  ref={(node) => setLightboxMediaNode(node)}
+                  style={mediaZoomStyle(current)}
+                  onError={() => markBroken(current.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
+                  onMouseDown={handleMediaMouseDown}
+                  onMouseMove={handleMediaMouseMove}
+                  onMouseUp={handleMediaMouseUp}
+                  onMouseLeave={handleMediaMouseUp}
+                  onTouchStart={handleMediaTouchStart}
+                  onTouchMove={handleMediaTouchMove}
+                  onTouchEnd={handleMediaTouchEnd}
+                  onContextMenu={toggleLightboxBack}
+                  onDragStart={(e) => e.preventDefault()}
+                />
+                {lightboxFlipped && (
+                  <div className="hush-photo-back-overlay" style={{ borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()} onContextMenu={toggleLightboxBack}>
                     <span className="hush-photo-back-hint">Photo name</span>
                     <strong className="hush-photo-back-title">{current.caption}</strong>
                   </div>
-                </div>
+                )}
               </div>
             )}
 

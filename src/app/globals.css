@@ -1215,6 +1215,11 @@ html {
   background: radial-gradient(circle at center, rgba(24, 31, 23, 0.82), rgba(5, 8, 5, 0.94)) !important;
 }
 .hush-photo-flip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
   perspective: 1400px;
 }
 
@@ -1265,6 +1270,34 @@ html {
   color: #8B6F4E;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+}
+.hush-photo-back-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: clamp(1.5rem, 4vw, 3.5rem);
+  text-align: center;
+  background: #F8F1E6;
+  color: #254F22;
+  border: 1px solid rgba(124, 92, 62, 0.24);
+  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.42);
+  animation: hush-photo-back-in 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes hush-photo-back-in {
+  from {
+    opacity: 0;
+    transform: rotateY(-14deg) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: rotateY(0deg) scale(1);
+  }
 }
 
 .hush-slideshow-stage {
