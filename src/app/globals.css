@@ -1288,7 +1288,6 @@ html {
   letter-spacing: 0.12em;
 }
 
-.hush-photo-back-stamp,
 .hush-photo-back-date {
   position: absolute;
   color: rgba(37, 79, 34, 0.62);
@@ -1297,16 +1296,6 @@ html {
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-}
-
-.hush-photo-back-stamp {
-  top: 15px;
-  right: 16px;
-  padding: 6px 8px;
-  border: 1px solid rgba(37, 79, 34, 0.32);
-  border-radius: 999px;
-  color: rgba(138, 0, 50, 0.72);
-  transform: rotate(7deg);
 }
 
 .hush-photo-back-date {
