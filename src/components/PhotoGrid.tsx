@@ -7,7 +7,7 @@ import { formatDuration } from '@/lib/media'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import Image from 'next/image'
-import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Check, Settings } from 'lucide-react'
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings } from 'lucide-react'
 
 type Props = {
   album: Album
@@ -89,6 +89,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeAnimating, setSwipeAnimating] = useState(false)
   const [slideshowActive, setSlideshowActive] = useState(false)
+  const [slideshowPaused, setSlideshowPaused] = useState(false)
   const [slideshowPickerOpen, setSlideshowPickerOpen] = useState(false)
   const [slideshowSelectedIds, setSlideshowSelectedIds] = useState<Set<string>>(new Set())
   const [slideshowPhotoIds, setSlideshowPhotoIds] = useState<string[] | null>(null)
@@ -113,6 +114,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     : photos
   const current = lightbox !== null ? viewerPhotos[lightbox] ?? null : null
   const overlayOpen = lightbox !== null || slideshowPickerOpen
+  const slideshowMode = slideshowPhotoIds !== null
 
   function openSettings(photo: Photo) {
     setSettingsPhoto(photo)
@@ -167,6 +169,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   const closeLightbox = useCallback(() => {
     setSlideshowActive(false)
+    setSlideshowPaused(false)
     setSlideshowPhotoIds(null)
     setLightbox(null)
     if (lightboxHistoryRef.current) {
@@ -494,6 +497,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       return
     }
     setSlideshowActive(false)
+    setSlideshowPaused(false)
     setSlideshowPhotoIds(null)
     openLightbox(index)
   }
@@ -512,6 +516,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (selectedIds.length === 0) return
     setSlideshowPhotoIds(selectedIds)
     setSlideshowActive(selectedIds.length > 1)
+    setSlideshowPaused(false)
     setSlideshowPickerOpen(false)
     setLightbox(0)
   }
@@ -626,37 +631,37 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (lightbox === null || current) return
     setLightbox(null)
     setSlideshowActive(false)
+    setSlideshowPaused(false)
     setSlideshowPhotoIds(null)
   }, [current, lightbox])
 
   useEffect(() => {
     if (!overlayOpen) return
-    const scrollY = window.scrollY
+
+    function preventPageScroll(event: Event) {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('[data-scroll-allowed="true"]')) return
+      event.preventDefault()
+    }
+
     document.documentElement.classList.add('hush-scroll-locked')
     document.body.classList.add('hush-scroll-locked')
-    document.body.style.position = 'fixed'
-    document.body.style.top = `-${scrollY}px`
-    document.body.style.left = '0'
-    document.body.style.right = '0'
-    document.body.style.width = '100%'
+    window.addEventListener('wheel', preventPageScroll, { passive: false })
+    window.addEventListener('touchmove', preventPageScroll, { passive: false })
 
     return () => {
+      window.removeEventListener('wheel', preventPageScroll)
+      window.removeEventListener('touchmove', preventPageScroll)
       document.documentElement.classList.remove('hush-scroll-locked')
       document.body.classList.remove('hush-scroll-locked')
-      document.body.style.position = ''
-      document.body.style.top = ''
-      document.body.style.left = ''
-      document.body.style.right = ''
-      document.body.style.width = ''
-      window.scrollTo(0, scrollY)
     }
   }, [overlayOpen])
 
   useEffect(() => {
-    if (!slideshowActive || lightbox === null || viewerPhotos.length < 2 || current?.media_type === 'video') return
+    if (!slideshowActive || slideshowPaused || lightbox === null || viewerPhotos.length < 2 || current?.media_type === 'video') return
     const timeout = window.setTimeout(() => next(), 4200)
     return () => window.clearTimeout(timeout)
-  }, [slideshowActive, lightbox, viewerPhotos.length, current?.id, current?.media_type, next])
+  }, [slideshowActive, slideshowPaused, lightbox, viewerPhotos.length, current?.id, current?.media_type, next])
 
   useEffect(() => {
     const maybeGrid = gridRef.current
@@ -846,7 +851,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       </div>
 
       {current && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden" onClick={closeLightbox} onWheel={(e) => e.preventDefault()}>
+        <div className={`fixed inset-0 z-50 flex items-center justify-center overflow-hidden${slideshowMode ? ' hush-slideshow-overlay' : ''}`} onClick={closeLightbox} onWheel={(e) => { if (!(e.target as HTMLElement).closest('[data-scroll-allowed="true"]')) e.preventDefault() }}>
           <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.82)' }} />
 
           <button
@@ -874,7 +879,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           </button>
 
           <div
-            className="hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4"
+            className={`hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] max-h-[80vh] mx-4 sm:mx-16 flex flex-col items-center gap-4${slideshowMode ? ' hush-slideshow-stage' : ''}`}
             style={{
               touchAction: 'pan-y',
               transform: `translateX(${swipeOffset}px) scale(${Math.max(0.94, 1 - Math.min(Math.abs(swipeOffset), 180) / 1800)})`,
@@ -891,6 +896,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               window.setTimeout(() => setSwipeAnimating(false), 180)
             }}
           >
+            {slideshowMode && (
+              <div className="hush-slideshow-head" onClick={(e) => e.stopPropagation()}>
+                <span>Slideshow</span>
+                <strong>{(lightbox ?? 0) + 1} / {viewerPhotos.length}</strong>
+              </div>
+            )}
+
             {broken.has(current.id) ? (
               <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
                 <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
@@ -909,7 +921,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 style={{ background: '#000', ...mediaZoomStyle(current) }}
                 onClick={(e) => e.stopPropagation()}
                 onEnded={() => {
-                  if (slideshowActive && viewerPhotos.length > 1) next()
+                  if (slideshowActive && !slideshowPaused && viewerPhotos.length > 1) next()
                 }}
                 onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
                 onMouseDown={handleMediaMouseDown}
@@ -946,7 +958,18 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               </div>
             )}
 
-            <div className="flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
+            {slideshowMode && (
+              <div className="hush-slideshow-progress" aria-hidden>
+                <span key={`${current.id}-${slideshowPaused ? 'paused' : 'playing'}`} className={slideshowPaused || current.media_type === 'video' ? 'is-paused' : ''} />
+              </div>
+            )}
+
+            <div className={`flex items-center gap-4${slideshowMode ? ' hush-slideshow-controls' : ''}`} onClick={(e) => e.stopPropagation()}>
+              {slideshowMode && viewerPhotos.length > 1 && (
+                <button onClick={(e) => { e.stopPropagation(); setSlideshowPaused((value) => !value) }} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: slideshowPaused ? 'rgba(253,250,245,0.92)' : 'rgba(138,181,133,0.28)', color: slideshowPaused ? '#254F22' : '#FDFAF5', border: '1px solid rgba(253,250,245,0.28)' }} title={slideshowPaused ? 'Resume slideshow' : 'Pause slideshow'} aria-label={slideshowPaused ? 'Resume slideshow' : 'Pause slideshow'}>
+                  {slideshowPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
+                </button>
+              )}
               {(current.caption || current.author_name) && (
                 <div className="text-center">
                   {current.caption && <p className="font-medium" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
@@ -969,7 +992,32 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               )}
             </div>
 
-            <p className="text-sm" style={{ color: '#8AB585' }}>{(lightbox ?? 0) + 1} / {viewerPhotos.length}</p>
+            {!slideshowMode && <p className="text-sm" style={{ color: '#8AB585' }}>{(lightbox ?? 0) + 1} / {viewerPhotos.length}</p>}
+
+            {slideshowMode && viewerPhotos.length > 1 && (
+              <div className="hush-slideshow-strip" data-scroll-allowed="true" onClick={(e) => e.stopPropagation()}>
+                {viewerPhotos.map((photo, index) => {
+                  const isActive = index === lightbox
+                  const thumbSrc = photo.media_type === 'video' ? photo.poster_url || '' : photo.url
+                  return (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      className={`hush-slideshow-thumb${isActive ? ' is-active' : ''}`}
+                      onClick={() => { setLightbox(index); setSlideshowPaused(true) }}
+                      aria-label={`Open slide ${index + 1}`}
+                    >
+                      {thumbSrc ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={thumbSrc} alt="" draggable={false} />
+                      ) : (
+                        <Play className="h-5 w-5" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1004,7 +1052,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               <span className="text-sm" style={{ color: '#8B6F4E' }}>{slideshowSelectedIds.size} selected</span>
             </div>
 
-            <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-5">
+            <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-5" data-scroll-allowed="true">
               {photos.map((photo) => {
                 const selected = slideshowSelectedIds.has(photo.id)
                 const thumbSrc = photo.media_type === 'video' ? photo.poster_url || '' : photo.url
