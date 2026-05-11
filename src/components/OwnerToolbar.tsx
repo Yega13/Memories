@@ -528,8 +528,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         <button
           className="hush-press"
           style={btnBase}
-          disabled={photos.length === 0}
           onClick={() => {
+            if (photos.length === 0) {
+              showAppToast('Upload photos or videos before creating a slideshow.', 'error')
+              return
+            }
             setShowShare(false)
             setShowSettings(false)
             onOpenSlideshow()

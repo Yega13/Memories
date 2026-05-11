@@ -9,12 +9,18 @@ export default function InitialPreloader() {
   const [phase, setPhase] = useState<'checking' | 'visible' | 'leaving' | 'hidden'>('checking')
 
   useEffect(() => {
-    if (window.sessionStorage.getItem(SEEN_KEY) === '1') {
-      setPhase('hidden')
-      return
+    try {
+      if (window.sessionStorage.getItem(SEEN_KEY) === '1') {
+        document.body.classList.remove('hush-page-preloading', 'hush-scroll-locked')
+        setPhase('hidden')
+        return
+      }
+
+      window.sessionStorage.setItem(SEEN_KEY, '1')
+    } catch {
+      document.body.classList.add('hush-page-preloading', 'hush-scroll-locked')
     }
 
-    window.sessionStorage.setItem(SEEN_KEY, '1')
     setPhase('visible')
     document.body.classList.add('hush-page-preloading', 'hush-scroll-locked')
 

@@ -79,6 +79,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const panGestureRef = useRef<{ point: Point; pan: Point; moved: boolean } | null>(null)
   const panRef = useRef<Point>({ x: 0, y: 0 })
   const lightboxVideoRef = useRef<HTMLVideoElement | null>(null)
+  const slideshowTimerRef = useRef<number | null>(null)
+  const slideshowTimerStartedAtRef = useRef(0)
+  const slideshowRemainingMsRef = useRef<number | null>(null)
   const reorderTimerRef = useRef<number | null>(null)
   const reorderDragIdRef = useRef<string | null>(null)
   const reorderSuppressedClickRef = useRef(false)
@@ -171,7 +174,15 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }
   }
 
+  const clearSlideshowTimer = useCallback(() => {
+    if (slideshowTimerRef.current === null) return
+    window.clearTimeout(slideshowTimerRef.current)
+    slideshowTimerRef.current = null
+  }, [])
+
   const closeLightbox = useCallback(() => {
+    clearSlideshowTimer()
+    slideshowRemainingMsRef.current = null
     setSlideshowActive(false)
     setSlideshowPaused(false)
     setSlideshowPhotoIds(null)
@@ -180,7 +191,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       lightboxHistoryRef.current = false
       window.history.back()
     }
-  }, [])
+  }, [clearSlideshowTimer])
 
   function openLightbox(index: number) {
     setLightbox(index)
@@ -518,6 +529,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function createSlideshow() {
     const selectedIds = photos.map((photo) => photo.id).filter((id) => slideshowSelectedIds.has(id))
     if (selectedIds.length === 0) return
+    slideshowRemainingMsRef.current = slideshowIntervalMs
     setSlideshowPhotoIds(selectedIds)
     setSlideshowActive(selectedIds.length > 1)
     setSlideshowPaused(false)
@@ -528,6 +540,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function toggleSlideshowPause() {
     setSlideshowPaused((paused) => {
       const nextPaused = !paused
+      if (nextPaused && current?.media_type !== 'video') {
+        const startedAt = slideshowTimerStartedAtRef.current
+        const remaining = slideshowRemainingMsRef.current ?? slideshowIntervalMs
+        const elapsed = startedAt > 0 ? Date.now() - startedAt : 0
+        slideshowRemainingMsRef.current = Math.max(250, remaining - elapsed)
+        clearSlideshowTimer()
+      }
       if (current?.media_type === 'video' && lightboxVideoRef.current) {
         if (nextPaused) {
           lightboxVideoRef.current.pause()
@@ -678,10 +697,26 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }, [overlayOpen])
 
   useEffect(() => {
-    if (!slideshowActive || slideshowPaused || lightbox === null || viewerPhotos.length < 2 || current?.media_type === 'video') return
-    const timeout = window.setTimeout(() => next(), slideshowIntervalMs)
-    return () => window.clearTimeout(timeout)
-  }, [slideshowActive, slideshowPaused, lightbox, viewerPhotos.length, current?.id, current?.media_type, next, slideshowIntervalMs])
+    slideshowRemainingMsRef.current = slideshowIntervalMs
+  }, [current?.id, slideshowIntervalMs])
+
+  useEffect(() => {
+    clearSlideshowTimer()
+    if (!slideshowActive || slideshowPaused || lightbox === null || viewerPhotos.length < 2 || current?.media_type === 'video') {
+      if (!slideshowPaused) slideshowRemainingMsRef.current = slideshowIntervalMs
+      return
+    }
+
+    const duration = Math.max(250, Math.min(slideshowIntervalMs, slideshowRemainingMsRef.current ?? slideshowIntervalMs))
+    slideshowRemainingMsRef.current = duration
+    slideshowTimerStartedAtRef.current = Date.now()
+    slideshowTimerRef.current = window.setTimeout(() => {
+      slideshowRemainingMsRef.current = slideshowIntervalMs
+      next()
+    }, duration)
+
+    return clearSlideshowTimer
+  }, [slideshowActive, slideshowPaused, lightbox, viewerPhotos.length, current?.id, current?.media_type, next, slideshowIntervalMs, clearSlideshowTimer])
 
   useEffect(() => {
     const maybeGrid = gridRef.current
@@ -872,7 +907,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
       {current && (
         <div className={`fixed inset-0 z-50 flex items-center justify-center overflow-hidden${slideshowMode ? ' hush-slideshow-overlay' : ''}`} onClick={closeLightbox} onWheel={(e) => { if (!(e.target as HTMLElement).closest('[data-scroll-allowed="true"]')) e.preventDefault() }}>
-          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.82)' }} />
+          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(5, 8, 5, 0.92)' }} />
 
           <button
             type="button"
@@ -983,7 +1018,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
             {slideshowMode && (
               <div className="hush-slideshow-progress" aria-hidden>
-                <span key={`${current.id}-${slideshowPaused ? 'paused' : 'playing'}-${slideshowIntervalMs}`} className={slideshowPaused || current.media_type === 'video' ? 'is-paused' : ''} style={{ animationDuration: `${slideshowIntervalMs}ms` }} />
+                <span key={`${current.id}-${slideshowIntervalMs}`} className={slideshowPaused || current.media_type === 'video' ? 'is-paused' : ''} style={{ animationDuration: `${slideshowIntervalMs}ms` }} />
               </div>
             )}
 

@@ -1,4 +1,4 @@
-﻿import type { Metadata, Viewport } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Playfair_Display } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
 import BackToTopButton from "@/components/BackToTopButton";
@@ -313,6 +313,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${playfair.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(window.sessionStorage.getItem('hushare.initialPreloaderSeen')!=='1'){document.body.classList.add('hush-page-preloading','hush-scroll-locked')}}catch(e){document.body.classList.add('hush-page-preloading','hush-scroll-locked')}",
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
