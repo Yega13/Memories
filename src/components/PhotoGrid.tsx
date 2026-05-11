@@ -7,7 +7,7 @@ import { formatDuration } from '@/lib/media'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import Image from 'next/image'
-import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Settings } from 'lucide-react'
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Check, Settings } from 'lucide-react'
 
 type Props = {
   album: Album
@@ -20,6 +20,7 @@ type Props = {
   onPhotoDeleted: (id: string) => void
   onPhotoUpdated: (id: string, patch: Partial<Photo>) => void
   onPhotosReordered: (photos: Photo[]) => void
+  slideshowRequestId?: number
 }
 
 function radiusFor(photo: Photo, album: Album, forceGlobalRadius = false): number {
@@ -70,7 +71,7 @@ function pointRelativeToCenter(point: Point, node: HTMLElement): Point {
   }
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered }: Props) {
+export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered, slideshowRequestId = 0 }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const lightboxHistoryRef = useRef(false)
@@ -81,12 +82,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const reorderDragIdRef = useRef<string | null>(null)
   const reorderSuppressedClickRef = useRef(false)
   const lastTapRef = useRef(0)
+  const handledSlideshowRequestRef = useRef(0)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [zoomScale, setZoomScale] = useState(1)
   const [zoomPan, setZoomPan] = useState<Point>({ x: 0, y: 0 })
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeAnimating, setSwipeAnimating] = useState(false)
   const [slideshowActive, setSlideshowActive] = useState(false)
+  const [slideshowPickerOpen, setSlideshowPickerOpen] = useState(false)
+  const [slideshowSelectedIds, setSlideshowSelectedIds] = useState<Set<string>>(new Set())
+  const [slideshowPhotoIds, setSlideshowPhotoIds] = useState<string[] | null>(null)
   const [reorderDraggingId, setReorderDraggingId] = useState<string | null>(null)
   const [reorderTargetId, setReorderTargetId] = useState<string | null>(null)
   const [reorderSaving, setReorderSaving] = useState(false)
@@ -100,6 +105,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [settingsFilter, setSettingsFilter] = useState<PhotoFilterChoice>('global')
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState('')
+
+  const viewerPhotos = slideshowPhotoIds
+    ? slideshowPhotoIds
+        .map((id) => photos.find((photo) => photo.id === id))
+        .filter((photo): photo is Photo => Boolean(photo))
+    : photos
+  const current = lightbox !== null ? viewerPhotos[lightbox] ?? null : null
+  const overlayOpen = lightbox !== null || slideshowPickerOpen
 
   function openSettings(photo: Photo) {
     setSettingsPhoto(photo)
@@ -121,7 +134,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function radiusMaxFor(photo: Photo): number {
-    if (lightbox !== null && photos[lightbox]?.id === photo.id && lightboxRadiusMax != null) {
+    if (current?.id === photo.id && lightboxRadiusMax != null) {
       return lightboxRadiusMax
     }
     return Math.max(1, Math.round(tileRadiusMaxById[photo.id] ?? 144))
@@ -154,6 +167,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   const closeLightbox = useCallback(() => {
     setSlideshowActive(false)
+    setSlideshowPhotoIds(null)
     setLightbox(null)
     if (lightboxHistoryRef.current) {
       lightboxHistoryRef.current = false
@@ -479,16 +493,36 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       reorderSuppressedClickRef.current = false
       return
     }
+    setSlideshowActive(false)
+    setSlideshowPhotoIds(null)
     openLightbox(index)
   }
 
+  function toggleSlideshowPick(photoId: string) {
+    setSlideshowSelectedIds((currentIds) => {
+      const nextIds = new Set(currentIds)
+      if (nextIds.has(photoId)) nextIds.delete(photoId)
+      else nextIds.add(photoId)
+      return nextIds
+    })
+  }
+
+  function createSlideshow() {
+    const selectedIds = photos.map((photo) => photo.id).filter((id) => slideshowSelectedIds.has(id))
+    if (selectedIds.length === 0) return
+    setSlideshowPhotoIds(selectedIds)
+    setSlideshowActive(selectedIds.length > 1)
+    setSlideshowPickerOpen(false)
+    setLightbox(0)
+  }
+
   const prev = useCallback(() => {
-    setLightbox((cur) => (cur === null ? null : cur === 0 ? photos.length - 1 : cur - 1))
-  }, [photos.length])
+    setLightbox((cur) => (cur === null ? null : cur === 0 ? viewerPhotos.length - 1 : cur - 1))
+  }, [viewerPhotos.length])
 
   const next = useCallback(() => {
-    setLightbox((cur) => (cur === null ? null : cur === photos.length - 1 ? 0 : cur + 1))
-  }, [photos.length])
+    setLightbox((cur) => (cur === null ? null : cur === viewerPhotos.length - 1 ? 0 : cur + 1))
+  }, [viewerPhotos.length])
 
   function handleSwipeStart(e: React.TouchEvent<HTMLDivElement>) {
     if (zoomScale > 1 || e.touches.length !== 1) {
@@ -577,21 +611,52 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   useEffect(() => () => clearReorderTimer(), [])
 
-  const current = lightbox !== null ? photos[lightbox] : null
-
   useEffect(() => {
-    if (!current) return
-    document.body.classList.add('hush-scroll-locked')
-    return () => {
-      document.body.classList.remove('hush-scroll-locked')
+    if (!slideshowRequestId || !isOwner || handledSlideshowRequestRef.current === slideshowRequestId) return
+    handledSlideshowRequestRef.current = slideshowRequestId
+    if (photos.length === 0) {
+      showAppToast('Upload media before creating a slideshow.', 'error')
+      return
     }
-  }, [current])
+    setSlideshowSelectedIds(new Set(photos.map((photo) => photo.id)))
+    setSlideshowPickerOpen(true)
+  }, [isOwner, photos, slideshowRequestId])
 
   useEffect(() => {
-    if (!slideshowActive || lightbox === null || photos.length < 2 || current?.media_type === 'video') return
+    if (lightbox === null || current) return
+    setLightbox(null)
+    setSlideshowActive(false)
+    setSlideshowPhotoIds(null)
+  }, [current, lightbox])
+
+  useEffect(() => {
+    if (!overlayOpen) return
+    const scrollY = window.scrollY
+    document.documentElement.classList.add('hush-scroll-locked')
+    document.body.classList.add('hush-scroll-locked')
+    document.body.style.position = 'fixed'
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.left = '0'
+    document.body.style.right = '0'
+    document.body.style.width = '100%'
+
+    return () => {
+      document.documentElement.classList.remove('hush-scroll-locked')
+      document.body.classList.remove('hush-scroll-locked')
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.left = ''
+      document.body.style.right = ''
+      document.body.style.width = ''
+      window.scrollTo(0, scrollY)
+    }
+  }, [overlayOpen])
+
+  useEffect(() => {
+    if (!slideshowActive || lightbox === null || viewerPhotos.length < 2 || current?.media_type === 'video') return
     const timeout = window.setTimeout(() => next(), 4200)
     return () => window.clearTimeout(timeout)
-  }, [slideshowActive, lightbox, photos.length, current?.id, current?.media_type, next])
+  }, [slideshowActive, lightbox, viewerPhotos.length, current?.id, current?.media_type, next])
 
   useEffect(() => {
     const maybeGrid = gridRef.current
@@ -656,11 +721,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   useEffect(() => {
     if (!settingsPhoto) return
-    const max = lightbox !== null && photos[lightbox]?.id === settingsPhoto.id && lightboxRadiusMax != null
+    const max = current?.id === settingsPhoto.id && lightboxRadiusMax != null
       ? lightboxRadiusMax
       : Math.max(1, Math.round(tileRadiusMaxById[settingsPhoto.id] ?? 144))
     if (settingsRadius > max) setSettingsRadius(max)
-  }, [lightbox, lightboxRadiusMax, photos, settingsPhoto, settingsRadius, tileRadiusMaxById])
+  }, [current, lightboxRadiusMax, settingsPhoto, settingsRadius, tileRadiusMaxById])
 
   if (photos.length === 0) {
     return (
@@ -839,12 +904,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 controls
                 autoPlay={!!album.video_autoplay}
                 playsInline
-                className="block max-h-[70vh] max-w-[92vw] object-contain"
+                className={`block max-h-[70vh] max-w-[92vw] object-contain${slideshowActive ? ' hush-slideshow-frame' : ''}`}
                 ref={(node) => setLightboxMediaNode(node)}
                 style={{ background: '#000', ...mediaZoomStyle(current) }}
                 onClick={(e) => e.stopPropagation()}
                 onEnded={() => {
-                  if (slideshowActive && photos.length > 1) next()
+                  if (slideshowActive && viewerPhotos.length > 1) next()
                 }}
                 onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
                 onMouseDown={handleMediaMouseDown}
@@ -857,7 +922,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 onContextMenu={(e) => e.preventDefault()}
               />
             ) : (
-              <div className="flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center overflow-hidden">
+              <div className={`flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center overflow-hidden${slideshowActive ? ' hush-slideshow-frame' : ''}`} key={current.id}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={current.url}
@@ -888,17 +953,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   {current.author_name && <p className="text-sm" style={{ color: '#C5D9C2' }}>by {current.author_name}</p>}
                 </div>
               )}
-              {photos.length > 1 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setSlideshowActive((value) => !value) }}
-                  className="p-2 rounded-lg transition hover:opacity-80"
-                  style={{ background: slideshowActive ? 'rgba(138,181,133,0.24)' : 'rgba(255,255,255,0.15)', color: '#FDFAF5', border: slideshowActive ? '1px solid rgba(138,181,133,0.75)' : '1px solid transparent' }}
-                  title={slideshowActive ? 'Pause slideshow' : 'Start slideshow'}
-                  aria-label={slideshowActive ? 'Pause slideshow' : 'Start slideshow'}
-                >
-                  {slideshowActive ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                </button>
-              )}
+
               <button onClick={(e) => { e.stopPropagation(); downloadPhoto(current) }} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
                 <Download className="w-5 h-5" />
               </button>
@@ -914,8 +969,78 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               )}
             </div>
 
-            <p className="text-sm" style={{ color: '#8AB585' }}>{(lightbox ?? 0) + 1} / {photos.length}</p>
+            <p className="text-sm" style={{ color: '#8AB585' }}>{(lightbox ?? 0) + 1} / {viewerPhotos.length}</p>
           </div>
+        </div>
+      )}
+
+      {slideshowPickerOpen && isOwner && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 py-6" onClick={() => setSlideshowPickerOpen(false)}>
+          <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.72)' }} />
+          <section
+            className="relative z-10 w-[min(94vw,860px)] rounded-2xl p-4 sm:p-5"
+            style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', boxShadow: '0 24px 70px rgba(0,0,0,0.28)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>Create slideshow</h2>
+                <p className="text-sm mt-1" style={{ color: '#7C5C3E' }}>
+                  Pick the media you want to include. They will play in the current album order.
+                </p>
+              </div>
+              <button type="button" className="rounded-full p-2 transition hover:opacity-80" style={{ background: '#F5F0E8', color: '#7C5C3E' }} onClick={() => setSlideshowPickerOpen(false)} aria-label="Close slideshow picker">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button type="button" className="rounded-full px-3 py-1.5 text-sm font-semibold transition hover:opacity-80" style={{ background: '#EAF0E8', color: '#254F22' }} onClick={() => setSlideshowSelectedIds(new Set(photos.map((photo) => photo.id)))}>
+                Select all
+              </button>
+              <button type="button" className="rounded-full px-3 py-1.5 text-sm font-semibold transition hover:opacity-80" style={{ background: '#F5F0E8', color: '#7C5C3E' }} onClick={() => setSlideshowSelectedIds(new Set())}>
+                Clear
+              </button>
+              <span className="text-sm" style={{ color: '#8B6F4E' }}>{slideshowSelectedIds.size} selected</span>
+            </div>
+
+            <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-5">
+              {photos.map((photo) => {
+                const selected = slideshowSelectedIds.has(photo.id)
+                const thumbSrc = photo.media_type === 'video' ? photo.poster_url || '' : photo.url
+                return (
+                  <button
+                    key={photo.id}
+                    type="button"
+                    className="relative aspect-square overflow-hidden rounded-xl transition"
+                    style={{ border: selected ? '3px solid #254F22' : '1px solid #DDD5C5', background: '#E8E0D2' }}
+                    onClick={() => toggleSlideshowPick(photo.id)}
+                  >
+                    {thumbSrc ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={thumbSrc} alt="" className="h-full w-full object-cover" draggable={false} />
+                    ) : (
+                      <span className="flex h-full w-full items-center justify-center" style={{ color: '#7C5C3E' }}>
+                        <Play className="h-7 w-7" />
+                      </span>
+                    )}
+                    <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full" style={{ background: selected ? '#254F22' : 'rgba(253,250,245,0.82)', color: selected ? '#FDFAF5' : '#7C5C3E', border: '1px solid rgba(37,79,34,0.18)' }}>
+                      {selected ? <Check className="h-4 w-4" /> : null}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button type="button" className="rounded-xl px-4 py-2 font-semibold transition hover:opacity-80" style={{ background: '#F5F0E8', color: '#7C5C3E' }} onClick={() => setSlideshowPickerOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="rounded-xl px-4 py-2 font-semibold transition hover:opacity-90 disabled:opacity-50" style={{ background: '#254F22', color: '#FDFAF5' }} disabled={slideshowSelectedIds.size === 0} onClick={createSlideshow}>
+                Create slideshow
+              </button>
+            </div>
+          </section>
         </div>
       )}
 

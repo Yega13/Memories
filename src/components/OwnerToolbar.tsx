@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Settings, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Play, Settings, Trash2, X } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -46,9 +46,10 @@ type Props = {
       resetFilterOverrides?: boolean
     },
   ) => void
+  onOpenSlideshow: () => void
 }
 
-export default function OwnerToolbar({ album, photos, ownerToken, userTier, mediaRadiusMax, onAlbumUpdated }: Props) {
+export default function OwnerToolbar({ album, photos, ownerToken, userTier, mediaRadiusMax, onAlbumUpdated, onOpenSlideshow }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
   const [showShare, setShowShare] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -508,6 +509,21 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
             />
           )}
         </div>
+
+        <button
+          className="hush-press"
+          style={btnBase}
+          disabled={photos.length === 0}
+          onClick={() => {
+            setShowShare(false)
+            setShowSettings(false)
+            onOpenSlideshow()
+          }}
+          title="Create slideshow"
+        >
+          <Play className="w-4 h-4" style={{ color: '#7C5C3E' }} />
+          Slideshow
+        </button>
 
         {zipProgress && (
           <div

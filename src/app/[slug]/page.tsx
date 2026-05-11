@@ -51,6 +51,7 @@ export default function AlbumPage() {
   const [mediaRadiusMax, setMediaRadiusMax] = useState(FALLBACK_MEDIA_RADIUS_MAX)
   const [forceGlobalRadius, setForceGlobalRadius] = useState(false)
   const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
+  const [slideshowRequestId, setSlideshowRequestId] = useState(0)
 
   const fetchAlbum = useCallback(async () => {
     setPasswordGate(null)
@@ -214,6 +215,7 @@ export default function AlbumPage() {
           userTier={userTier}
           mediaRadiusMax={globalMediaRadiusMax}
           onAlbumUpdated={handleAlbumUpdated}
+          onOpenSlideshow={() => setSlideshowRequestId((id) => id + 1)}
         />
       )}
 
@@ -231,6 +233,7 @@ export default function AlbumPage() {
           onPhotoDeleted={handlePhotoDeleted}
           onPhotoUpdated={handlePhotoUpdated}
           onPhotosReordered={handlePhotosReordered}
+          slideshowRequestId={slideshowRequestId}
         />
 
         {!isOwner && (

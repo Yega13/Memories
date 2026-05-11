@@ -24,6 +24,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+html.hush-scroll-locked,
 body.hush-scroll-locked,
 body.hush-page-preloading {
   overflow: hidden;
@@ -1200,5 +1201,19 @@ html {
 @keyframes hush-route-loading-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+.hush-slideshow-frame {
+  animation: hush-slideshow-frame 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes hush-slideshow-frame {
+  from {
+    opacity: 0.18;
+  }
+
+  to {
+    opacity: 1;
   }
 }
