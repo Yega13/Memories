@@ -1,5 +1,5 @@
 import type { CollectionSummary } from '@/components/owner-toolbar/types'
-import type { MediaDisplayFilter, MediaHoverEffect, MobileGridColumns } from '@/lib/media-display'
+import type { MediaDisplayFilter, MediaHoverEffect, MobileGridColumns, SlideshowAnimation } from '@/lib/media-display'
 
 async function jsonBody<T>(res: Response): Promise<T> {
   return (await res.json().catch(() => ({}))) as T
@@ -65,9 +65,11 @@ export async function saveMediaSettingsRequest(
   mediaFilter: MediaDisplayFilter,
   mediaHover: MediaHoverEffect,
   mobileGridColumns: MobileGridColumns,
+  slideshowIntervalMs: number,
+  slideshowAnimation: SlideshowAnimation,
   resetRadiusOverrides: boolean,
   resetFilterOverrides: boolean,
-): Promise<{ ok: true; media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect; mobile_grid_columns: MobileGridColumns } | { ok: false; error: string }> {
+): Promise<{ ok: true; media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect; mobile_grid_columns: MobileGridColumns; slideshow_interval_ms: number; slideshow_animation: SlideshowAnimation } | { ok: false; error: string }> {
   const res = await fetch('/api/album/media-settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -79,15 +81,17 @@ export async function saveMediaSettingsRequest(
       media_filter: mediaFilter,
       media_hover: mediaHover,
       mobile_grid_columns: mobileGridColumns,
+      slideshow_interval_ms: slideshowIntervalMs,
+      slideshow_animation: slideshowAnimation,
       reset_radius_overrides: resetRadiusOverrides,
       reset_filter_overrides: resetFilterOverrides,
     }),
   })
-  const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter; media_hover?: MediaHoverEffect; mobile_grid_columns?: MobileGridColumns }>(res)
-  if (!res.ok || body.media_radius == null || body.video_autoplay == null || !body.media_filter || !body.media_hover || !body.mobile_grid_columns) {
+  const body = await jsonBody<{ error?: string; media_radius?: number; video_autoplay?: boolean; media_filter?: MediaDisplayFilter; media_hover?: MediaHoverEffect; mobile_grid_columns?: MobileGridColumns; slideshow_interval_ms?: number; slideshow_animation?: SlideshowAnimation }>(res)
+  if (!res.ok || body.media_radius == null || body.video_autoplay == null || !body.media_filter || !body.media_hover || !body.mobile_grid_columns || body.slideshow_interval_ms == null || !body.slideshow_animation) {
     return { ok: false, error: body.error ?? `Save failed (${res.status})` }
   }
-  return { ok: true, media_radius: body.media_radius, video_autoplay: body.video_autoplay, media_filter: body.media_filter, media_hover: body.media_hover, mobile_grid_columns: body.mobile_grid_columns }
+  return { ok: true, media_radius: body.media_radius, video_autoplay: body.video_autoplay, media_filter: body.media_filter, media_hover: body.media_hover, mobile_grid_columns: body.mobile_grid_columns, slideshow_interval_ms: body.slideshow_interval_ms, slideshow_animation: body.slideshow_animation }
 }
 
 export async function uploadBackgroundRequest(

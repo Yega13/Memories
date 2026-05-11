@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
-import { cssMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
+import { DEFAULT_SLIDESHOW_INTERVAL_MS, cssMediaDisplayFilter, type MediaDisplayFilter, type SlideshowAnimation } from '@/lib/media-display'
 import { formatDuration } from '@/lib/media'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
@@ -78,6 +78,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const pinchRef = useRef<{ distance: number; scale: number; pan: Point; center: Point } | null>(null)
   const panGestureRef = useRef<{ point: Point; pan: Point; moved: boolean } | null>(null)
   const panRef = useRef<Point>({ x: 0, y: 0 })
+  const lightboxVideoRef = useRef<HTMLVideoElement | null>(null)
   const reorderTimerRef = useRef<number | null>(null)
   const reorderDragIdRef = useRef<string | null>(null)
   const reorderSuppressedClickRef = useRef(false)
@@ -115,6 +116,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const current = lightbox !== null ? viewerPhotos[lightbox] ?? null : null
   const overlayOpen = lightbox !== null || slideshowPickerOpen
   const slideshowMode = slideshowPhotoIds !== null
+  const slideshowIntervalMs = album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS
+  const slideshowAnimation: SlideshowAnimation = album.slideshow_animation ?? 'fade'
+  const slideshowFrameClass = slideshowActive && slideshowAnimation !== 'none' ? ` hush-slideshow-frame hush-slideshow-${slideshowAnimation}` : ''
 
   function openSettings(photo: Photo) {
     setSettingsPhoto(photo)
@@ -521,6 +525,22 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setLightbox(0)
   }
 
+  function toggleSlideshowPause() {
+    setSlideshowPaused((paused) => {
+      const nextPaused = !paused
+      if (current?.media_type === 'video' && lightboxVideoRef.current) {
+        if (nextPaused) {
+          lightboxVideoRef.current.pause()
+        } else {
+          void lightboxVideoRef.current.play().catch(() => {
+            setSlideshowPaused(true)
+          })
+        }
+      }
+      return nextPaused
+    })
+  }
+
   const prev = useCallback(() => {
     setLightbox((cur) => (cur === null ? null : cur === 0 ? viewerPhotos.length - 1 : cur - 1))
   }, [viewerPhotos.length])
@@ -659,9 +679,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   useEffect(() => {
     if (!slideshowActive || slideshowPaused || lightbox === null || viewerPhotos.length < 2 || current?.media_type === 'video') return
-    const timeout = window.setTimeout(() => next(), 4200)
+    const timeout = window.setTimeout(() => next(), slideshowIntervalMs)
     return () => window.clearTimeout(timeout)
-  }, [slideshowActive, slideshowPaused, lightbox, viewerPhotos.length, current?.id, current?.media_type, next])
+  }, [slideshowActive, slideshowPaused, lightbox, viewerPhotos.length, current?.id, current?.media_type, next, slideshowIntervalMs])
 
   useEffect(() => {
     const maybeGrid = gridRef.current
@@ -916,8 +936,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 controls
                 autoPlay={!!album.video_autoplay}
                 playsInline
-                className={`block max-h-[70vh] max-w-[92vw] object-contain${slideshowActive ? ' hush-slideshow-frame' : ''}`}
-                ref={(node) => setLightboxMediaNode(node)}
+                className={`block max-h-[70vh] max-w-[92vw] object-contain${slideshowFrameClass}`}
+                ref={(node) => {
+                  lightboxVideoRef.current = node
+                  setLightboxMediaNode(node)
+                }}
                 style={{ background: '#000', ...mediaZoomStyle(current) }}
                 onClick={(e) => e.stopPropagation()}
                 onEnded={() => {
@@ -934,7 +957,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 onContextMenu={(e) => e.preventDefault()}
               />
             ) : (
-              <div className={`flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center overflow-hidden${slideshowActive ? ' hush-slideshow-frame' : ''}`} key={current.id}>
+              <div className={`flex h-[70vh] w-[min(92vw,1100px)] items-center justify-center overflow-hidden${slideshowFrameClass}`} key={current.id}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={current.url}
@@ -960,13 +983,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
             {slideshowMode && (
               <div className="hush-slideshow-progress" aria-hidden>
-                <span key={`${current.id}-${slideshowPaused ? 'paused' : 'playing'}`} className={slideshowPaused || current.media_type === 'video' ? 'is-paused' : ''} />
+                <span key={`${current.id}-${slideshowPaused ? 'paused' : 'playing'}-${slideshowIntervalMs}`} className={slideshowPaused || current.media_type === 'video' ? 'is-paused' : ''} style={{ animationDuration: `${slideshowIntervalMs}ms` }} />
               </div>
             )}
 
             <div className={`flex items-center gap-4${slideshowMode ? ' hush-slideshow-controls' : ''}`} onClick={(e) => e.stopPropagation()}>
               {slideshowMode && viewerPhotos.length > 1 && (
-                <button onClick={(e) => { e.stopPropagation(); setSlideshowPaused((value) => !value) }} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: slideshowPaused ? 'rgba(253,250,245,0.92)' : 'rgba(138,181,133,0.28)', color: slideshowPaused ? '#254F22' : '#FDFAF5', border: '1px solid rgba(253,250,245,0.28)' }} title={slideshowPaused ? 'Resume slideshow' : 'Pause slideshow'} aria-label={slideshowPaused ? 'Resume slideshow' : 'Pause slideshow'}>
+                <button onClick={(e) => { e.stopPropagation(); toggleSlideshowPause() }} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: slideshowPaused ? 'rgba(253,250,245,0.92)' : 'rgba(138,181,133,0.28)', color: slideshowPaused ? '#254F22' : '#FDFAF5', border: '1px solid rgba(253,250,245,0.28)' }} title={slideshowPaused ? 'Resume slideshow' : 'Pause slideshow'} aria-label={slideshowPaused ? 'Resume slideshow' : 'Pause slideshow'}>
                   {slideshowPaused ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
                 </button>
               )}

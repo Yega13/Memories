@@ -5,7 +5,7 @@ import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, Lo
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
-import { MEDIA_DISPLAY_FILTER_OPTIONS, MEDIA_HOVER_EFFECT_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns } from '@/lib/media-display'
+import { DEFAULT_SLIDESHOW_INTERVAL_MS, MAX_SLIDESHOW_INTERVAL_MS, MIN_SLIDESHOW_INTERVAL_MS, MEDIA_DISPLAY_FILTER_OPTIONS, MEDIA_HOVER_EFFECT_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, SLIDESHOW_ANIMATION_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
 import { showAppToast, storeAppToast } from '@/components/AppToast'
@@ -90,6 +90,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [savedMediaFilter, setSavedMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
   const [mediaHover, setMediaHover] = useState<MediaHoverEffect>(album.media_hover ?? 'none')
   const [mobileGridColumns, setMobileGridColumns] = useState<MobileGridColumns>(album.mobile_grid_columns ?? 3)
+  const [slideshowIntervalMs, setSlideshowIntervalMs] = useState(album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS)
+  const [slideshowAnimation, setSlideshowAnimation] = useState<SlideshowAnimation>(album.slideshow_animation ?? 'fade')
   const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
   const [mediaSaved, setMediaSaved] = useState(false)
@@ -153,13 +155,15 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setSavedMediaFilter(album.media_filter ?? 'none')
       setMediaHover(album.media_hover ?? 'none')
       setMobileGridColumns(album.mobile_grid_columns ?? 3)
+      setSlideshowIntervalMs(album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS)
+      setSlideshowAnimation(album.slideshow_animation ?? 'fade')
       setMediaError('')
       setMediaSaved(false)
       setOpenSection(null)
       setDeleteConfirm(false)
       setDeleteError('')
     }
-  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.mobile_grid_columns, album.video_autoplay, showSettings])
+  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.mobile_grid_columns, album.slideshow_animation, album.slideshow_interval_ms, album.video_autoplay, showSettings])
 
   useEffect(() => {
     if (showSettings && canUseCollections) void loadCollections()
@@ -268,7 +272,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter, nextHover = mediaHover, nextMobileGridColumns = mobileGridColumns) {
+  async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter, nextHover = mediaHover, nextMobileGridColumns = mobileGridColumns, nextSlideshowIntervalMs = slideshowIntervalMs, nextSlideshowAnimation = slideshowAnimation) {
     setMediaSaving(true)
     setMediaError('')
     setMediaSaved(false)
@@ -283,6 +287,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         nextFilter,
         nextHover,
         nextMobileGridColumns,
+        nextSlideshowIntervalMs,
+        nextSlideshowAnimation,
         resetRadiusOverrides,
         resetFilterOverrides,
       )
@@ -298,12 +304,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setSavedMediaFilter(result.media_filter)
       setMediaHover(result.media_hover)
       setMobileGridColumns(result.mobile_grid_columns)
+      setSlideshowIntervalMs(result.slideshow_interval_ms)
+      setSlideshowAnimation(result.slideshow_animation)
       onAlbumUpdated(
-        { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter, media_hover: result.media_hover, mobile_grid_columns: result.mobile_grid_columns },
+        { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter, media_hover: result.media_hover, mobile_grid_columns: result.mobile_grid_columns, slideshow_interval_ms: result.slideshow_interval_ms, slideshow_animation: result.slideshow_animation },
         { forceGlobalRadius: false, resetRadiusOverrides, resetFilterOverrides },
       )
       setMediaSaved(true)
-      showAppToast('Media display saved.')
+      showAppToast('Settings saved.')
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Network error'
       setMediaError(message)
@@ -317,6 +325,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     const nextRadius = Math.max(0, Math.min(radiusMax, Math.round(value)))
     setMediaRadius(nextRadius)
     onAlbumUpdated({ media_radius: nextRadius }, { forceGlobalRadius: true })
+    setMediaSaved(false)
+  }
+
+  function applySlideshowInterval(value: number) {
+    const nextInterval = Math.max(MIN_SLIDESHOW_INTERVAL_MS, Math.min(MAX_SLIDESHOW_INTERVAL_MS, Math.round(value)))
+    setSlideshowIntervalMs(nextInterval)
+    onAlbumUpdated({ slideshow_interval_ms: nextInterval })
     setMediaSaved(false)
   }
 
@@ -828,6 +843,84 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       style={{ background: '#254F22', color: '#FDFAF5' }}
                     >
                       {mediaSaving ? 'Saving...' : 'Save media display'}
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <section style={settingsSectionStyle}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('slideshow')}>
+                  <Play className="w-4 h-4" style={{ color: '#7C5C3E' }} />
+                  <span style={sectionTitle}>Slideshow settings</span>
+                  <ChevronDown
+                    className="ml-auto w-4 h-4 transition-transform"
+                    style={{ color: '#A89880', transform: openSection === 'slideshow' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {openSection === 'slideshow' && (
+                  <div className="px-4 pb-4 space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Slide speed</label>
+                        <span className="text-xs font-mono" style={{ color: '#A89880' }}>{(slideshowIntervalMs / 1000).toFixed(slideshowIntervalMs % 1000 === 0 ? 0 : 1)}s</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={MIN_SLIDESHOW_INTERVAL_MS}
+                        max={MAX_SLIDESHOW_INTERVAL_MS}
+                        step={250}
+                        value={slideshowIntervalMs}
+                        onChange={(e) => applySlideshowInterval(Number(e.target.value))}
+                        className="w-full"
+                      />
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          className="hush-press rounded-lg py-2 text-xs font-semibold"
+                          style={{ background: slideshowIntervalMs === 3000 ? '#254F22' : '#FDFAF5', color: slideshowIntervalMs === 3000 ? '#FDFAF5' : '#254F22', border: '1px solid #DDD5C5' }}
+                          onClick={() => applySlideshowInterval(3000)}
+                        >
+                          Faster
+                        </button>
+                        <button
+                          type="button"
+                          className="hush-press rounded-lg py-2 text-xs font-semibold"
+                          style={{ background: slideshowIntervalMs === 6000 ? '#254F22' : '#FDFAF5', color: slideshowIntervalMs === 6000 ? '#FDFAF5' : '#254F22', border: '1px solid #DDD5C5' }}
+                          onClick={() => applySlideshowInterval(6000)}
+                        >
+                          Slower
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Animation</label>
+                      <select
+                        value={slideshowAnimation}
+                        onChange={(e) => {
+                          const nextAnimation = e.target.value as SlideshowAnimation
+                          setSlideshowAnimation(nextAnimation)
+                          onAlbumUpdated({ slideshow_animation: nextAnimation })
+                          setMediaSaved(false)
+                        }}
+                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                        style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+                      >
+                        {SLIDESHOW_ANIMATION_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}
+                    {mediaSaved && !mediaError && <p className="text-xs" style={{ color: '#254F22' }}>Saved.</p>}
+                    <button
+                      onClick={() => saveMediaSettings()}
+                      disabled={mediaSaving}
+                      className="hush-press w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: '#254F22', color: '#FDFAF5' }}
+                    >
+                      {mediaSaving ? 'Saving...' : 'Save slideshow settings'}
                     </button>
                   </div>
                 )}

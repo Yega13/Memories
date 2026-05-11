@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { clampMediaRadius, isMediaDisplayFilter, isMediaHoverEffect, isMobileGridColumns, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns } from '@/lib/media-display'
+import { clampMediaRadius, clampSlideshowInterval, isMediaDisplayFilter, isMediaHoverEffect, isMobileGridColumns, isSlideshowAnimation, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
 import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 
@@ -20,6 +20,8 @@ export async function POST(req: Request) {
     media_filter?: MediaDisplayFilter
     media_hover?: MediaHoverEffect
     mobile_grid_columns?: MobileGridColumns
+    slideshow_interval_ms?: number
+    slideshow_animation?: SlideshowAnimation
     reset_radius_overrides?: boolean
     reset_filter_overrides?: boolean
   }
@@ -39,6 +41,9 @@ export async function POST(req: Request) {
   const mediaHover = isMediaHoverEffect(rawMediaHover) ? rawMediaHover : null
   const rawMobileGridColumns = body.mobile_grid_columns ?? 3
   const mobileGridColumns = isMobileGridColumns(rawMobileGridColumns) ? Number(rawMobileGridColumns) as MobileGridColumns : null
+  const slideshowIntervalMs = clampSlideshowInterval(body.slideshow_interval_ms ?? 4200)
+  const rawSlideshowAnimation = body.slideshow_animation ?? 'fade'
+  const slideshowAnimation = isSlideshowAnimation(rawSlideshowAnimation) ? rawSlideshowAnimation : null
 
   if (!slug || !token) {
     return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
@@ -54,6 +59,12 @@ export async function POST(req: Request) {
   }
   if (!mobileGridColumns) {
     return NextResponse.json({ error: 'Invalid mobile grid' }, { status: 400, headers: NO_STORE })
+  }
+  if (slideshowIntervalMs == null) {
+    return NextResponse.json({ error: 'Invalid slideshow speed' }, { status: 400, headers: NO_STORE })
+  }
+  if (!slideshowAnimation) {
+    return NextResponse.json({ error: 'Invalid slideshow animation' }, { status: 400, headers: NO_STORE })
   }
 
   const admin = createAdminClient()
@@ -72,10 +83,10 @@ export async function POST(req: Request) {
 
   const { data: updated, error } = await admin
     .from('albums')
-    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter, media_hover: mediaHover, mobile_grid_columns: mobileGridColumns })
+    .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter, media_hover: mediaHover, mobile_grid_columns: mobileGridColumns, slideshow_interval_ms: slideshowIntervalMs, slideshow_animation: slideshowAnimation })
     .eq('id', album.id)
-    .select('media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns')
-    .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect; mobile_grid_columns: MobileGridColumns }>()
+    .select('media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation')
+    .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect; mobile_grid_columns: MobileGridColumns; slideshow_interval_ms: number; slideshow_animation: SlideshowAnimation }>()
 
   if (error) {
     console.error('[album/media-settings] update failed:', error.message)
@@ -85,6 +96,8 @@ export async function POST(req: Request) {
       error.message.includes('media_filter') ||
       error.message.includes('media_hover') ||
       error.message.includes('mobile_grid_columns') ||
+      error.message.includes('slideshow_interval_ms') ||
+      error.message.includes('slideshow_animation') ||
       error.message.includes('schema cache')
     return NextResponse.json(
       {

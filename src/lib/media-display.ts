@@ -1,9 +1,13 @@
 export type MediaDisplayFilter = 'none' | 'warm' | 'cool' | 'mono' | 'vintage' | 'soft'
 export type MediaHoverEffect = 'none' | 'mono' | 'fade' | 'zoom' | 'lift'
 export type MobileGridColumns = 3 | 4 | 5 | 6
+export type SlideshowAnimation = 'none' | 'fade' | 'rise' | 'zoom'
 
 export const MIN_MEDIA_RADIUS = 0
 export const MAX_MEDIA_RADIUS = 10000
+export const MIN_SLIDESHOW_INTERVAL_MS = 2000
+export const MAX_SLIDESHOW_INTERVAL_MS = 10000
+export const DEFAULT_SLIDESHOW_INTERVAL_MS = 4200
 
 export const MEDIA_DISPLAY_FILTER_OPTIONS: Array<{ value: MediaDisplayFilter; label: string }> = [
   { value: 'none', label: 'None' },
@@ -29,12 +33,23 @@ export const MOBILE_GRID_COLUMN_OPTIONS: Array<{ value: MobileGridColumns; label
   { value: 6, label: '6 in a row' },
 ]
 
+export const SLIDESHOW_ANIMATION_OPTIONS: Array<{ value: SlideshowAnimation; label: string }> = [
+  { value: 'fade', label: 'Fade' },
+  { value: 'rise', label: 'Soft rise' },
+  { value: 'zoom', label: 'Gentle zoom' },
+  { value: 'none', label: 'None' },
+]
+
 const MEDIA_DISPLAY_FILTERS = new Set<MediaDisplayFilter>(
   MEDIA_DISPLAY_FILTER_OPTIONS.map((option) => option.value),
 )
 
 const MEDIA_HOVER_EFFECTS = new Set<MediaHoverEffect>(
   MEDIA_HOVER_EFFECT_OPTIONS.map((option) => option.value),
+)
+
+const SLIDESHOW_ANIMATIONS = new Set<SlideshowAnimation>(
+  SLIDESHOW_ANIMATION_OPTIONS.map((option) => option.value),
 )
 
 export function isMediaDisplayFilter(value: unknown): value is MediaDisplayFilter {
@@ -48,6 +63,16 @@ export function isMediaHoverEffect(value: unknown): value is MediaHoverEffect {
 export function isMobileGridColumns(value: unknown): value is MobileGridColumns {
   const numeric = typeof value === 'number' ? value : Number(value)
   return MOBILE_GRID_COLUMN_OPTIONS.some((option) => option.value === numeric)
+}
+
+export function isSlideshowAnimation(value: unknown): value is SlideshowAnimation {
+  return typeof value === 'string' && SLIDESHOW_ANIMATIONS.has(value as SlideshowAnimation)
+}
+
+export function clampSlideshowInterval(value: unknown): number | null {
+  const numeric = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.max(MIN_SLIDESHOW_INTERVAL_MS, Math.min(MAX_SLIDESHOW_INTERVAL_MS, Math.round(numeric)))
 }
 
 export function clampMediaRadius(value: unknown): number | null {
