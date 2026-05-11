@@ -107,7 +107,7 @@ body.hush-page-loaded > main,
 body.hush-page-loaded > footer,
 body.hush-page-loaded .hush-back-to-top,
 body.hush-page-loaded [data-app-toast-viewport] {
-  animation: hush-page-enter 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: hush-page-enter 560ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .hush-initial-preloader {

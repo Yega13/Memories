@@ -7,7 +7,7 @@ import { formatDuration } from '@/lib/media'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import Image from 'next/image'
-import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Settings } from 'lucide-react'
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Settings } from 'lucide-react'
 
 type Props = {
   album: Album
@@ -86,6 +86,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [zoomPan, setZoomPan] = useState<Point>({ x: 0, y: 0 })
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [swipeAnimating, setSwipeAnimating] = useState(false)
+  const [slideshowActive, setSlideshowActive] = useState(false)
   const [reorderDraggingId, setReorderDraggingId] = useState<string | null>(null)
   const [reorderTargetId, setReorderTargetId] = useState<string | null>(null)
   const [reorderSaving, setReorderSaving] = useState(false)
@@ -152,6 +153,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   const closeLightbox = useCallback(() => {
+    setSlideshowActive(false)
     setLightbox(null)
     if (lightboxHistoryRef.current) {
       lightboxHistoryRef.current = false
@@ -586,6 +588,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }, [current])
 
   useEffect(() => {
+    if (!slideshowActive || lightbox === null || photos.length < 2 || current?.media_type === 'video') return
+    const timeout = window.setTimeout(() => next(), 4200)
+    return () => window.clearTimeout(timeout)
+  }, [slideshowActive, lightbox, photos.length, current?.id, current?.media_type, next])
+
+  useEffect(() => {
     const maybeGrid = gridRef.current
     if (!maybeGrid) return
     const grid = maybeGrid
@@ -835,6 +843,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 ref={(node) => setLightboxMediaNode(node)}
                 style={{ background: '#000', ...mediaZoomStyle(current) }}
                 onClick={(e) => e.stopPropagation()}
+                onEnded={() => {
+                  if (slideshowActive && photos.length > 1) next()
+                }}
                 onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
                 onMouseDown={handleMediaMouseDown}
                 onMouseMove={handleMediaMouseMove}
@@ -876,6 +887,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   {current.caption && <p className="font-medium" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
                   {current.author_name && <p className="text-sm" style={{ color: '#C5D9C2' }}>by {current.author_name}</p>}
                 </div>
+              )}
+              {photos.length > 1 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSlideshowActive((value) => !value) }}
+                  className="p-2 rounded-lg transition hover:opacity-80"
+                  style={{ background: slideshowActive ? 'rgba(138,181,133,0.24)' : 'rgba(255,255,255,0.15)', color: '#FDFAF5', border: slideshowActive ? '1px solid rgba(138,181,133,0.75)' : '1px solid transparent' }}
+                  title={slideshowActive ? 'Pause slideshow' : 'Start slideshow'}
+                  aria-label={slideshowActive ? 'Pause slideshow' : 'Start slideshow'}
+                >
+                  {slideshowActive ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                </button>
               )}
               <button onClick={(e) => { e.stopPropagation(); downloadPhoto(current) }} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
                 <Download className="w-5 h-5" />
