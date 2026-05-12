@@ -1,25 +1,18 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { deleteAlbumAssetsAndRows } from '@/lib/album-delete'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-
-type AlbumToDelete = {
-  id: string
-  owner_token: string
-  user_id: string | null
-  background_theme: string | null
-}
+const MAX_TITLE_LENGTH = 120
 
 export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string }
+  let body: { slug?: string; owner_token?: string; title?: string }
   try {
     body = await req.json()
   } catch {
@@ -28,21 +21,28 @@ export async function POST(req: Request) {
 
   const slug = String(body.slug ?? '').trim()
   const token = String(body.owner_token ?? '').trim()
-  if (!slug || !token) {
-    return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
+  const title = String(body.title ?? '').trim().slice(0, MAX_TITLE_LENGTH)
+  if (!slug || !token || !title) {
+    return NextResponse.json({ error: 'Album title is required' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess<AlbumToDelete>(slug, token, 'background_theme')
+  const access = await verifyAlbumOwnerAccess(slug, token)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }
 
   const admin = createAdminClient()
-  const album = access.album
-  const result = await deleteAlbumAssetsAndRows(admin, album)
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 500, headers: NO_STORE })
+  const { data: updated, error } = await admin
+    .from('albums')
+    .update({ title })
+    .eq('id', access.album.id)
+    .select('title')
+    .single<{ title: string }>()
+
+  if (error) {
+    console.error('[album/title] update failed:', error.message)
+    return NextResponse.json({ error: 'Could not rename album' }, { status: 500, headers: NO_STORE })
   }
 
-  return NextResponse.json({ ok: true }, { headers: NO_STORE })
+  return NextResponse.json({ ok: true, title: updated.title }, { headers: NO_STORE })
 }

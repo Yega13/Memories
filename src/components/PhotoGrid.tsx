@@ -22,6 +22,7 @@ type Props = {
   onPhotoUpdated: (id: string, patch: Partial<Photo>) => void
   onPhotosReordered: (photos: Photo[]) => void
   slideshowRequestId?: number
+  arrangeMode?: boolean
 }
 
 function radiusFor(photo: Photo, album: Album, forceGlobalRadius = false): number {
@@ -72,7 +73,7 @@ function pointRelativeToCenter(point: Point, node: HTMLElement): Point {
   }
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered, slideshowRequestId = 0 }: Props) {
+export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered, slideshowRequestId = 0, arrangeMode = false }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const lightboxHistoryRef = useRef(false)
@@ -479,6 +480,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || !isOwner || !ownerToken || reorderSaving) return
+    const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    if (coarsePointer && !arrangeMode) return
     clearReorderTimer()
     const tile = e.currentTarget
     const pointerId = e.pointerId
@@ -544,6 +547,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function toggleGridCardBack(photo: Photo, e: React.MouseEvent<HTMLElement>) {
     e.preventDefault()
     e.stopPropagation()
+    if (arrangeMode) return
     clearReorderTimer()
     reorderDragIdRef.current = null
     setReorderDraggingId(null)
@@ -862,7 +866,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           const hover = album.media_hover ?? 'none'
           const mediaName = mediaNameFor(photo)
           const isGridFlipped = Boolean(mediaName && flippedPhotoId === photo.id)
-          const isReorderMode = reorderDraggingId != null
+          const isReorderMode = arrangeMode || reorderDraggingId != null
           const isReorderDragging = reorderDraggingId === photo.id
           const isReorderTarget = reorderDraggingId != null && reorderTargetId === photo.id && reorderDraggingId !== photo.id
           return (

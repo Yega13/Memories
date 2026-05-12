@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -41,22 +41,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Use a JPG, PNG, WebP, or AVIF image' }, { status: 415, headers: NO_STORE })
   }
 
+  const access = await verifyAlbumOwnerAccess(slug, token)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
   const admin = createAdminClient()
-  const { data: album, error: lookupError } = await admin
-    .from('albums')
-    .select('id, owner_token')
-    .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string }>()
-
-  if (lookupError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
-
   const ext = EXT_BY_TYPE[file.type]
-  const path = `${album.id}/backgrounds/${randomUUID()}.${ext}`
+  const path = `${access.album.id}/backgrounds/${randomUUID()}.${ext}`
   const { error: uploadError } = await admin.storage
     .from('Photos')
     .upload(path, file, { contentType: file.type, cacheControl: '31536000', upsert: false })
@@ -71,7 +63,7 @@ export async function POST(req: Request) {
   const { error: updateError } = await admin
     .from('albums')
     .update({ background_theme })
-    .eq('id', album.id)
+    .eq('id', access.album.id)
 
   if (updateError) {
     console.error('[album/background/upload] album update failed:', updateError.message)

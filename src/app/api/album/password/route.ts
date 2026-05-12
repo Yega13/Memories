@@ -3,20 +3,13 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { hashPassword, MIN_PASSWORD_LEN, MAX_PASSWORD_LEN } from '@/lib/album-password'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Set or clear the album password. Requires:
-//   1. Signed-in (we bind albums.user_id like the custom-URL flow does).
-//   2. Live tier >= Pro (with the admin override from getUserTier).
-//   3. Ownership via slug + owner_token.
-//
-// Body: { slug, owner_token, password: string | null }
-// Pass null/empty string to clear.
 export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
@@ -45,24 +38,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Pro plan required' }, { status: 403, headers: NO_STORE })
   }
 
+  const access = await verifyAlbumOwnerAccess(slug, token)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
   const admin = createAdminClient()
-  const { data: album, error: lookupError } = await admin
-    .from('albums')
-    .select('id, owner_token, user_id')
-    .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string; user_id: string | null }>()
-
-  if (lookupError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
-  if (album.user_id && album.user_id !== user.id) {
-    return NextResponse.json({ error: 'This album is bound to another account' }, { status: 403, headers: NO_STORE })
-  }
-
-  // Clear path.
+  const album = access.album
   const raw = body.password
   const isClear = raw === null || raw === undefined || (typeof raw === 'string' && raw === '')
   if (isClear) {
@@ -77,7 +59,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, password_protected: false }, { headers: NO_STORE })
   }
 
-  // Set path.
   if (typeof raw !== 'string') {
     return NextResponse.json({ error: 'Password must be text' }, { status: 400, headers: NO_STORE })
   }
@@ -88,9 +69,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `At most ${MAX_PASSWORD_LEN} characters` }, { status: 400, headers: NO_STORE })
   }
 
-  // We bind albums.user_id here too so future tier checks (resolver looking
-  // up the owner's tier) have someone to call out. Mirrors the custom-URL
-  // flow exactly.
   let password_hash: string
   try {
     password_hash = await hashPassword(raw)

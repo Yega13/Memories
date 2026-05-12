@@ -105,6 +105,8 @@ export default function PhotoSettingsModal({
               max={radiusMax}
               value={radius}
               onChange={(e) => onRadiusChange(Number(e.target.value))}
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               className="w-full"
             />
             <input
@@ -113,6 +115,8 @@ export default function PhotoSettingsModal({
               max={radiusMax}
               value={radius}
               onChange={(e) => onRadiusChange(Number(e.target.value))}
+              onPointerDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
               className="mt-2 w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
               style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
             />

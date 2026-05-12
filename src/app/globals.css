@@ -53,6 +53,10 @@ img {
   -webkit-user-drag: none;
 }
 
+input[type="range"] {
+  touch-action: none;
+}
+
 .hush-brand-preloader {
   min-height: 100svh;
   display: flex;
@@ -646,7 +650,7 @@ a:hover,
   }
 
   .hush-owner-settings {
-    grid-column: 1 / -1;
+    grid-column: auto;
     margin-left: 0 !important;
   }
 
@@ -808,7 +812,7 @@ a:hover,
   }
 
   .hush-owner-settings {
-    grid-column: 1 / -1;
+    grid-column: auto;
     margin-left: 0 !important;
   }
 

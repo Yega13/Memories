@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isValidAlbumBackground, normalizeAlbumBackground } from '@/lib/album-background'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -28,25 +28,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid background' }, { status: 400, headers: NO_STORE })
   }
 
+  const access = await verifyAlbumOwnerAccess(slug, token)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
   const admin = createAdminClient()
-  const { data: album, error: lookupError } = await admin
-    .from('albums')
-    .select('id, owner_token')
-    .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string }>()
-
-  if (lookupError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
-
   const background_theme = normalizeAlbumBackground(body.background_theme)
   const { error } = await admin
     .from('albums')
     .update({ background_theme })
-    .eq('id', album.id)
+    .eq('id', access.album.id)
 
   if (error) {
     console.error('[album/background] update failed:', error.message)

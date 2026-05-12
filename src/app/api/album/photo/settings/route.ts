@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { clampMediaRadius, isMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX, mediaTextOrNull } from '@/lib/media-text'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -52,20 +52,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid filter' }, { status: 400, headers: NO_STORE })
   }
 
+  const access = await verifyAlbumOwnerAccess(slug, token)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
   const admin = createAdminClient()
-  const { data: album, error: albumError } = await admin
-    .from('albums')
-    .select('id, owner_token')
-    .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string }>()
-
-  if (albumError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
-
   const { data: photo, error: photoError } = await admin
     .from('photos')
     .select('id, album_id')
@@ -75,7 +67,7 @@ export async function POST(req: Request) {
   if (photoError || !photo) {
     return NextResponse.json({ error: 'Photo not found' }, { status: 404, headers: NO_STORE })
   }
-  if (photo.album_id !== album.id) {
+  if (photo.album_id !== access.album.id) {
     return NextResponse.json({ error: 'Photo does not belong to this album' }, { status: 403, headers: NO_STORE })
   }
 

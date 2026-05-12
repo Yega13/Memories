@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { clampMediaRadius, clampSlideshowInterval, isMediaDisplayFilter, isMediaHoverEffect, isMobileGridColumns, isSlideshowAnimation, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -67,24 +67,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid slideshow animation' }, { status: 400, headers: NO_STORE })
   }
 
+  const access = await verifyAlbumOwnerAccess(slug, token)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
   const admin = createAdminClient()
-  const { data: album, error: lookupError } = await admin
-    .from('albums')
-    .select('id, owner_token')
-    .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string }>()
-
-  if (lookupError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
-
   const { data: updated, error } = await admin
     .from('albums')
     .update({ media_radius: mediaRadius, video_autoplay: videoAutoplay, media_filter: mediaFilter, media_hover: mediaHover, mobile_grid_columns: mobileGridColumns, slideshow_interval_ms: slideshowIntervalMs, slideshow_animation: slideshowAnimation })
-    .eq('id', album.id)
+    .eq('id', access.album.id)
     .select('media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation')
     .single<{ media_radius: number; video_autoplay: boolean; media_filter: MediaDisplayFilter; media_hover: MediaHoverEffect; mobile_grid_columns: MobileGridColumns; slideshow_interval_ms: number; slideshow_animation: SlideshowAnimation }>()
 
@@ -117,7 +109,7 @@ export async function POST(req: Request) {
     const { error: resetError } = await admin
       .from('photos')
       .update(resetPatch)
-      .eq('album_id', album.id)
+      .eq('album_id', access.album.id)
 
     if (resetError) {
       console.error('[album/media-settings] reset photo overrides failed:', resetError.message)

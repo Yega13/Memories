@@ -2,17 +2,13 @@ import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { R2Env } from '@/lib/r2'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Owner-gated photo deletion. Verifies the (slug, owner_token) pair against
-// the albums table, then removes the photo from both storage and the photos
-// table using the service-role client. The DELETE policy on `photos` is now
-// closed, so this endpoint is the only path to deletion.
 export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
@@ -32,24 +28,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
 
+  const access = await verifyAlbumOwnerAccess(slug, token)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
   const admin = createAdminClient()
-
-  // 1. Resolve album and verify ownership.
-  const { data: album, error: albumError } = await admin
-    .from('albums')
-    .select('id, owner_token')
-    .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string }>()
-
-  if (albumError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
-
-  // 2. Look up the photo and confirm it belongs to this album. This stops
-  // an owner of one album from deleting photos in another.
   const { data: photo, error: photoError } = await admin
     .from('photos')
     .select('id, album_id, storage_path, storage_backend, poster_path')
@@ -65,14 +49,10 @@ export async function POST(req: Request) {
   if (photoError || !photo) {
     return NextResponse.json({ error: 'Photo not found' }, { status: 404, headers: NO_STORE })
   }
-  if (photo.album_id !== album.id) {
+  if (photo.album_id !== access.album.id) {
     return NextResponse.json({ error: 'Photo does not belong to this album' }, { status: 403, headers: NO_STORE })
   }
 
-  // 3. Delete from storage first, then DB. If storage fails we still try the
-  // DB delete - an orphan storage object is recoverable; an orphan DB row is
-  // a UI bug. Both errors are logged for observability.
-  // Posters live in the same backend as their video (we upload them together).
   const paths = [photo.storage_path]
   if (photo.poster_path) paths.push(photo.poster_path)
 

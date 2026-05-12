@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -28,24 +28,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Duplicate media ids' }, { status: 400, headers: NO_STORE })
   }
 
+  const access = await verifyAlbumOwnerAccess(slug, token)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
   const admin = createAdminClient()
-  const { data: album, error: albumError } = await admin
-    .from('albums')
-    .select('id, owner_token')
-    .eq('slug', slug)
-    .maybeSingle<{ id: string; owner_token: string }>()
-
-  if (albumError || !album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE })
-  }
-
   const { data: albumPhotos, error: photoError } = await admin
     .from('photos')
     .select('id')
-    .eq('album_id', album.id)
+    .eq('album_id', access.album.id)
     .returns<Array<{ id: string }>>()
 
   if (photoError) {
@@ -63,7 +55,7 @@ export async function POST(req: Request) {
       .from('photos')
       .update({ sort_order: index })
       .eq('id', photoIds[index])
-      .eq('album_id', album.id)
+      .eq('album_id', access.album.id)
     if (error) {
       console.error('[photos/reorder] update failed:', error.message)
       return NextResponse.json({ error: 'Could not save media order' }, { status: 500, headers: NO_STORE })

@@ -3,8 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { validateCustomSlug } from '@/lib/custom-slug'
-import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -37,7 +37,7 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
   let album: { id: string } | null = null
   if (albumSlug && token) {
-    const verified = await verifyOwnedAlbum(admin, albumSlug, token, user.id)
+    const verified = await verifyOwnedAlbum(admin, albumSlug, token)
     if ('error' in verified) return verified.error
     album = verified.album
   }
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const verified = await verifyOwnedAlbum(admin, albumSlug, token, user.id)
+  const verified = await verifyOwnedAlbum(admin, albumSlug, token)
   if ('error' in verified) return verified.error
   const { album } = verified
 
@@ -262,25 +262,14 @@ async function verifyOwnedAlbum(
   admin: ReturnType<typeof createAdminClient>,
   albumSlug: string,
   token: string,
-  userId: string,
 ): Promise<{ album: AlbumForCollection } | { error: NextResponse }> {
-  const { data: album, error: albumError } = await admin
-    .from('albums')
-    .select('id, owner_token, user_id')
-    .eq('slug', albumSlug)
-    .maybeSingle<AlbumForCollection>()
-
-  if (albumError || !album) {
-    return { error: NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE }) }
-  }
-  if (!timingSafeEqual(token, album.owner_token)) {
-    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403, headers: NO_STORE }) }
-  }
-  if (album.user_id && album.user_id !== userId) {
-    return { error: NextResponse.json({ error: 'This album is bound to another account' }, { status: 403, headers: NO_STORE }) }
+  void admin
+  const access = await verifyAlbumOwnerAccess<AlbumForCollection>(albumSlug, token)
+  if (!access.ok) {
+    return { error: NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE }) }
   }
 
-  return { album }
+  return { album: access.album }
 }
 
 async function getExistingCollection(

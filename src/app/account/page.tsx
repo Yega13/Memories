@@ -10,6 +10,7 @@ import { getActiveSubscription } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
 import CollectionActions from './CollectionActions'
 import DeleteAlbumButton from './DeleteAlbumButton'
+import RenameAlbumButton from './RenameAlbumButton'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
 
@@ -455,6 +456,7 @@ export default async function AccountPage({ searchParams }: Props) {
                         </span>
                       </span>
                     </Link>
+                    <RenameAlbumButton albumId={album.id} title={album.title} />
                     <DeleteAlbumButton albumId={album.id} />
                   </div>
                 ))}

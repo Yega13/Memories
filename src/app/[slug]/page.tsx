@@ -46,15 +46,18 @@ export default function AlbumPage() {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [ownerAccessDenied, setOwnerAccessDenied] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [userTier, setUserTier] = useState<Tier>('free')
   const [mediaRadiusMax, setMediaRadiusMax] = useState(FALLBACK_MEDIA_RADIUS_MAX)
   const [forceGlobalRadius, setForceGlobalRadius] = useState(false)
   const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
   const [slideshowRequestId, setSlideshowRequestId] = useState(0)
+  const [arrangeMode, setArrangeMode] = useState(false)
 
   const fetchAlbum = useCallback(async () => {
     setPasswordGate(null)
+    setOwnerAccessDenied(false)
     const qs = new URLSearchParams({ slug })
     if (ownerToken) qs.set('owner_token', ownerToken)
     const res = await fetch(`/api/album/resolve?${qs.toString()}`, {
@@ -94,8 +97,9 @@ export default function AlbumPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug: data.slug, owner_token: ownerToken }),
         })
-        const result = (await authRes.json()) as { isOwner?: boolean }
+        const result = (await authRes.json()) as { isOwner?: boolean; accessDenied?: boolean }
         setIsOwner(!!result.isOwner)
+        if (result.accessDenied) setOwnerAccessDenied(true)
 
         if (result.isOwner) {
           try {
@@ -202,10 +206,28 @@ export default function AlbumPage() {
 
   const reportHref = `/report?album=${encodeURIComponent(album.title)}&url=${encodeURIComponent(publicAlbumUrl)}&slug=${encodeURIComponent(publicSlug)}`
 
+  if (ownerAccessDenied && ownerToken) {
+    return (
+      <div
+        className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center"
+        style={{ background: '#254F22', color: '#FDFAF5' }}
+      >
+        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-serif)' }}>
+          You don&apos;t have access
+        </h1>
+        <p className="max-w-md opacity-90">
+          This management link belongs to another account. Sign in with the album owner account, or open the public album link.
+        </p>
+        <Link href={`/${publicSlug}`} className="underline underline-offset-4 hover:opacity-80 transition">
+          Open public album
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <main className="hush-album-page min-h-screen" style={albumBackgroundStyle(album.background_theme ?? DEFAULT_BG)}>
-      <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} />
+      <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} ownerToken={ownerToken} onAlbumUpdated={handleAlbumUpdated} />
 
       {isOwner && (
         <OwnerToolbar
@@ -216,6 +238,8 @@ export default function AlbumPage() {
           mediaRadiusMax={globalMediaRadiusMax}
           onAlbumUpdated={handleAlbumUpdated}
           onOpenSlideshow={() => setSlideshowRequestId((id) => id + 1)}
+          arrangeMode={arrangeMode}
+          onToggleArrangeMode={() => setArrangeMode((mode) => !mode)}
         />
       )}
 
@@ -234,6 +258,7 @@ export default function AlbumPage() {
           onPhotoUpdated={handlePhotoUpdated}
           onPhotosReordered={handlePhotosReordered}
           slideshowRequestId={slideshowRequestId}
+          arrangeMode={arrangeMode}
         />
 
         {!isOwner && (
