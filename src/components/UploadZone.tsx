@@ -90,6 +90,15 @@ type PhotoInsertRow = {
   duration_seconds: number | null
 }
 
+const HEIC_EXT_RE = /\.(heic|heif)$/i
+const HEIC_MIME_TYPES = new Set([
+  'image/heic',
+  'image/heif',
+  'image/heic-sequence',
+  'image/heif-sequence',
+])
+const FILE_ACCEPT = 'image/*,video/*,.heic,.heif,image/heic,image/heif,image/heic-sequence,image/heif-sequence'
+
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
@@ -102,9 +111,33 @@ function isExistingObjectError(message: string): boolean {
   return /already exists|duplicate|resource already exists/i.test(message)
 }
 
+function isHeicFile(file: File): boolean {
+  return HEIC_MIME_TYPES.has(file.type.toLowerCase()) || HEIC_EXT_RE.test(file.name)
+}
+
+function jpegNameFor(file: File): string {
+  const withoutExt = file.name.replace(/\.[^.]+$/, '')
+  return `${withoutExt || 'photo'}.jpg`
+}
+
+async function convertHeicToJpeg(file: File): Promise<File> {
+  const { default: heic2any } = await import('heic2any')
+  const converted = await heic2any({
+    blob: file,
+    toType: 'image/jpeg',
+    quality: 0.9,
+  })
+  const blob = Array.isArray(converted) ? converted[0] : converted
+  return new File([blob], jpegNameFor(file), {
+    type: 'image/jpeg',
+    lastModified: file.lastModified,
+  })
+}
+
 export default function UploadZone({ album, onPhotoAdded }: Props) {
   const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
+  const [preparing, setPreparing] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -123,33 +156,51 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     }
   }, [])
 
-  function addFiles(files: FileList | null) {
-    if (uploading) return
+  async function addFiles(files: FileList | null) {
+    if (uploading || preparing) return
     if (!files) return
+    setPreparing(true)
     const next: PendingItem[] = []
     const rejected: string[] = []
 
-    Array.from(files).forEach((file) => {
+    for (const file of Array.from(files)) {
       const kind = detectKind(file)
       if (!kind) {
         rejected.push(`${file.name}: unsupported file type`)
-        return
+        continue
       }
       const cap = kind === 'video' ? caps.video : caps.image
       if (file.size > cap) {
         rejected.push(
           `${file.name}: ${formatFileSize(file.size)} exceeds ${formatFileSize(cap)} limit`,
         )
-        return
+        continue
       }
+
+      let uploadFile = file
+      if (kind === 'image' && isHeicFile(file)) {
+        try {
+          uploadFile = await convertHeicToJpeg(file)
+        } catch {
+          rejected.push(`${file.name}: could not convert HEIC to JPG`)
+          continue
+        }
+        if (uploadFile.size > cap) {
+          rejected.push(
+            `${file.name}: converted JPG is ${formatFileSize(uploadFile.size)}, above the ${formatFileSize(cap)} limit`,
+          )
+          continue
+        }
+      }
+
       next.push({
-        file,
-        preview: URL.createObjectURL(file),
+        file: uploadFile,
+        preview: URL.createObjectURL(uploadFile),
         kind,
         caption: '',
         author: '',
       })
-    })
+    }
 
     if (rejected.length) {
       const message = rejected.join(' - ')
@@ -159,6 +210,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       setUploadError('')
     }
     setPending((prev) => [...prev, ...next])
+    setPreparing(false)
   }
 
   function removeFile(index: number) {
@@ -410,16 +462,16 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   return (
     <div className="hush-upload-wrap my-6">
       <div
-        onClick={() => { if (!uploading) inputRef.current?.click() }}
-        onDragOver={(e) => { e.preventDefault(); if (!uploading) setDragOver(true) }}
+        onClick={() => { if (!uploading && !preparing) inputRef.current?.click() }}
+        onDragOver={(e) => { e.preventDefault(); if (!uploading && !preparing) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files) }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files) }}
         className="hush-hover-lift hush-upload-zone rounded-2xl p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
           background: dragOver ? '#E8F5E3' : '#FDFAF5',
-          opacity: uploading ? 0.65 : 1,
-          cursor: uploading ? 'wait' : 'pointer',
+          opacity: uploading || preparing ? 0.65 : 1,
+          cursor: uploading || preparing ? 'wait' : 'pointer',
         }}
       >
         <Upload className="hush-upload-icon w-8 h-8 mx-auto mb-3" style={{ color: '#A89880' }} />
@@ -444,15 +496,20 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           </Link>
           . Illegal or abusive content may be removed.
         </p>
+        {preparing && (
+          <p className="mt-3 text-xs font-semibold" style={{ color: '#254F22' }}>
+            Preparing files...
+          </p>
+        )}
         <input
           ref={inputRef}
           type="file"
-          accept="image/*,video/*"
+          accept={FILE_ACCEPT}
           multiple
           className="hidden"
-          disabled={uploading}
+          disabled={uploading || preparing}
           onChange={(e) => {
-            addFiles(e.target.files)
+            void addFiles(e.target.files)
             e.currentTarget.value = ''
           }}
         />

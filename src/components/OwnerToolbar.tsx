@@ -498,11 +498,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   }
 
   return (
-    <div style={{ background: '#F5F0E8', borderBottom: '1px solid #DDD5C5' }}>
-      <div className="hush-container py-3 flex flex-wrap items-center gap-3">
-        <div className="relative" ref={shareRef}>
+    <div className="hush-owner-toolbar" style={{ background: '#F5F0E8', borderBottom: '1px solid #DDD5C5' }}>
+      <div className="hush-container hush-owner-toolbar-inner py-3 flex flex-wrap items-center gap-3">
+        <div className="hush-owner-action-wrap relative" ref={shareRef}>
           <button
-            className="hush-press"
+            className="hush-press hush-owner-action"
             style={btnBase}
             onClick={() => {
               setShowShare((s) => !s)
@@ -526,7 +526,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         </div>
 
         <button
-          className="hush-press"
+          className="hush-press hush-owner-action"
           style={btnBase}
           onClick={() => {
             if (photos.length === 0) {
@@ -553,9 +553,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
           </div>
         )}
 
-        <div className="relative ml-auto" ref={settingsRef}>
+        <div className="hush-owner-action-wrap hush-owner-settings relative ml-auto" ref={settingsRef}>
           <button
-            className="hush-press"
+            className="hush-press hush-owner-action"
             style={{ ...btnBase, padding: '6px 10px' }}
             onClick={() => {
               setShowSettings((s) => {
