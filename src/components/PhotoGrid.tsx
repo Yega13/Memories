@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, cssMediaDisplayFilter, type MediaDisplayFilter, type SlideshowAnimation } from '@/lib/media-display'
 import { formatDuration } from '@/lib/media'
-import { formatDate } from '@/lib/utils'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import Image from 'next/image'
@@ -531,10 +530,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     return photo.caption?.trim() || photo.author_name?.trim() || ''
   }
 
-  function photoStampFor(photo: Photo): string {
-    return formatDate(photo.created_at)
-  }
-
   function toggleGridCardBack(photo: Photo, e: React.MouseEvent<HTMLElement>) {
     e.preventDefault()
     e.stopPropagation()
@@ -947,9 +942,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 )}
                 {isGridFlipped && (
                   <div className="hush-grid-photo-back" style={{ borderRadius: mediaRadius }}>
-                    <span className="hush-photo-back-hint">{isVideo ? 'Video name' : 'Photo name'}</span>
                     <strong className="hush-photo-back-title">{mediaName}</strong>
-                    <span className="hush-photo-back-date">{photoStampFor(photo)}</span>
                   </div>
                 )}
               </div>

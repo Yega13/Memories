@@ -98,6 +98,8 @@ const HEIC_MIME_TYPES = new Set([
   'image/heif-sequence',
 ])
 const FILE_ACCEPT = 'image/*,video/*,.heic,.heif,image/heic,image/heif,image/heic-sequence,image/heif-sequence'
+const MEDIA_CAPTION_MAX = 30
+const MEDIA_AUTHOR_MAX = 16
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -551,7 +553,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
                   onChange={(e) => { const val = e.target.value; setPending((prev) => prev.map((p, idx) => idx === i ? { ...p, caption: val } : p)) }}
                   className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none transition disabled:opacity-60"
                   style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
-                  maxLength={100}
+                  maxLength={MEDIA_CAPTION_MAX}
                 />
                 <input
                   type="text"
@@ -561,7 +563,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
                   onChange={(e) => { const val = e.target.value; setPending((prev) => prev.map((p, idx) => idx === i ? { ...p, author: val } : p)) }}
                   className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none transition disabled:opacity-60"
                   style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
-                  maxLength={40}
+                  maxLength={MEDIA_AUTHOR_MAX}
                 />
               </div>
               <button

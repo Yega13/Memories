@@ -16,8 +16,25 @@ const footerLinks = [
   { href: '/terms', label: 'Terms' },
 ]
 
+const footerRoutes = new Set([
+  '/',
+  '/account',
+  '/event-photo-sharing',
+  '/login',
+  '/pricing',
+  '/privacy',
+  '/qr-code-photo-album',
+  '/report',
+  '/shared-photo-album',
+  '/support',
+  '/terms',
+  '/wedding-photo-sharing',
+])
+
 export default function SiteFooter() {
   const pathname = usePathname()
+  if (!footerRoutes.has(pathname)) return null
+
   const visibleLinks = footerLinks.filter((link) => link.href !== pathname)
 
   return (

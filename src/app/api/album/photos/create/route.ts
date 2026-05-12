@@ -21,6 +21,8 @@ type PhotoRow = {
 const STORAGE_BACKENDS = new Set(['supabase', 'r2'])
 const MEDIA_TYPES = new Set(['image', 'video'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const MEDIA_CAPTION_MAX = 30
+const MEDIA_AUTHOR_MAX = 16
 
 export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
@@ -79,8 +81,8 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
     storage_path: storagePath,
     storage_backend: storageBackend,
     url,
-    caption: textOrNull(row.caption, 100),
-    author_name: textOrNull(row.author_name, 40),
+    caption: textOrNull(row.caption, MEDIA_CAPTION_MAX),
+    author_name: textOrNull(row.author_name, MEDIA_AUTHOR_MAX),
     media_type: mediaType,
     poster_path: textOrNull(row.poster_path, 256),
     poster_url: textOrNull(row.poster_url, 2048),

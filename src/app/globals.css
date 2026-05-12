@@ -1331,8 +1331,7 @@ html {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: clamp(0.9rem, 3vw, 1.5rem);
+  padding: clamp(0.75rem, 2.4vw, 1.25rem);
   text-align: center;
   background: #F8F1E6;
   color: #111111;
@@ -1369,41 +1368,15 @@ html {
 }
 
 .hush-photo-back-title {
-  max-width: 90%;
+  max-width: 86%;
   overflow-wrap: anywhere;
   font-family: var(--font-hand), "Segoe Print", cursive;
-  font-size: clamp(1.25rem, 3.15vw, 2.55rem);
+  font-size: clamp(1.05rem, 2.45vw, 2rem);
   line-height: 1.1;
   font-weight: 400;
   color: #111111;
   transform: rotate(-2deg);
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.32);
-}
-
-.hush-photo-back-hint {
-  font-size: 0.7rem;
-  color: #8B6F4E;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-}
-
-.hush-photo-back-date {
-  position: absolute;
-  color: rgba(37, 79, 34, 0.62);
-  font-family: var(--font-sans);
-  font-size: clamp(0.52rem, 1.15vw, 0.72rem);
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.hush-photo-back-date {
-  left: 18px;
-  bottom: 18px;
-  padding: 4px 7px;
-  border: 1px solid rgba(37, 79, 34, 0.34);
-  border-radius: 4px;
-  transform: rotate(-4deg);
 }
 
 @keyframes hush-photo-back-in {
