@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX, mediaTextOrNull } from '@/lib/media-text'
 
 export const runtime = 'nodejs'
 
@@ -21,8 +22,6 @@ type PhotoRow = {
 const STORAGE_BACKENDS = new Set(['supabase', 'r2'])
 const MEDIA_TYPES = new Set(['image', 'video'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const MEDIA_CAPTION_MAX = 30
-const MEDIA_AUTHOR_MAX = 16
 
 export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
@@ -81,18 +80,13 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
     storage_path: storagePath,
     storage_backend: storageBackend,
     url,
-    caption: textOrNull(row.caption, MEDIA_CAPTION_MAX),
-    author_name: textOrNull(row.author_name, MEDIA_AUTHOR_MAX),
+    caption: mediaTextOrNull(row.caption, MEDIA_CAPTION_MAX),
+    author_name: mediaTextOrNull(row.author_name, MEDIA_AUTHOR_MAX),
     media_type: mediaType,
-    poster_path: textOrNull(row.poster_path, 256),
-    poster_url: textOrNull(row.poster_url, 2048),
+    poster_path: mediaTextOrNull(row.poster_path, 256),
+    poster_url: mediaTextOrNull(row.poster_url, 2048),
     duration_seconds: numberOrNull(row.duration_seconds),
   }
-}
-
-function textOrNull(value: unknown, max: number) {
-  const text = String(value ?? '').trim().slice(0, max)
-  return text || null
 }
 
 function numberOrNull(value: unknown) {

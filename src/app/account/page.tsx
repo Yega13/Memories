@@ -13,7 +13,6 @@ import DeleteAlbumButton from './DeleteAlbumButton'
 import SignOutButton from './SignOutButton'
 import SubscriptionPolling from './SubscriptionPolling'
 
-// Sticky page nav - matches /pricing, /support, /privacy. Logo links home.
 function AccountNav() {
   return (
     <nav
@@ -98,12 +97,7 @@ export default async function AccountPage({ searchParams }: Props) {
     redirect('/login?next=/account')
   }
 
-  // Gate: admins and active Pro/Studio subscribers only.
   if (!(await hasAccountAccess(user))) {
-    // Customers freshly redirected from Polar checkout (?welcome=1) might
-    // arrive before our webhook has had a chance to upsert their row.
-    // Show a polling state instead of a bare 403 - the row almost always
-    // arrives within a few seconds.
     if (welcome === '1') {
       return <SubscriptionPolling email={user.email ?? ''} />
     }
@@ -228,10 +222,10 @@ export default async function AccountPage({ searchParams }: Props) {
   return (
     <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
       <AccountNav />
-      <main className="px-4 py-10 sm:py-14">
-        <div className="hush-container">
+      <main className="hush-account-main px-4 py-10 sm:py-14">
+        <div className="hush-container hush-account-container">
           <section
-            className="hush-fade-up rounded-2xl p-6 sm:p-8 mb-6"
+            className="hush-account-hero hush-fade-up rounded-2xl p-6 sm:p-8 mb-6"
             style={{
               background: '#FFFFFF',
               border: '1px solid #DDD5C5',
@@ -262,7 +256,7 @@ export default async function AccountPage({ searchParams }: Props) {
             </div>
           </section>
 
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
+          <section className="hush-account-stats grid grid-cols-2 gap-3 sm:grid-cols-4 mb-6">
             {dashboardStats.map(([label, value, detail]) => (
               <div
                 key={label}
@@ -276,9 +270,9 @@ export default async function AccountPage({ searchParams }: Props) {
             ))}
           </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
+          <div className="hush-account-grid grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
             <section
-              className="hush-hover-lift rounded-2xl p-6"
+              className="hush-account-plan-card hush-hover-lift rounded-2xl p-6"
               style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.08)' }}
             >
               <div className="flex items-start justify-between gap-4 mb-5">
@@ -326,7 +320,7 @@ export default async function AccountPage({ searchParams }: Props) {
             </section>
 
             <section
-              className="hush-hover-lift rounded-2xl p-6"
+              className="hush-account-quick hush-hover-lift rounded-2xl p-6"
               style={{ background: '#FBF4E4', border: '1px solid rgba(196,166,120,0.35)' }}
             >
               <p className="text-xs uppercase tracking-wide mb-2" style={{ color: '#8B6F4E' }}>Quick actions</p>
@@ -388,7 +382,7 @@ export default async function AccountPage({ searchParams }: Props) {
                         <span className="block truncate text-xs" style={{ color: '#8B6F4E' }}>/c/{collection.slug}</span>
                         {collection.description && (
                           <span
-                            className="mt-1 block overflow-hidden text-xs leading-snug"
+                            className="hush-account-collection-description mt-1 block overflow-hidden text-xs leading-snug"
                             style={{ color: '#5C4A3C', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}
                           >
                             {collection.description}
@@ -483,7 +477,7 @@ export default async function AccountPage({ searchParams }: Props) {
             </div>
           </section>
 
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 mb-6">
+          <section className="hush-account-tips grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 mb-6">
             {[
               ['Customize albums', 'Change album colors and stock backgrounds from each owner toolbar.'],
               ['Protect important links', 'Use passwords and custom URLs on Pro and Studio albums.'],

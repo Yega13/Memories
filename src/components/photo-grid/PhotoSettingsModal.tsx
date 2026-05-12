@@ -9,13 +9,19 @@ type Props = {
   photo: Photo
   radius: number
   filter: PhotoFilterChoice
+  caption: string
+  author: string
   saving: boolean
   error: string
   radiusMax: number
+  captionMax: number
+  authorMax: number
   onClose: () => void
   onRadiusChange: (value: number) => void
   onRadiusReset: () => void
   onFilterChange: (value: PhotoFilterChoice) => void
+  onCaptionChange: (value: string) => void
+  onAuthorChange: (value: string) => void
   onSave: () => void
 }
 
@@ -24,13 +30,19 @@ export default function PhotoSettingsModal({
   photo,
   radius,
   filter,
+  caption,
+  author,
   saving,
   error,
   radiusMax,
+  captionMax,
+  authorMax,
   onClose,
   onRadiusChange,
   onRadiusReset,
   onFilterChange,
+  onCaptionChange,
+  onAuthorChange,
   onSave,
 }: Props) {
   return (
@@ -41,7 +53,7 @@ export default function PhotoSettingsModal({
         <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: '1px solid #E8E0D2' }}>
           <div>
             <h2 className="text-base font-semibold" style={{ color: '#254F22' }}>Media settings</h2>
-            <p className="text-xs" style={{ color: '#7C5C3E' }}>{photo.caption || 'Only this item.'}</p>
+            <p className="text-xs" style={{ color: '#7C5C3E' }}>{caption || author || photo.caption || 'Only this item.'}</p>
           </div>
           <button type="button" onClick={onClose} className="rounded-full p-2 transition hover:opacity-80" style={{ color: '#7C5C3E', background: '#F5F0E8' }} aria-label="Close media settings">
             <X className="h-4 w-4" />
@@ -49,6 +61,39 @@ export default function PhotoSettingsModal({
         </div>
 
         <div className="space-y-4 p-5">
+          <div className="space-y-3">
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Description</label>
+                <span className="text-xs font-mono" style={{ color: '#A89880' }}>{caption.length}/{captionMax}</span>
+              </div>
+              <input
+                type="text"
+                value={caption}
+                maxLength={captionMax}
+                onChange={(e) => onCaptionChange(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+                placeholder="Photo description"
+              />
+            </div>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Author name</label>
+                <span className="text-xs font-mono" style={{ color: '#A89880' }}>{author.length}/{authorMax}</span>
+              </div>
+              <input
+                type="text"
+                value={author}
+                maxLength={authorMax}
+                onChange={(e) => onAuthorChange(e.target.value)}
+                className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+                placeholder="Author name"
+              />
+            </div>
+          </div>
+
           <div>
             <div className="mb-2 flex items-center justify-between gap-3">
               <label className="text-xs font-medium" style={{ color: '#7C5C3E' }}>Corner radius</label>

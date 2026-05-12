@@ -33,9 +33,10 @@ const footerRoutes = new Set([
 
 export default function SiteFooter() {
   const pathname = usePathname()
-  if (!footerRoutes.has(pathname)) return null
+  const normalizedPathname = pathname === '/' ? pathname : pathname.replace(/\/$/, '')
+  if (!footerRoutes.has(normalizedPathname)) return null
 
-  const visibleLinks = footerLinks.filter((link) => link.href !== pathname)
+  const visibleLinks = footerLinks.filter((link) => link.href !== normalizedPathname)
 
   return (
     <footer

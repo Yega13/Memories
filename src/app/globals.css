@@ -493,6 +493,60 @@ a:hover,
     flex: 0 0 auto;
   }
 
+  .hush-account-main {
+    padding-top: 1rem !important;
+    padding-bottom: 1.2rem !important;
+  }
+
+  .hush-account-container {
+    width: min(100%, 34rem) !important;
+  }
+
+  .hush-account-hero {
+    margin-bottom: 0.8rem !important;
+    padding: 1rem !important;
+    border-radius: 1rem !important;
+  }
+
+  .hush-account-hero h1 {
+    margin-bottom: 0.45rem !important;
+    font-size: 1.72rem !important;
+    line-height: 1.05 !important;
+  }
+
+  .hush-account-hero p {
+    font-size: 0.78rem !important;
+  }
+
+  .hush-account-stats,
+  .hush-account-plan-card,
+  .hush-account-tips {
+    display: none !important;
+  }
+
+  .hush-account-grid,
+  .hush-account-main section {
+    gap: 0.85rem !important;
+  }
+
+  .hush-account-quick {
+    padding: 1rem !important;
+    border-radius: 1rem !important;
+  }
+
+  .hush-account-quick h2,
+  .hush-account-quick p:not(:first-child) {
+    display: none !important;
+  }
+
+  .hush-account-quick .grid {
+    gap: 0.5rem !important;
+  }
+
+  .hush-account-collection-description {
+    display: none !important;
+  }
+
   .hush-support-form {
     overflow: hidden;
   }

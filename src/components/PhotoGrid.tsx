@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, cssMediaDisplayFilter, type MediaDisplayFilter, type SlideshowAnimation } from '@/lib/media-display'
 import { formatDuration } from '@/lib/media'
+import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import Image from 'next/image'
@@ -109,6 +110,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [settingsPhoto, setSettingsPhoto] = useState<Photo | null>(null)
   const [settingsRadius, setSettingsRadius] = useState(album.media_radius ?? 12)
   const [settingsFilter, setSettingsFilter] = useState<PhotoFilterChoice>('global')
+  const [settingsCaption, setSettingsCaption] = useState('')
+  const [settingsAuthor, setSettingsAuthor] = useState('')
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState('')
 
@@ -128,6 +131,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setSettingsPhoto(photo)
     setSettingsRadius(radiusFor(photo, album, forceGlobalRadius))
     setSettingsFilter(photo.display_filter ?? 'global')
+    setSettingsCaption(photo.caption ?? '')
+    setSettingsAuthor(photo.author_name ?? '')
     setSettingsError('')
   }
 
@@ -362,12 +367,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           photo_id: settingsPhoto.id,
           display_radius: settingsRadius === (album.media_radius ?? 12) ? null : settingsRadius,
           display_filter: settingsFilter === 'global' ? null : settingsFilter,
+          caption: settingsCaption.trim() || null,
+          author_name: settingsAuthor.trim() || null,
         }),
       })
       const body = (await res.json().catch(() => ({}))) as {
         error?: string
         display_radius?: number | null
         display_filter?: MediaDisplayFilter | null
+        caption?: string | null
+        author_name?: string | null
       }
       if (!res.ok) {
         setSettingsError(body.error ?? `Save failed (${res.status})`)
@@ -377,6 +386,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       onPhotoUpdated(settingsPhoto.id, {
         display_radius: body.display_radius ?? null,
         display_filter: body.display_filter ?? null,
+        caption: body.caption ?? null,
+        author_name: body.author_name ?? null,
       })
       showAppToast('Media settings saved.')
       setSettingsPhoto(null)
@@ -1212,13 +1223,19 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           photo={settingsPhoto}
           radius={settingsRadius}
           filter={settingsFilter}
+          caption={settingsCaption}
+          author={settingsAuthor}
           saving={settingsSaving}
           error={settingsError}
           radiusMax={radiusMaxFor(settingsPhoto)}
+          captionMax={MEDIA_CAPTION_MAX}
+          authorMax={MEDIA_AUTHOR_MAX}
           onClose={() => setSettingsPhoto(null)}
           onRadiusChange={applySettingsRadius}
           onRadiusReset={() => setSettingsRadius(album.media_radius ?? 12)}
           onFilterChange={setSettingsFilter}
+          onCaptionChange={setSettingsCaption}
+          onAuthorChange={setSettingsAuthor}
           onSave={savePhotoSettings}
         />
       )}

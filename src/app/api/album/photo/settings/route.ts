@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { clampMediaRadius, isMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
 import { timingSafeEqual } from '@/lib/timing-safe'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX, mediaTextOrNull } from '@/lib/media-text'
 
 export const runtime = 'nodejs'
 
@@ -18,6 +19,8 @@ export async function POST(req: Request) {
     photo_id?: string
     display_radius?: number | null
     display_filter?: MediaDisplayFilter | null
+    caption?: string | null
+    author_name?: string | null
   }
   try {
     body = await req.json()
@@ -34,6 +37,10 @@ export async function POST(req: Request) {
     : isMediaDisplayFilter(body.display_filter)
       ? body.display_filter
       : undefined
+  const hasCaption = Object.prototype.hasOwnProperty.call(body, 'caption')
+  const hasAuthorName = Object.prototype.hasOwnProperty.call(body, 'author_name')
+  const caption = hasCaption ? mediaTextOrNull(body.caption, MEDIA_CAPTION_MAX) : undefined
+  const authorName = hasAuthorName ? mediaTextOrNull(body.author_name, MEDIA_AUTHOR_MAX) : undefined
 
   if (!slug || !token || !photoId) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
@@ -72,12 +79,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Photo does not belong to this album' }, { status: 403, headers: NO_STORE })
   }
 
+  const updatePayload: {
+    display_radius: number | null
+    display_filter: MediaDisplayFilter | null
+    caption?: string | null
+    author_name?: string | null
+  } = {
+    display_radius: displayRadius,
+    display_filter: displayFilter,
+  }
+  if (hasCaption) updatePayload.caption = caption ?? null
+  if (hasAuthorName) updatePayload.author_name = authorName ?? null
+
   const { data: updated, error } = await admin
     .from('photos')
-    .update({ display_radius: displayRadius, display_filter: displayFilter })
+    .update(updatePayload)
     .eq('id', photo.id)
-    .select('display_radius, display_filter')
-    .single<{ display_radius: number | null; display_filter: MediaDisplayFilter | null }>()
+    .select('display_radius, display_filter, caption, author_name')
+    .single<{
+      display_radius: number | null
+      display_filter: MediaDisplayFilter | null
+      caption: string | null
+      author_name: string | null
+    }>()
 
   if (error) {
     console.error('[photo/settings] update failed:', error.message)

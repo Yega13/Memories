@@ -11,6 +11,7 @@ import {
   type MediaKind,
 } from '@/lib/media'
 import { formatFileSize } from '@/lib/utils'
+import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
 import { showAppToast } from '@/components/AppToast'
 import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
@@ -98,8 +99,6 @@ const HEIC_MIME_TYPES = new Set([
   'image/heif-sequence',
 ])
 const FILE_ACCEPT = 'image/*,video/*,.heic,.heif,image/heic,image/heif,image/heic-sequence,image/heif-sequence'
-const MEDIA_CAPTION_MAX = 30
-const MEDIA_AUTHOR_MAX = 16
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
