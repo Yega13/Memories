@@ -57,6 +57,10 @@ input[type="range"] {
   touch-action: none;
 }
 
+.hush-owner-arrange-action {
+  display: none !important;
+}
+
 .hush-brand-preloader {
   min-height: 100svh;
   display: flex;
@@ -662,6 +666,10 @@ a:hover,
     border-radius: 0.65rem !important;
   }
 
+  .hush-owner-arrange-action {
+    display: flex !important;
+  }
+
   .hush-owner-action svg {
     width: 0.95rem !important;
     height: 0.95rem !important;
@@ -823,6 +831,10 @@ a:hover,
     padding: 0.36rem 0.45rem !important;
     font-size: 0.74rem !important;
     border-radius: 0.6rem !important;
+  }
+
+  .hush-owner-arrange-action {
+    display: flex !important;
   }
 
   .hush-owner-action svg {

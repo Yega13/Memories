@@ -1,12 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { isAccountAdmin } from '@/lib/auth'
 import { timingSafeEqual } from '@/lib/timing-safe'
 
 type AlbumOwnerBase = {
   id: string
   owner_token: string
   user_id: string | null
+  custom_slug?: string | null
 }
 
 type AccessOk<T extends AlbumOwnerBase> = {
@@ -22,6 +22,20 @@ type AccessFail = {
   reason: 'missing' | 'not_found' | 'bad_token' | 'access_denied'
 }
 
+const PROTECTED_MANAGEMENT_SLUGS = new Set([
+  'tfromthefans',
+  'tpeakframes',
+  'redhavenepreleaseshow',
+  'talixfans',
+])
+
+const PROTECTED_MANAGEMENT_EMAILS = new Set([
+  'alinagnuni3@gmail.com',
+  'taliartisticproduction@gmail.com',
+  'taligolergant26@gmail.com',
+  'yeganyansuren13@gmail.com',
+])
+
 export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwnerBase>(
   slug: string,
   ownerToken: string,
@@ -34,7 +48,7 @@ export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwn
   }
 
   const admin = createAdminClient()
-  const columns = ['id', 'owner_token', 'user_id', extraColumns].filter(Boolean).join(', ')
+  const columns = Array.from(new Set(['id', 'owner_token', 'user_id', 'custom_slug', ...extraColumns.split(',').map((column) => column.trim()).filter(Boolean)])).join(', ')
   const { data: album, error } = await admin
     .from('albums')
     .select(columns)
@@ -53,11 +67,13 @@ export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwn
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (album.user_id) {
-    if (!user || (user.id !== album.user_id && !isAccountAdmin(user))) {
+  const protectedManagement = PROTECTED_MANAGEMENT_SLUGS.has(cleanSlug) || (album.custom_slug ? PROTECTED_MANAGEMENT_SLUGS.has(album.custom_slug) : false)
+  if (protectedManagement) {
+    const email = user?.email?.toLowerCase()
+    if (!email || !PROTECTED_MANAGEMENT_EMAILS.has(email)) {
       return { ok: false, status: 403, error: "You don't have access", reason: 'access_denied' }
     }
-    return { ok: true, album, userId: user.id }
+    return { ok: true, album, userId: user?.id ?? null }
   }
 
   if (user) {

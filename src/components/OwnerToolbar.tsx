@@ -528,7 +528,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         </div>
 
         <button
-          className="hush-press hush-owner-action"
+          className="hush-press hush-owner-action hush-owner-arrange-action"
           style={btnBase}
           onClick={() => {
             if (photos.length === 0) {
