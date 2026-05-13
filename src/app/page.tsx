@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { PointerEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -109,6 +110,20 @@ export default function Home() {
   const [albumPlaceholder, setAlbumPlaceholder] = useState(ALBUM_PLACEHOLDERS[0])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  function tiltCard(event: PointerEvent<HTMLElement>) {
+    if (window.matchMedia('(max-width: 1023px)').matches) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = (event.clientX - rect.left) / rect.width - 0.5
+    const y = (event.clientY - rect.top) / rect.height - 0.5
+    event.currentTarget.style.setProperty('--hush-tilt-y', `${x * 9}deg`)
+    event.currentTarget.style.setProperty('--hush-tilt-x', `${y * -9}deg`)
+  }
+
+  function resetTiltCard(event: PointerEvent<HTMLElement>) {
+    event.currentTarget.style.setProperty('--hush-tilt-x', '0deg')
+    event.currentTarget.style.setProperty('--hush-tilt-y', '0deg')
+  }
 
   useEffect(() => {
     setAlbumPlaceholder(ALBUM_PLACEHOLDERS[Math.floor(Math.random() * ALBUM_PLACEHOLDERS.length)])
@@ -266,28 +281,28 @@ export default function Home() {
 
           <div className="hush-home-visuals relative hidden lg:flex items-center justify-center" style={{ height: 'clamp(460px, 36vw, 600px)' }}>
 
-            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '-4%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', transform: 'rotate(-4deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div onPointerMove={tiltCard} onPointerLeave={resetTiltCard} className="hush-float-slow hush-tilt-card absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-4deg', top: '-4%', left: '2%', width: 'clamp(200px, 13vw, 270px)', height: 'clamp(250px, 16vw, 340px)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/card1.jpg" alt="Sunlit forest trail captured on a morning hike - a Hushare album photo" fill sizes="200px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Morning hike</span>
               </div>
             </div>
 
-            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '3deg', animationDelay: '-1.8s', top: '-6%', right: '6%', width: 'clamp(180px, 12vw, 250px)', height: 'clamp(220px, 15vw, 310px)', transform: 'rotate(3deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div onPointerMove={tiltCard} onPointerLeave={resetTiltCard} className="hush-float-slow hush-tilt-card absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '3deg', animationDelay: '-1.8s', top: '-6%', right: '6%', width: 'clamp(180px, 12vw, 250px)', height: 'clamp(220px, 15vw, 310px)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/card2.jpg" alt="Warm golden-hour landscape shared in a Hushare album" fill sizes="180px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(124,74,45,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Golden hour</span>
               </div>
             </div>
 
-            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '1deg', animationDelay: '-3.2s', top: '38%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', transform: 'rotate(1deg)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
+            <div onPointerMove={tiltCard} onPointerLeave={resetTiltCard} className="hush-float-slow hush-tilt-card absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '1deg', animationDelay: '-3.2s', top: '38%', left: '13%', width: 'clamp(240px, 16vw, 340px)', height: 'clamp(270px, 18vw, 380px)', border: '4px solid rgba(255,255,255,0.95)', zIndex: 10 }}>
               <Image src="/card3.jpg" alt="Quiet lake at dusk - a memory kept in a shared Hushare album" fill sizes="240px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(27,58,107,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Lake at dusk</span>
               </div>
             </div>
 
-            <div className="hush-float-slow absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-2deg', animationDelay: '-4.6s', bottom: '-6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', transform: 'rotate(-2deg)', border: '4px solid rgba(255,255,255,0.9)' }}>
+            <div onPointerMove={tiltCard} onPointerLeave={resetTiltCard} className="hush-float-slow hush-tilt-card absolute rounded-2xl overflow-hidden shadow-2xl" style={{ ['--hush-rotate' as string]: '-2deg', animationDelay: '-4.6s', bottom: '-6%', right: '4%', width: 'clamp(190px, 13vw, 280px)', height: 'clamp(190px, 13vw, 280px)', border: '4px solid rgba(255,255,255,0.9)' }}>
               <Image src="/children.avif" alt="Children exploring outdoors - photo from a shared Hushare family album" fill sizes="190px" className="object-cover" draggable={false} />
               <div className="absolute inset-0 flex items-end p-3" style={{ background: 'linear-gradient(to top, rgba(139,111,78,0.6) 0%, transparent 55%)' }}>
                 <span className="text-xs font-medium" style={{ color: '#FDFAF5', fontFamily: 'var(--font-serif)' }}>Little explorers</span>

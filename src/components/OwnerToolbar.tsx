@@ -1203,7 +1203,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                 </button>
                 {openSection === 'danger' && (
                   <div className="px-4 pb-4">
-                    <div className="rounded-xl p-3" style={{ background: '#FFF7F4', border: '1px solid rgba(192,57,43,0.25)' }}>
+                    <div className={`hush-delete-dialog hush-delete-panel rounded-xl p-3 ${deleteConfirm ? 'hush-delete-dialog-open' : ''}`} style={{ background: '#FFF7F4', border: '1px solid rgba(192,57,43,0.25)' }}>
                       <p className="text-xs leading-relaxed mb-3" style={{ color: '#7A2A1F' }}>
                         Delete this album, its photos and videos, and remove it from collections.
                       </p>
@@ -1219,17 +1219,20 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           {deletingAlbum ? 'Deleting...' : deleteConfirm ? 'Delete permanently' : 'Delete album'}
                         </button>
                         {deleteConfirm && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDeleteConfirm(false)
-                              setDeleteError('')
-                            }}
-                            className="hush-press rounded-lg px-3 py-2 text-sm font-semibold transition hover:opacity-90"
-                            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
-                          >
-                            Cancel
-                          </button>
+                          <div className="hush-delete-confirm-family">
+                            <p>Delete forever?</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDeleteConfirm(false)
+                                setDeleteError('')
+                              }}
+                              className="hush-press rounded-lg px-3 py-2 text-sm font-semibold transition hover:opacity-90"
+                              style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         )}
                       </div>
                       {deleteConfirm && !deleteError && (

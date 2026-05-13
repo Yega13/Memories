@@ -47,12 +47,12 @@ export default function DeleteAlbumButton({ albumId }: Props) {
   }
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2">
+    <div className={`hush-delete-dialog mt-2 ${confirming ? 'hush-delete-dialog-open' : ''}`}>
       <button
         type="button"
         onClick={deleteAlbum}
         disabled={deleting}
-        className="hush-press inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+        className="hush-delete-primary hush-press inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
         style={{
           background: confirming ? '#C0392B' : '#FFFFFF',
           border: '1px solid #C0392B',
@@ -63,17 +63,20 @@ export default function DeleteAlbumButton({ albumId }: Props) {
         {deleting ? 'Deleting...' : confirming ? 'Confirm delete' : 'Delete'}
       </button>
       {confirming && (
-        <button
-          type="button"
-          onClick={() => {
-            setConfirming(false)
-            setError('')
-          }}
-          className="hush-press rounded-lg px-2.5 py-1.5 text-xs font-semibold transition"
-          style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
-        >
-          Cancel
-        </button>
+        <div className="hush-delete-confirm-family" role="alert">
+          <p>Delete this album forever?</p>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(false)
+              setError('')
+            }}
+            className="hush-press rounded-lg px-2.5 py-1.5 text-xs font-semibold transition"
+            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
+          >
+            Cancel
+          </button>
+        </div>
       )}
       {error && <span className="basis-full text-xs" style={{ color: '#C0392B' }}>{error}</span>}
     </div>
