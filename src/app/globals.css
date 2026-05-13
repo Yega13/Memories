@@ -57,6 +57,14 @@ input[type="range"] {
   touch-action: none;
 }
 
+.hush-album-title-edit-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  vertical-align: middle;
+}
+
 .hush-owner-arrange-action {
   display: none !important;
 }

@@ -116,7 +116,22 @@ export default function AlbumHeader({ album, photoCount, isOwner, ownerToken, on
               title={isOwner ? 'Double-click to rename' : undefined}
             >
               {album.title}
-              {isOwner && <Pencil className="ml-2 inline h-3.5 w-3.5 opacity-55" aria-hidden="true" />}
+              {isOwner && (
+                <button
+                  type="button"
+                  className="hush-album-title-edit-button ml-2 inline-flex align-middle"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    openEditor()
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  aria-label="Rename album"
+                  title="Rename album"
+                >
+                  <Pencil className="h-3.5 w-3.5 opacity-65" aria-hidden="true" />
+                </button>
+              )}
             </h1>
           )}
           <p className="hush-album-meta text-xs mt-0.5" style={{ color: '#7C5C3E' }}>
