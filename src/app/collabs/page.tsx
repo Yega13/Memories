@@ -23,7 +23,7 @@ export const metadata: Metadata = {
     description: PAGE_DESCRIPTION,
     siteName: "Hushare",
     locale: "en_US",
-    images: [{ url: `${SITE_URL}/collabs/tali-golergant.jpg`, alt: "Tali Golergant x Hushare" }],
+    images: [{ url: `${SITE_URL}/collabs/tali-golergant.jpg`, alt: "Tali Golergant × Hushare" }],
   },
   twitter: {
     card: "summary_large_image",
@@ -49,7 +49,7 @@ const collabs = [
       "Tali Golergant is a Luxembourgish singer whose music bridges pop and soul with deeply personal storytelling. Her community uses Hushare at concerts and events so every fan can contribute their own photos — building a shared visual memory of every show.",
     photo: "/collabs/tali-golergant.jpg",
     photoAlt: "Tali Golergant",
-    href: "https://taligolergant.com/husahre-collab/",
+    href: "https://taligolergant.org/husahre-collab/",
     hrefLabel: "See the collab",
   },
 ];
