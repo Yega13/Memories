@@ -401,6 +401,21 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }
   }
 
+  function removeFromSlideshow(photoId: string) {
+    if (!slideshowPhotoIds) return
+    const newIds = slideshowPhotoIds.filter((id) => id !== photoId)
+    if (newIds.length === 0) {
+      setSlideshowPhotoIds(null)
+      setLightbox(null)
+      return
+    }
+    if (lightbox !== null && lightbox >= newIds.length) {
+      setLightbox(newIds.length - 1)
+    }
+    setSlideshowPhotoIds(newIds)
+    showAppToast('Removed from slideshow.')
+  }
+
   async function deletePhoto(photo: Photo) {
     if (!ownerToken) return
     setDeleting(photo.id)
@@ -1114,9 +1129,15 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       <Settings className="w-5 h-5" />
                     </button>
                   )}
-                  <button onClick={(e) => { e.stopPropagation(); deletePhoto(current) }} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete">
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                  {slideshowMode ? (
+                    <button onClick={(e) => { e.stopPropagation(); removeFromSlideshow(current.id) }} className="p-2 rounded-lg transition hover:opacity-80" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Remove from slideshow" aria-label="Remove from slideshow">
+                      <X className="w-5 h-5" />
+                    </button>
+                  ) : (
+                    <button onClick={(e) => { e.stopPropagation(); deletePhoto(current) }} disabled={deleting === current.id} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-50" style={{ background: 'rgba(192,57,43,0.3)', color: '#FDFAF5' }} title="Delete photo" aria-label="Delete photo">
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
                 </>
               )}
             </div>
