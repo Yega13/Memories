@@ -81,9 +81,25 @@ input[type="range"] {
 .hush-line-reveal-loader {
   position: relative;
   width: min(68vw, 24rem);
-  padding: 0 0 1rem;
+  padding: 0 0 1.15rem;
   contain: layout paint;
   transform: translateZ(0);
+}
+
+.hush-line-reveal-loader::before {
+  content: "";
+  position: absolute;
+  top: -0.8rem;
+  bottom: 0.45rem;
+  left: 0;
+  width: 2px;
+  border-radius: 999px;
+  background: #750026;
+  box-shadow: 0 0 22px rgba(117, 0, 38, 0.28);
+  transform: translateX(-1rem);
+  opacity: 0;
+  animation: hush-line-reveal-cursor 1850ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  z-index: 3;
 }
 
 .hush-line-reveal-logo {
@@ -93,8 +109,8 @@ input[type="range"] {
 }
 
 .hush-line-reveal-logo-base {
-  opacity: 0.11;
-  filter: grayscale(0.12);
+  opacity: 0.045;
+  filter: grayscale(0.2);
 }
 
 .hush-line-reveal-logo-fill {
@@ -104,7 +120,7 @@ input[type="range"] {
   clip-path: inset(0 100% 0 0);
   transform: translateZ(0);
   will-change: clip-path, opacity;
-  animation: hush-line-reveal-logo 2250ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation: hush-line-reveal-logo 1850ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
 .hush-line-reveal-track {
@@ -122,14 +138,14 @@ input[type="range"] {
   position: absolute;
   left: 0;
   bottom: 0;
-  width: 38%;
+  width: 30%;
   height: 2px;
   border-radius: 999px;
   background: linear-gradient(90deg, transparent 0%, #750026 18%, #750026 82%, transparent 100%);
   transform: translateX(-110%);
   transform-origin: left center;
   will-change: transform, opacity;
-  animation: hush-line-reveal-sweep 2250ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  animation: hush-line-reveal-sweep 1850ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
 }
 
 body.hush-page-preloading > main,
@@ -1356,19 +1372,35 @@ html {
 @keyframes hush-line-reveal-logo {
   0% {
     clip-path: inset(0 100% 0 0);
-    opacity: 0.56;
+    opacity: 0;
   }
   12% {
-    opacity: 0.78;
+    opacity: 0.92;
   }
-  64%,
-  86% {
+  62%,
+  82% {
     clip-path: inset(0 0 0 0);
     opacity: 1;
   }
   100% {
-    clip-path: inset(0 0 0 100%);
-    opacity: 0.56;
+    clip-path: inset(0 0 0 0);
+    opacity: 0;
+  }
+}
+
+@keyframes hush-line-reveal-cursor {
+  0% {
+    opacity: 0;
+    transform: translateX(-1rem);
+  }
+  10%,
+  76% {
+    opacity: 1;
+  }
+  84%,
+  100% {
+    opacity: 0;
+    transform: translateX(calc(min(68vw, 24rem) + 1rem));
   }
 }
 
@@ -1382,7 +1414,7 @@ html {
     opacity: 1;
   }
   100% {
-    transform: translateX(275%);
+    transform: translateX(360%);
     opacity: 0;
   }
 }

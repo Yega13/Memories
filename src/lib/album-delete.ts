@@ -1,6 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { R2Env } from '@/lib/r2'
+import { storagePathFromPublicPhotoUrl } from '@/lib/storage-path'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -70,13 +71,4 @@ export async function deleteAlbumAssetsAndRows(
   }
 
   return { ok: true }
-}
-
-function storagePathFromPublicPhotoUrl(value: string | null): string | null {
-  if (!value?.startsWith('image:')) return null
-  const marker = '/storage/v1/object/public/Photos/'
-  const markerIndex = value.indexOf(marker)
-  if (markerIndex === -1) return null
-  const path = value.slice(markerIndex + marker.length).split('?')[0]
-  return path ? decodeURIComponent(path) : null
 }

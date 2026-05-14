@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isValidAlbumBackground, normalizeAlbumBackground } from '@/lib/album-background'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { storagePathFromPublicPhotoUrl } from '@/lib/storage-path'
 
 export const runtime = 'nodejs'
 
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid background' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess(slug, token)
+  const access = await verifyAlbumOwnerAccess<{ id: string; owner_token: string; user_id: string | null; custom_slug?: string | null; background_theme: string | null }>(slug, token, 'background_theme')
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }
@@ -51,6 +52,13 @@ export async function POST(req: Request) {
       },
       { status: 500, headers: NO_STORE },
     )
+  }
+
+  const previousPath = storagePathFromPublicPhotoUrl(access.album.background_theme)
+  const nextPath = storagePathFromPublicPhotoUrl(background_theme)
+  if (previousPath && previousPath !== nextPath) {
+    const { error: removeError } = await admin.storage.from('Photos').remove([previousPath])
+    if (removeError) console.error('[album/background] old background remove failed:', removeError.message)
   }
 
   return NextResponse.json({ ok: true, background_theme }, { headers: NO_STORE })
