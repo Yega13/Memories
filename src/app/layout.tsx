@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist, Playfair_Display, Playwrite_GB_J } from "next/font/google";
 import AppToastViewport from "@/components/AppToast";
 import BackToTopButton from "@/components/BackToTopButton";
@@ -27,6 +28,7 @@ export const runtime = "nodejs";
 
 const SITE_URL = "https://hushare.space";
 const SITE_NAME = "Hushare";
+const ADSENSE_CLIENT = "ca-pub-3517778612783935";
 const TAGLINE = "Shared photo albums from one link";
 const DESCRIPTION =
   "Create a shared photo album in seconds. Guests add photos from one link - no app, no sign-up. Perfect for weddings, trips, reunions, and every moment worth keeping.";
@@ -330,6 +332,14 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <InitialPreloader />
+        {process.env.NODE_ENV === "production" && (
+          <Script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${ADSENSE_CLIENT}`}
+            crossOrigin="anonymous"
+            strategy="afterInteractive"
+          />
+        )}
         {children}
         <SiteFooter />
         <BackToTopButton />
