@@ -10,7 +10,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 
 const PAGE_TITLE = "Collabs";
 const PAGE_DESCRIPTION =
-  "Artists and creators who use Hushare to collect fan photos, document their work, and share memories from their events.";
+  "Communities, artists, and creators who use Hushare to collect shared photos and turn every event into a living album.";
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     description: PAGE_DESCRIPTION,
     siteName: "Hushare",
     locale: "en_US",
+    images: [{ url: `${SITE_URL}/collabs/tali-golergant.jpg`, alt: "Tali Golergant x Hushare" }],
   },
   twitter: {
     card: "summary_large_image",
@@ -45,7 +46,7 @@ const collabs = [
     flag: "🇱🇺",
     role: "Singer & Artist",
     description:
-      "Tali Golergant is a Luxembourgish singer whose music bridges pop and soul with deeply personal storytelling. She uses Hushare at her concerts and events so fans can contribute their own photos — building a shared visual memory of every show.",
+      "Tali Golergant is a Luxembourgish singer whose music bridges pop and soul with deeply personal storytelling. Her community uses Hushare at concerts and events so every fan can contribute their own photos — building a shared visual memory of every show.",
     photo: "/collabs/tali-golergant.jpg",
     photoAlt: "Tali Golergant",
     href: "https://taligolergant.com/husahre-collab/",
@@ -56,6 +57,7 @@ const collabs = [
 export default function CollabsPage() {
   return (
     <main className="min-h-screen" style={{ background: "#FDFAF5" }}>
+
       {/* Nav */}
       <nav className="hush-container-xl hush-nav">
         <Link href="/" aria-label="Hushare home">
@@ -81,7 +83,7 @@ export default function CollabsPage() {
       </nav>
 
       {/* Hero */}
-      <section className="hush-readable hush-fade-up pt-12 sm:pt-20 pb-10 text-center">
+      <section className="hush-readable hush-fade-up pt-12 sm:pt-20 pb-12 text-center px-4">
         <p
           className="text-xs sm:text-sm font-medium uppercase mb-4"
           style={{ color: "#8B6F4E", letterSpacing: "0.18em" }}
@@ -92,70 +94,83 @@ export default function CollabsPage() {
           className="text-3xl sm:text-4xl md:text-5xl font-bold mb-5 leading-tight"
           style={{ ...SERIF, color: "#254F22" }}
         >
-          Artists who trust Hushare
+          Communities who trust Hushare
         </h1>
         <p
-          className="text-base sm:text-lg max-w-xl mx-auto leading-relaxed"
+          className="text-base sm:text-lg max-w-lg mx-auto leading-relaxed"
           style={{ color: "#5C4A3C" }}
         >
-          These artists use Hushare to let fans and guests contribute their own photos — turning every event into a shared album.
+          Fans, families, and event communities using Hushare to turn every gathering into a shared album.
         </p>
       </section>
 
-      {/* Collab cards */}
-      <section className="hush-container-xl pb-24">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+      {/* Featured collabs */}
+      <section className="hush-container-xl pb-28 px-4 sm:px-6">
+        <div className="max-w-4xl mx-auto flex flex-col gap-12">
           {collabs.map((collab) => (
             <article
               key={collab.name}
-              className="hush-reveal flex flex-col rounded-[20px] overflow-hidden"
+              className="hush-reveal flex flex-col md:flex-row rounded-[24px] overflow-hidden"
               style={{
                 background: "#FFFFFF",
-                border: "1px solid #E8E0D0",
-                boxShadow: "0 4px 24px rgba(37,79,34,0.07)",
+                border: "1px solid #E4DDD2",
+                boxShadow: "0 8px 40px rgba(37,79,34,0.09), 0 1px 4px rgba(37,79,34,0.05)",
               }}
             >
-              {/* Photo */}
+              {/* Image */}
               <div
-                className="relative w-full"
-                style={{ aspectRatio: "4/3", background: "#E8E0D2" }}
+                className="relative w-full md:w-[48%] flex-none"
+                style={{ minHeight: "300px" }}
               >
                 <Image
                   src={collab.photo}
                   alt={collab.photoAlt}
                   fill
-                  className="object-cover object-top"
-                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  className="object-cover"
+                  sizes="(min-width: 768px) 45vw, 100vw"
+                  priority
                 />
               </div>
 
               {/* Content */}
-              <div className="flex flex-col flex-1 p-6 gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xl" aria-hidden="true">{collab.flag}</span>
-                    <span className="text-xs font-medium uppercase" style={{ color: "#8B6F4E", letterSpacing: "0.14em" }}>
-                      {collab.origin} · {collab.role}
-                    </span>
-                  </div>
-                  <h2
-                    className="text-xl font-bold leading-snug"
-                    style={{ ...SERIF, color: "#254F22" }}
+              <div
+                className="flex flex-col justify-center gap-5 p-8 md:p-10 flex-1"
+                style={{ background: "#FDFAF5" }}
+              >
+                {/* Meta */}
+                <div className="flex items-center gap-2">
+                  <span className="text-lg" aria-hidden="true">{collab.flag}</span>
+                  <span
+                    className="text-xs font-semibold uppercase tracking-widest"
+                    style={{ color: "#8B6F4E" }}
                   >
-                    {collab.name}
-                  </h2>
+                    {collab.origin} · {collab.role}
+                  </span>
                 </div>
 
-                <p className="text-sm leading-relaxed flex-1" style={{ color: "#5C4A3C" }}>
+                {/* Name */}
+                <h2
+                  className="text-2xl sm:text-3xl font-bold leading-tight"
+                  style={{ ...SERIF, color: "#254F22" }}
+                >
+                  {collab.name}
+                </h2>
+
+                {/* Divider */}
+                <div className="w-10 h-px" style={{ background: "rgba(196,166,120,0.5)" }} />
+
+                {/* Description */}
+                <p className="text-sm sm:text-base leading-relaxed" style={{ color: "#5C4A3C" }}>
                   {collab.description}
                 </p>
 
+                {/* Link */}
                 <a
                   href={collab.href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold transition hover:opacity-75 mt-auto"
-                  style={{ color: "#254F22" }}
+                  className="inline-flex items-center gap-2 self-start rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-85"
+                  style={{ background: "#254F22", color: "#FDFAF5" }}
                 >
                   {collab.hrefLabel}
                   <ArrowUpRight className="w-4 h-4" />
@@ -166,30 +181,40 @@ export default function CollabsPage() {
         </div>
 
         {/* CTA */}
-        <div className="mt-20 text-center">
+        <div className="mt-20 max-w-4xl mx-auto">
           <div
-            className="inline-block rounded-2xl px-8 py-8 max-w-lg"
-            style={{ background: "#EDF3EC", border: "1px solid rgba(37,79,34,0.15)" }}
+            className="rounded-[20px] px-8 py-10 text-center"
+            style={{
+              background: "linear-gradient(135deg, #254F22 0%, #1a3a18 100%)",
+              boxShadow: "0 8px 32px rgba(37,79,34,0.2)",
+            }}
           >
-            <h2
-              className="text-xl font-bold mb-3"
-              style={{ ...SERIF, color: "#254F22" }}
+            <p
+              className="text-xs font-semibold uppercase mb-4"
+              style={{ color: "rgba(253,250,245,0.55)", letterSpacing: "0.18em" }}
             >
-              Are you an artist or creator?
+              Join the community
+            </p>
+            <h2
+              className="text-xl sm:text-2xl font-bold mb-3"
+              style={{ ...SERIF, color: "#FDFAF5" }}
+            >
+              Do you use Hushare for your events?
             </h2>
-            <p className="text-sm leading-relaxed mb-5" style={{ color: "#5C4A3C" }}>
-              If you use Hushare at your events and want to be featured here, reach out.
+            <p className="text-sm leading-relaxed mb-6 max-w-md mx-auto" style={{ color: "rgba(253,250,245,0.72)" }}>
+              If your community, event, or project runs on Hushare and you want to be featured here, reach out.
             </p>
             <a
               href="mailto:husharesupport@gmail.com"
-              className="inline-block rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-90"
-              style={{ background: "#254F22", color: "#FDFAF5" }}
+              className="inline-block rounded-xl px-6 py-2.5 text-sm font-semibold transition hover:opacity-90"
+              style={{ background: "#FDFAF5", color: "#254F22" }}
             >
               Get in touch
             </a>
           </div>
         </div>
       </section>
+
     </main>
   );
 }
