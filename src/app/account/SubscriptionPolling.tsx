@@ -78,14 +78,14 @@ export default function SubscriptionPolling({ email }: { email: string }) {
             up. This usually clears within a minute or two - try refreshing this
             page shortly. If it&apos;s still not showing in 5 minutes, email{' '}
             <a
-              href="mailto:support@hushare.space"
+              href="mailto:husharesupport@gmail.com"
               style={{
                 color: '#254F22',
                 textDecoration: 'underline',
                 textDecorationStyle: 'dotted',
               }}
             >
-              support@hushare.space
+              husharesupport@gmail.com
             </a>{' '}
             from <strong className="break-all">{email}</strong> and we&apos;ll
             sort it immediately.

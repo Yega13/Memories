@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 const LAST_UPDATED = "2026-04-25";
 const LAST_UPDATED_HUMAN = "April 25, 2026";
 
@@ -295,14 +295,14 @@ export default function PrivacyPage() {
           <p className="mt-3">
             To exercise any of these rights, email{" "}
             <a
-              href="mailto:support@hushare.space"
+              href="mailto:husharesupport@gmail.com"
               style={{
                 color: "#254F22",
                 textDecoration: "underline",
                 textDecorationStyle: "dotted",
               }}
             >
-              support@hushare.space
+              husharesupport@gmail.com
             </a>{" "}
             from the address you used to contact us - or, if you never gave
             us one, include your album name and approximate creation date.
@@ -355,14 +355,14 @@ export default function PrivacyPage() {
             Questions, requests, complaints - all of it comes to one
             address:{" "}
             <a
-              href="mailto:support@hushare.space"
+              href="mailto:husharesupport@gmail.com"
               style={{
                 color: "#254F22",
                 textDecoration: "underline",
                 textDecorationStyle: "dotted",
               }}
             >
-              support@hushare.space
+              husharesupport@gmail.com
             </a>
             . A human replies.
           </p>

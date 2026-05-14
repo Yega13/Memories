@@ -6,7 +6,7 @@ import ReportForm from "./ReportForm";
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 const PAGE_TITLE = "Report an Album";
 const PAGE_DESCRIPTION = "Report a Hushare album for abuse, privacy concerns, spam, phishing, copyright issues, or other urgent safety problems.";
 

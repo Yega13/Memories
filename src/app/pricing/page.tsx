@@ -8,7 +8,7 @@ import FaqList from "@/components/FaqList";
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 
 const PAGE_TITLE = "Pricing";
 const PAGE_DESCRIPTION =
@@ -155,7 +155,7 @@ const billingFaq = [
   },
   {
     q: "How do you handle refunds?",
-    a: "Refunds are handled by support, not automatically in the app. Email support@hushare.space with your account email and we'll review it manually within two business days.",
+    a: "Refunds are handled by support, not automatically in the app. Email husharesupport@gmail.com with your account email and we'll review it manually within two business days.",
   },
   {
     q: "Do you offer annual pricing?",
@@ -676,7 +676,7 @@ export default function PricingPage() {
           style={{ color: "#8B6F4E", fontFamily: "var(--font-serif)" }}
         >
           Other questions? Write to{" "}
-          <a href="mailto:support@hushare.space" style={{ color: "#254F22", fontWeight: 600 }}>support@hushare.space</a>
+          <a href="mailto:husharesupport@gmail.com" style={{ color: "#254F22", fontWeight: 600 }}>husharesupport@gmail.com</a>
         </p>
       </section>
 

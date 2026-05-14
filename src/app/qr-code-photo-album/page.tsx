@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 const title = "QR Code Photo Album for Events";
 const description =
   "Make a QR code photo album guests can scan to upload photos and videos instantly, without accounts, app downloads, or complicated setup.";

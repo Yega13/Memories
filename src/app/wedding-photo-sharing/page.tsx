@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 const title = "Wedding Photo Sharing Without an App";
 const description =
   "Create one private wedding photo album link, turn it into a QR code, and let every guest add photos without sign-up or app downloads.";

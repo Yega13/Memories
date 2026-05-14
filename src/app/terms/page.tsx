@@ -4,7 +4,7 @@ import Link from "next/link";
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 const LAST_UPDATED = "2026-05-02";
 const LAST_UPDATED_HUMAN = "May 2, 2026";
 
@@ -179,8 +179,8 @@ export default function TermsPage() {
         <Section number={5} heading="Reports and contact">
           <p>
             To report illegal, abusive, or unwanted content, email{" "}
-            <a href="mailto:support@hushare.space" style={{ ...INK, fontWeight: 700 }}>
-              support@hushare.space
+            <a href="mailto:husharesupport@gmail.com" style={{ ...INK, fontWeight: 700 }}>
+              husharesupport@gmail.com
             </a>{" "}
             with the album link and a short explanation. If someone is in immediate danger,
             contact local emergency services first.

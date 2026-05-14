@@ -6,8 +6,8 @@ import SupportForm from "./SupportForm";
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.space";
-const SUPPORT_EMAIL = "support@hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
+const SUPPORT_EMAIL = "husharesupport@gmail.com";
 
 const PAGE_TITLE = "Support";
 const PAGE_DESCRIPTION =

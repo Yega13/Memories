@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 
 const PUBLIC_AGENTS = [
   "Googlebot",

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import SeoLandingPage from "@/components/SeoLandingPage";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 const title = "Shared Photo Album From One Link";
 const description =
   "Start a shared photo album in seconds. Friends, family, and guests can add photos and videos from one private link with no sign-up.";
