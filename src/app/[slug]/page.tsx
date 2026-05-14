@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams, useSearchParams, notFound as triggerNotFound } from 'next/navigation'
 import Link from 'next/link'
 import { supabase, type Album, type Photo } from '@/lib/supabase'
 import type { Tier } from '@/lib/subscriptions'
@@ -184,20 +184,7 @@ export default function AlbumPage() {
   }
 
   if (notFound || !album) {
-    return (
-      <div
-        className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center"
-        style={{ background: '#254F22', color: '#FDFAF5' }}
-      >
-        <h1 className="text-3xl font-bold" style={{ fontFamily: 'var(--font-serif)' }}>
-          Album not found
-        </h1>
-        <p className="opacity-90">This link may be invalid or the album was deleted.</p>
-        <Link href="/" className="underline underline-offset-4 hover:opacity-80 transition">
-          Create a new album
-        </Link>
-      </div>
-    )
+    return triggerNotFound()
   }
 
   const globalMediaRadiusMax = Math.max(1, mediaRadiusMax)
