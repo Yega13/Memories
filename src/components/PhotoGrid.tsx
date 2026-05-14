@@ -973,7 +973,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           <button
             type="button"
             aria-label="Close"
-            className="absolute top-4 right-4 z-20 flex items-center justify-center rounded-full transition hover:opacity-80"
+            className="absolute top-4 right-4 z-20 flex items-center justify-center rounded-full transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             style={{
               width: 42,
               height: 42,
@@ -989,10 +989,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           </button>
           {!slideshowMode && (
             <>
-              <button className="absolute left-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); prev() }}>
+              <button className="absolute left-4 z-10 transition hover:opacity-70 p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); prev() }} aria-label="Previous photo">
                 <ChevronLeft className="w-8 h-8" />
               </button>
-              <button className="absolute right-4 z-10 transition hover:opacity-70 p-2" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); next() }}>
+              <button className="absolute right-4 z-10 transition hover:opacity-70 p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); next() }} aria-label="Next photo">
                 <ChevronRight className="w-8 h-8" />
               </button>
             </>
@@ -1155,13 +1155,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-4 py-6" onClick={() => setSlideshowPickerOpen(false)}>
           <div aria-hidden className="absolute inset-0" style={{ background: 'rgba(12, 16, 12, 0.72)' }} />
           <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="slideshow-picker-title"
             className="relative z-10 w-[min(94vw,860px)] rounded-2xl p-4 sm:p-5"
             style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', boxShadow: '0 24px 70px rgba(0,0,0,0.28)' }}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 mb-4">
               <div>
-                <h2 className="text-lg font-semibold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>Create slideshow</h2>
+                <h2 id="slideshow-picker-title" className="text-lg font-semibold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>Create slideshow</h2>
                 <p className="text-sm mt-1" style={{ color: '#7C5C3E' }}>
                   Pick the media you want to include. They will play in the current album order.
                 </p>

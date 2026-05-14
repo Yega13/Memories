@@ -76,6 +76,9 @@ async function hmacPassword(
 }
 
 function passwordPeppers(): string[] {
+  if (!process.env.ALBUM_PASSWORD_PEPPER) {
+    console.warn('[album-password] ALBUM_PASSWORD_PEPPER is not set; falling back to secondary secrets. Set a dedicated pepper in env.')
+  }
   const peppers = [
     process.env.ALBUM_PASSWORD_PEPPER ??
       process.env.SUPABASE_SERVICE_ROLE_KEY ??

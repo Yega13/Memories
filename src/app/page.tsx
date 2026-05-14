@@ -9,7 +9,7 @@ import { ArrowRight } from 'lucide-react'
 import AccountNavLink from '@/components/AccountNavLink'
 import FaqList from '@/components/FaqList'
 
-const NATURE_IMG = 'https://live.staticflickr.com/8731/17080622367_6c7109db98_h.jpg'
+const NATURE_IMG = '/hero-nature.jpg'
 
 const ALBUM_PLACEHOLDERS = [
   'Wedding in Yerevan',
@@ -460,136 +460,6 @@ export default function Home() {
           }}
         >
           <FaqList items={homeFaq} compactCount={6} plusSize={28} />
-          <div className="hidden">
-          {[
-            {
-              q: 'Do guests need an account to add photos?',
-              a: (
-                <>
-                  No. Anyone with your album link can view and add photos - <strong className="font-semibold" style={{ color: '#254F22' }}>no sign-up</strong>, no app, no download. Hushare is designed so the only friction between a guest and the album is tapping the link.
-                </>
-              ),
-            },
-            {
-              q: 'How long does Hushare keep my photos?',
-              a: (
-                <>
-                  Free albums are preserved as long as they remain active. If an album sits untouched for <strong className="font-semibold" style={{ color: '#254F22' }}>12 months</strong>, it is automatically retired and its media is deleted. Active albums live on indefinitely. Paid tiers will remove this inactivity rule.
-                </>
-              ),
-            },
-            {
-              q: 'Is Hushare really free?',
-              a: (
-                <>
-                  Yes. Free albums are free to create, share, upload to, and download from, with no credit card required. Paid tiers add custom URLs, passwords, larger uploads, Studio Collections, and no inactivity retirement.
-                </>
-              ),
-            },
-            {
-              q: 'Can I customize how an album looks?',
-              a: (
-                <>
-                  Yes. Owners can choose a background color or one of Hushare&apos;s stock photo backgrounds from album settings. Saved backgrounds are part of the album, so guests see the same look.
-                </>
-              ),
-            },
-            {
-              q: 'What are Collections?',
-              a: (
-                <>
-                  Collections are Studio-only pages that group several albums under one public link, useful for photographers, event planners, or families managing related albums.
-                </>
-              ),
-            },
-            {
-              q: 'Can I use a QR code at a wedding or event?',
-              a: (
-                <>
-                  Yes. Every album has a unique link you can turn into a <strong className="font-semibold" style={{ color: '#254F22' }}>QR code</strong> and print on table cards, invitations, programs, or a welcome sign. Guests scan it and start adding photos instantly.
-                </>
-              ),
-            },
-            {
-              q: 'Can I download all the photos at once?',
-              a: (
-                <>
-                  Yes. From the owner view of your album, you can download the full collection as a single <strong className="font-semibold" style={{ color: '#254F22' }}>ZIP</strong> file - <strong className="font-semibold" style={{ color: '#254F22' }}>originals</strong>, not compressed thumbnails.
-                </>
-              ),
-            },
-            {
-              q: 'Who can see my album?',
-              a: (
-                <>
-                  Only people with the link. Albums are <strong className="font-semibold" style={{ color: '#254F22' }}>unlisted</strong> - they are not indexed by search engines and cannot be discovered by browsing the site. Share the link only with the people you want to invite.
-                </>
-              ),
-            },
-            {
-              q: 'What happens if I lose my owner link?',
-              a: (
-                <>
-                  The owner link is how Hushare recognises you as the album creator. <strong className="font-semibold" style={{ color: '#254F22' }}>Bookmark it</strong> as soon as you create an album, or forward it to yourself. If you do lose it, contact us with your album name and approximate creation date and we will verify you manually.
-                </>
-              ),
-            },
-            {
-              q: 'What photo formats and sizes are supported?',
-              a: (
-                <>
-                  Free albums support JPG, PNG, HEIC, and WebP images up to <strong className="font-semibold" style={{ color: '#254F22' }}>25 MB</strong> each, plus MP4, MOV, or WebM videos up to <strong className="font-semibold" style={{ color: '#254F22' }}>50 MB</strong>. Pro and Studio albums support uploads up to <strong className="font-semibold" style={{ color: '#254F22' }}>200 MB</strong>.
-                </>
-              ),
-            },
-          ].map(({ q, a }, i, arr) => (
-            <details
-              key={i}
-              className="group"
-              style={{
-                borderBottom: i === arr.length - 1 ? 'none' : '1px dashed rgba(196,166,120,0.45)',
-              }}
-            >
-              <summary
-                className="list-none cursor-pointer flex items-start gap-4 py-5 select-none"
-                style={{ outline: 'none' }}
-              >
-                <span
-                  aria-hidden
-                  className="flex-none inline-flex items-center justify-center rounded-full transition-transform group-open:rotate-45"
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    background: '#254F22',
-                    color: '#FDFAF5',
-                    fontSize: '18px',
-                    lineHeight: 1,
-                    marginTop: '2px',
-                  }}
-                >
-                  +
-                </span>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-serif)',
-                    color: '#254F22',
-                    fontSize: '1.15rem',
-                    fontWeight: 600,
-                    lineHeight: 1.35,
-                  }}
-                >
-                  {q}
-                </span>
-              </summary>
-              <p
-                className="pb-6 pl-12 pr-2 text-[0.95rem] leading-relaxed"
-                style={{ color: '#5C4A3C' }}
-              >
-                {a}
-              </p>
-            </details>
-          ))}
-          </div>
         </div>
 
         <p

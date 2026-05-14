@@ -121,7 +121,7 @@ export async function POST(req: Request) {
       httpMetadata: { contentType },
     })
   } catch (e) {
-    console.error('[upload/r2] put failed:', e)
+    console.error('[upload/r2] put failed:', e instanceof Error ? e.message : String(e))
     return NextResponse.json({ error: 'Upload failed' }, { status: 500, headers: NO_STORE })
   }
 

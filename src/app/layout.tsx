@@ -26,7 +26,7 @@ const handwriting = Playwrite_GB_J({
 
 export const runtime = "nodejs";
 
-const SITE_URL = "https://hushare.space";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 const SITE_NAME = "Hushare";
 const ADSENSE_CLIENT = "ca-pub-3517778612783935";
 const TAGLINE = "Shared photo albums from one link";
@@ -320,6 +320,12 @@ export default function RootLayout({
       lang="en"
         className={`${geistSans.variable} ${playfair.variable} ${handwriting.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="preconnect" href="https://zleajzevvhugkwlqlolt.supabase.co" />
+        <link rel="preconnect" href="https://videos.hushare.space" />
+        <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
+        <link rel="dns-prefetch" href="https://pagead2.googlesyndication.com" />
+      </head>
       <body className="min-h-full flex flex-col">
         <script
           dangerouslySetInnerHTML={{

@@ -69,7 +69,7 @@ export async function POST(req: Request) {
       discountId,
     })
   } catch (err) {
-    console.error('[checkout] Polar createCheckout failed:', err)
+    console.error('[checkout] Polar createCheckout failed:', err instanceof Error ? err.message : String(err))
     return NextResponse.json(
       { error: 'Could not start checkout. Please try again.' },
       { status: 502, headers: NO_STORE },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Lock } from 'lucide-react'
 
 type Props = {
@@ -15,17 +15,6 @@ export default function PasswordGate({ slug, title, onUnlocked }: Props) {
   const [error, setError] = useState('')
   const clearedAutofillRef = useRef(false)
   const passwordInputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    function clearPaintedAutofill() {
-      if (!passwordInputRef.current || password) return
-      passwordInputRef.current.value = ''
-    }
-
-    clearPaintedAutofill()
-    const timers = [50, 250, 800].map((delay) => window.setTimeout(clearPaintedAutofill, delay))
-    return () => timers.forEach((timer) => window.clearTimeout(timer))
-  }, [password, slug])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()

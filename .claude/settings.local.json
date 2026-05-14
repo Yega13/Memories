@@ -21,7 +21,9 @@
       "Bash(node -e \"const l=require\\('lucide-react'\\); console.log\\('Lock:', typeof l.Lock, 'LockOpen:', typeof l.LockOpen, 'Unlock:', typeof l.Unlock\\)\")",
       "Bash(git rm *)",
       "Bash(npx eslint *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('version','?'\\)\\)\")",
+      "Bash(python -c ' *)"
     ]
   }
 }

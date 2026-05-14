@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   try {
     portalUrl = await createCustomerSession(subscription.polar_customer_id)
   } catch (err) {
-    console.error('[portal] Polar customer session failed:', err)
+    console.error('[portal] Polar customer session failed:', err instanceof Error ? err.message : String(err))
     return NextResponse.json(
       { error: 'Could not open the billing portal. Please try again.' },
       { status: 502, headers: NO_STORE },

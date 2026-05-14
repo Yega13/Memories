@@ -29,12 +29,11 @@ const PROTECTED_MANAGEMENT_SLUGS = new Set([
   'talixfans',
 ])
 
-const PROTECTED_MANAGEMENT_EMAILS = new Set([
-  'alinagnuni3@gmail.com',
-  'taliartisticproduction@gmail.com',
-  'taligolergant26@gmail.com',
-  'yeganyansuren13@gmail.com',
-])
+const PROTECTED_MANAGEMENT_EMAILS = new Set(
+  process.env.PROTECTED_MANAGEMENT_EMAILS
+    ? process.env.PROTECTED_MANAGEMENT_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean)
+    : ['alinagnuni3@gmail.com', 'taliartisticproduction@gmail.com', 'taligolergant26@gmail.com', 'yeganyansuren13@gmail.com'],
+)
 
 export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwnerBase>(
   slug: string,
