@@ -1,0 +1,93 @@
+import { NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getUserTierById } from '@/lib/subscriptions'
+import { sendExpiryWarningEmail } from '@/lib/email'
+
+export const runtime = 'nodejs'
+
+const NO_STORE = { 'Cache-Control': 'no-store' }
+const RETIRE_AFTER_DAYS = 365
+const WARN_BEFORE_DAYS = 30
+const WARN_AFTER_DAYS = RETIRE_AFTER_DAYS - WARN_BEFORE_DAYS // 335
+const BATCH_SIZE = 50
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
+
+type ExpiryCandidate = {
+  id: string
+  user_id: string | null
+  title: string
+  slug: string
+  custom_slug: string | null
+  last_activity_at: string
+}
+
+export async function POST(req: Request) {
+  const secret = process.env.ALBUM_RETIREMENT_SECRET
+  if (!secret) {
+    console.error('[notify-expiry] ALBUM_RETIREMENT_SECRET not set; refusing to run')
+    return NextResponse.json({ error: 'Not configured' }, { status: 503, headers: NO_STORE })
+  }
+  const auth = req.headers.get('authorization') ?? ''
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })
+  }
+
+  const now = Date.now()
+  const warnCutoffOld = new Date(now - RETIRE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const warnCutoffNew = new Date(now - WARN_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString()
+
+  const admin = createAdminClient()
+  const { data: candidates, error } = await admin
+    .from('albums')
+    .select('id, user_id, title, slug, custom_slug, last_activity_at')
+    .is('retired_at', null)
+    .is('expiry_warning_sent_at', null)
+    .not('user_id', 'is', null)
+    .lt('last_activity_at', warnCutoffNew)
+    .gt('last_activity_at', warnCutoffOld)
+    .order('last_activity_at', { ascending: true })
+    .limit(BATCH_SIZE)
+    .returns<ExpiryCandidate[]>()
+
+  if (error) {
+    console.error('[notify-expiry] candidate lookup failed:', error.message)
+    return NextResponse.json({ error: 'Could not scan albums' }, { status: 500, headers: NO_STORE })
+  }
+
+  let notified = 0
+  let skippedPaid = 0
+  let failed = 0
+
+  for (const album of candidates ?? []) {
+    const tier = await getUserTierById(album.user_id)
+    if (tier !== 'free') {
+      skippedPaid += 1
+      continue
+    }
+
+    try {
+      const { data: { user } } = await admin.auth.admin.getUserById(album.user_id!)
+      const email = user?.email
+      if (!email) continue
+
+      const publicSlug = album.custom_slug || album.slug
+      const albumUrl = `${SITE_URL}/${publicSlug}`
+      const daysLeft = Math.max(
+        1,
+        Math.round((new Date(album.last_activity_at).getTime() + RETIRE_AFTER_DAYS * 24 * 60 * 60 * 1000 - now) / (24 * 60 * 60 * 1000)),
+      )
+
+      await admin.from('albums').update({ expiry_warning_sent_at: new Date().toISOString() }).eq('id', album.id)
+      await sendExpiryWarningEmail(email, album.title, albumUrl, daysLeft)
+      notified += 1
+    } catch (err) {
+      console.error('[notify-expiry] failed for album', album.id, ':', err instanceof Error ? err.message : String(err))
+      failed += 1
+    }
+  }
+
+  return NextResponse.json(
+    { ok: true, scanned: candidates?.length ?? 0, notified, skippedPaid, failed },
+    { headers: NO_STORE },
+  )
+}

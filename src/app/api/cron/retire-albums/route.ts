@@ -11,6 +11,7 @@ const BATCH_SIZE = 25
 
 type RetirementCandidate = {
   id: string
+  slug: string
   user_id: string | null
   background_theme: string | null
   last_activity_at: string
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: candidates, error } = await admin
     .from('albums')
-    .select('id, user_id, background_theme, last_activity_at')
+    .select('id, slug, user_id, background_theme, last_activity_at')
     .is('retired_at', null)
     .lt('last_activity_at', cutoff)
     .order('last_activity_at', { ascending: true })
@@ -51,17 +52,35 @@ export async function POST(req: Request) {
   let failed = 0
 
   for (const album of candidates ?? []) {
-    const tier = await getUserTierById(album.user_id)
+    let tier: Awaited<ReturnType<typeof getUserTierById>>
+    try {
+      tier = await getUserTierById(album.user_id)
+    } catch (err) {
+      // If tier check fails for any reason, skip this album — never delete on uncertainty.
+      console.error('[retire-albums] tier check failed for album', album.slug, ':', err instanceof Error ? err.message : String(err))
+      failed += 1
+      continue
+    }
+
     if (tier !== 'free') {
       skippedPaid += 1
+      // Reset activity so it doesn't show up in the next scan.
       await admin.from('albums').update({ last_activity_at: new Date().toISOString() }).eq('id', album.id)
       continue
     }
 
+    // Mark retired first so concurrent cron runs don't pick it up twice.
     await admin.from('albums').update({ retired_at: new Date().toISOString() }).eq('id', album.id)
+
     const result = await deleteAlbumAssetsAndRows(admin, album)
-    if (result.ok) retired += 1
-    else failed += 1
+    if (result.ok) {
+      retired += 1
+    } else {
+      // Deletion failed — clear retired_at so the next cron run can retry.
+      console.error('[retire-albums] deletion failed for album', album.slug, '— resetting retired_at for retry')
+      await admin.from('albums').update({ retired_at: null }).eq('id', album.id)
+      failed += 1
+    }
   }
 
   return NextResponse.json(

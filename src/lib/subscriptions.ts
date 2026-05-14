@@ -60,15 +60,31 @@ export async function getUserTier(user: UserLike): Promise<Tier> {
   return sub?.tier ?? 'free'
 }
 
+// Safe for server-only/cron contexts: uses admin client, no cookie session needed.
 export async function getUserTierById(userId: string | null | undefined): Promise<Tier> {
   if (!userId) return 'free'
-  const sub = await getActiveSubscription(userId)
-  if (sub) return sub.tier
 
   const admin = createAdminClient()
-  const { data, error } = await admin.auth.admin.getUserById(userId)
-  if (error || !data?.user?.email) return 'free'
-  if (isAccountAdmin({ email: data.user.email })) return 'studio'
+
+  // Query subscriptions with the admin client (bypasses RLS — safe since this
+  // only runs in trusted server/cron code, never in user-facing routes).
+  const { data: sub } = await admin
+    .from('subscriptions')
+    .select('tier, status, current_period_end, cancel_at_period_end')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<Subscription>()
+
+  if (sub) {
+    if (sub.status === 'active' || sub.status === 'trialing') return sub.tier
+    if ((sub.status === 'canceled' || sub.status === 'past_due') && sub.current_period_end) {
+      if (new Date(sub.current_period_end) > new Date()) return sub.tier
+    }
+  }
+
+  const { data: authData } = await admin.auth.admin.getUserById(userId)
+  if (isAccountAdmin({ email: authData?.user?.email })) return 'studio'
   return 'free'
 }
 

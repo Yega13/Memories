@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX, mediaTextOrNull } from '@/lib/media-text'
+import { sendPhotoNotificationEmail } from '@/lib/email'
 
 export const runtime = 'nodejs'
 
@@ -43,9 +44,9 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: album } = await admin
     .from('albums')
-    .select('id')
+    .select('id, user_id, title, slug, custom_slug, last_notification_at')
     .eq('id', albumId)
-    .maybeSingle<{ id: string }>()
+    .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null; last_notification_at: string | null }>()
   if (!album) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
@@ -60,6 +61,8 @@ export async function POST(req: Request) {
     console.error('[photos/create] insert failed:', error.message)
     return NextResponse.json({ error: 'Could not save uploaded files' }, { status: 500, headers: NO_STORE })
   }
+
+  void maybeNotifyOwner(admin, album, shaped.length)
 
   return NextResponse.json({ ok: true }, { headers: NO_STORE })
 }
@@ -94,4 +97,41 @@ function numberOrNull(value: unknown) {
   const number = Number(value)
   if (!Number.isFinite(number) || number < 0 || number > 60 * 60 * 12) return null
   return Math.round(number)
+}
+
+const NOTIFICATION_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 hours between notification emails
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
+
+type NotifiableAlbum = {
+  id: string
+  user_id: string | null
+  title: string
+  slug: string
+  custom_slug: string | null
+  last_notification_at: string | null
+}
+
+async function maybeNotifyOwner(
+  admin: ReturnType<typeof createAdminClient>,
+  album: NotifiableAlbum,
+  photoCount: number,
+) {
+  if (!album.user_id) return
+
+  const lastSent = album.last_notification_at ? new Date(album.last_notification_at).getTime() : 0
+  if (Date.now() - lastSent < NOTIFICATION_COOLDOWN_MS) return
+
+  try {
+    const { data: { user } } = await admin.auth.admin.getUserById(album.user_id)
+    const email = user?.email
+    if (!email) return
+
+    const publicSlug = album.custom_slug || album.slug
+    const albumUrl = `${SITE_URL}/${publicSlug}`
+
+    await admin.from('albums').update({ last_notification_at: new Date().toISOString() }).eq('id', album.id)
+    await sendPhotoNotificationEmail(email, album.title, albumUrl, photoCount)
+  } catch (err) {
+    console.error('[photos/create] notification failed:', err instanceof Error ? err.message : String(err))
+  }
 }

@@ -72,10 +72,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Could not save background' }, { status: 500, headers: NO_STORE })
   }
 
-  const previousPath = storagePathFromPublicPhotoUrl(access.album.background_theme)
-  if (previousPath && previousPath !== path) {
-    const { error: removeError } = await admin.storage.from('Photos').remove([previousPath])
-    if (removeError) console.error('[album/background/upload] old background remove failed:', removeError.message)
+  // Delete all other background files for this album (list-based, no URL parsing needed)
+  try {
+    const folder = `${access.album.id}/backgrounds`
+    const { data: existing } = await admin.storage.from('Photos').list(folder)
+    if (existing && existing.length > 0) {
+      const toDelete = existing
+        .map((f) => `${folder}/${f.name}`)
+        .filter((p) => p !== path)
+      if (toDelete.length > 0) {
+        const { error: rmErr } = await admin.storage.from('Photos').remove(toDelete)
+        if (rmErr) console.error('[album/background/upload] old backgrounds remove failed:', rmErr.message)
+      }
+    }
+  } catch (err) {
+    console.error('[album/background/upload] background cleanup failed:', err instanceof Error ? err.message : String(err))
   }
 
   return NextResponse.json({ ok: true, background_theme }, { headers: NO_STORE })

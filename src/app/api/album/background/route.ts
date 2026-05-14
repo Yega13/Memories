@@ -54,11 +54,21 @@ export async function POST(req: Request) {
     )
   }
 
-  const previousPath = storagePathFromPublicPhotoUrl(access.album.background_theme)
-  const nextPath = storagePathFromPublicPhotoUrl(background_theme)
-  if (previousPath && previousPath !== nextPath) {
-    const { error: removeError } = await admin.storage.from('Photos').remove([previousPath])
-    if (removeError) console.error('[album/background] old background remove failed:', removeError.message)
+  // If switching away from a custom image (to stock/color/null), delete all uploaded background files
+  const previousWasCustom = !!storagePathFromPublicPhotoUrl(access.album.background_theme)
+  const nextIsCustom = !!storagePathFromPublicPhotoUrl(background_theme)
+  if (previousWasCustom && !nextIsCustom) {
+    try {
+      const folder = `${access.album.id}/backgrounds`
+      const { data: existing } = await admin.storage.from('Photos').list(folder)
+      if (existing && existing.length > 0) {
+        const toDelete = existing.map((f) => `${folder}/${f.name}`)
+        const { error: rmErr } = await admin.storage.from('Photos').remove(toDelete)
+        if (rmErr) console.error('[album/background] old background remove failed:', rmErr.message)
+      }
+    } catch (err) {
+      console.error('[album/background] background cleanup failed:', err instanceof Error ? err.message : String(err))
+    }
   }
 
   return NextResponse.json({ ok: true, background_theme }, { headers: NO_STORE })
