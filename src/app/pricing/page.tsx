@@ -320,6 +320,12 @@ export default function PricingPage() {
           />
         </Link>
         <div className="hush-nav-links">
+          <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Collabs
+          </Link>
+          <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Support
+          </Link>
           <AccountNavLink />
         </div>
       </nav>
