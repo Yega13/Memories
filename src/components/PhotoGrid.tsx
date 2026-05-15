@@ -87,6 +87,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const reorderTimerRef = useRef<number | null>(null)
   const reorderDragIdRef = useRef<string | null>(null)
   const reorderSuppressedClickRef = useRef(false)
+  const reorderDragPointerRef = useRef<Point | null>(null)
+  const reorderDragTileSizeRef = useRef<number>(90)
   const lastTapRef = useRef(0)
   const handledSlideshowRequestRef = useRef(0)
   const [lightbox, setLightbox] = useState<number | null>(null)
@@ -103,6 +105,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [reorderDraggingId, setReorderDraggingId] = useState<string | null>(null)
   const [reorderTargetId, setReorderTargetId] = useState<string | null>(null)
   const [reorderSaving, setReorderSaving] = useState(false)
+  const [dragGhostPointer, setDragGhostPointer] = useState<Point | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
   const [tileRadiusMaxById, setTileRadiusMaxById] = useState<Record<string, number>>({})
@@ -501,12 +504,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     const tile = e.currentTarget
     const pointerId = e.pointerId
     reorderDragIdRef.current = photo.id
+    reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
+    const rect = tile.getBoundingClientRect()
+    reorderDragTileSizeRef.current = Math.round(Math.min(rect.width, rect.height) * 0.82)
     const holdDelay = arrangeMode && coarsePointer ? 150 : 1000
     reorderTimerRef.current = window.setTimeout(() => {
       reorderTimerRef.current = null
       reorderSuppressedClickRef.current = true
       setReorderDraggingId(photo.id)
       setReorderTargetId(photo.id)
+      setDragGhostPointer(reorderDragPointerRef.current ? { ...reorderDragPointerRef.current } : null)
       try {
         if (tile.isConnected) tile.setPointerCapture(pointerId)
       } catch {
@@ -517,6 +524,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!reorderDragIdRef.current || !reorderDraggingId) return
     e.preventDefault()
+    reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
+    setDragGhostPointer({ x: e.clientX, y: e.clientY })
     const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-photo-id]')
     const targetId = target?.dataset.photoId
     if (targetId) setReorderTargetId(targetId)
@@ -527,8 +536,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     const dragId = reorderDraggingId
     const targetId = reorderTargetId
     reorderDragIdRef.current = null
+    reorderDragPointerRef.current = null
     setReorderDraggingId(null)
     setReorderTargetId(null)
+    setDragGhostPointer(null)
     if (dragId) {
       e.preventDefault()
       reorderSuppressedClickRef.current = true
@@ -1008,11 +1019,35 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           </button>
           {!slideshowMode && (
             <>
-              <button className="absolute left-4 z-10 transition hover:opacity-70 p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); prev() }} aria-label="Previous photo">
-                <ChevronLeft className="w-8 h-8" />
+              <button
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                style={{
+                  width: 40, height: 40,
+                  background: 'rgba(15,20,15,0.62)',
+                  border: '1px solid rgba(253,250,245,0.30)',
+                  color: '#FDFAF5',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                }}
+                onClick={(e) => { e.stopPropagation(); prev() }}
+                aria-label="Previous photo"
+              >
+                <ChevronLeft className="w-5 h-5" />
               </button>
-              <button className="absolute right-4 z-10 transition hover:opacity-70 p-2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black" style={{ color: '#FDFAF5' }} onClick={(e) => { e.stopPropagation(); next() }} aria-label="Next photo">
-                <ChevronRight className="w-8 h-8" />
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center rounded-full transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                style={{
+                  width: 40, height: 40,
+                  background: 'rgba(15,20,15,0.62)',
+                  border: '1px solid rgba(253,250,245,0.30)',
+                  color: '#FDFAF5',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                }}
+                onClick={(e) => { e.stopPropagation(); next() }}
+                aria-label="Next photo"
+              >
+                <ChevronRight className="w-5 h-5" />
               </button>
             </>
           )}
@@ -1248,6 +1283,42 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           </section>
         </div>
       )}
+
+      {reorderDraggingId && dragGhostPointer && (() => {
+        const ghost = photos.find((p) => p.id === reorderDraggingId)
+        if (!ghost) return null
+        const size = reorderDragTileSizeRef.current
+        const thumbSrc = ghost.media_type === 'video' ? ghost.poster_url || '' : ghost.url
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              left: dragGhostPointer.x - size / 2,
+              top: dragGhostPointer.y - size / 2,
+              width: size,
+              height: size,
+              zIndex: 300,
+              pointerEvents: 'none',
+              borderRadius: previewRadiusFor(ghost),
+              overflow: 'hidden',
+              transform: 'scale(1.1)',
+              transformOrigin: 'center',
+              boxShadow: '0 16px 48px rgba(0,0,0,0.5)',
+              border: '2px solid rgba(253,250,245,0.65)',
+              opacity: 0.93,
+            }}
+          >
+            {thumbSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={thumbSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} draggable={false} />
+            ) : (
+              <div style={{ width: '100%', height: '100%', background: '#E8E0D2', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Play className="w-6 h-6" style={{ color: '#7C5C3E' }} />
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {settingsPhoto && isOwner && (
         <PhotoSettingsModal
