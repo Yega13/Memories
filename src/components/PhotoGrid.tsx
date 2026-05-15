@@ -1083,7 +1083,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
               </div>
             ) : current.media_type === 'video' ? (
-              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
+              <div className={`hush-photo-flip w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
                 <video
                   src={current.url}
                   poster={current.poster_url || undefined}
@@ -1091,7 +1091,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   autoPlay={slideshowMode ? !slideshowPaused : !!album.video_autoplay}
                   muted={slideshowMode}
                   playsInline
-                  className="block max-h-full max-w-full object-contain"
+                  className="block max-h-[min(65vh,680px)] max-w-full object-contain"
                   ref={(node) => {
                     lightboxVideoRef.current = node
                     setLightboxMediaNode(node)
@@ -1113,12 +1113,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 />
               </div>
             ) : (
-              <div className={`hush-photo-flip h-[70vh] w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
+              <div className={`hush-photo-flip w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={current.url}
                   alt={current.caption || ''}
-                  className="block max-h-full max-w-full object-contain"
+                  className="block max-h-[min(70vh,760px)] max-w-full object-contain"
                   ref={(node) => setLightboxMediaNode(node)}
                   style={mediaZoomStyle(current)}
                   onError={() => markBroken(current.id)}
