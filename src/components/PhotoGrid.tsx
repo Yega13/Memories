@@ -8,7 +8,7 @@ import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import Image from 'next/image'
-import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings } from 'lucide-react'
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings, Star } from 'lucide-react'
 
 type Props = {
   album: Album
@@ -23,6 +23,8 @@ type Props = {
   onPhotosReordered: (photos: Photo[]) => void
   slideshowRequestId?: number
   arrangeMode?: boolean
+  coverPhotoId?: string | null
+  onCoverSet?: (photoId: string | null) => void
 }
 
 function radiusFor(photo: Photo, album: Album, forceGlobalRadius = false): number {
@@ -73,7 +75,7 @@ function pointRelativeToCenter(point: Point, node: HTMLElement): Point {
   }
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered, slideshowRequestId = 0, arrangeMode = false }: Props) {
+export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered, slideshowRequestId = 0, arrangeMode = false, coverPhotoId, onCoverSet }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null)
   const lightboxHistoryRef = useRef(false)
@@ -90,6 +92,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const reorderDragPointerRef = useRef<Point | null>(null)
   const reorderDragTileSizeRef = useRef<number>(90)
   const lastTapRef = useRef(0)
+  const rotateTimerRef = useRef<number | null>(null)
+  const rotateTouchStartRef = useRef<Point | null>(null)
+  const rotateHoldFiredRef = useRef(false)
   const handledSlideshowRequestRef = useRef(0)
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [zoomScale, setZoomScale] = useState(1)
@@ -118,6 +123,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [settingsAuthor, setSettingsAuthor] = useState('')
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsError, setSettingsError] = useState('')
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [lightboxRotation, setLightboxRotation] = useState<0 | 90 | 180 | 270>(0)
+  const [settingCover, setSettingCover] = useState(false)
 
   const viewerPhotos = slideshowPhotoIds
     ? slideshowPhotoIds
@@ -184,6 +194,80 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }
   }
 
+  function clearRotateTimer() {
+    if (rotateTimerRef.current != null) {
+      window.clearTimeout(rotateTimerRef.current)
+      rotateTimerRef.current = null
+    }
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }
+
+  function toggleSelection(photoId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(photoId)) next.delete(photoId)
+      else next.add(photoId)
+      return next
+    })
+  }
+
+  async function bulkDeleteSelected() {
+    if (!ownerToken || selectedIds.size === 0) return
+    setBulkDeleting(true)
+    const ids = [...selectedIds]
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        fetch('/api/album/photo/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, owner_token: ownerToken, photo_id: id }),
+        }),
+      ),
+    )
+    let deleted = 0
+    let failed = 0
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]
+      if (result.status === 'fulfilled' && result.value.ok) {
+        onPhotoDeleted(ids[i])
+        deleted++
+      } else {
+        failed++
+      }
+    }
+    setBulkDeleting(false)
+    exitSelectMode()
+    if (failed > 0) showAppToast(`${deleted} deleted, ${failed} failed.`, 'error')
+    else showAppToast(`${deleted} photo${deleted !== 1 ? 's' : ''} deleted.`)
+  }
+
+  async function setCoverPhoto(photo: Photo) {
+    if (!ownerToken) return
+    const newCoverId = coverPhotoId === photo.id ? null : photo.id
+    setSettingCover(true)
+    try {
+      const res = await fetch('/api/album/cover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, owner_token: ownerToken, photo_id: newCoverId }),
+      })
+      if (res.ok) {
+        onCoverSet?.(newCoverId)
+        showAppToast(newCoverId ? 'Set as album cover.' : 'Cover cleared.')
+      } else {
+        showAppToast('Could not update cover.', 'error')
+      }
+    } catch {
+      showAppToast('Could not update cover.', 'error')
+    } finally {
+      setSettingCover(false)
+    }
+  }
+
   const clearSlideshowTimer = useCallback(() => {
     if (slideshowTimerRef.current === null) return
     window.clearTimeout(slideshowTimerRef.current)
@@ -197,6 +281,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setSlideshowPaused(false)
     setSlideshowPhotoIds(null)
     setFlippedPhotoId(null)
+    setLightboxRotation(0)
     setLightbox(null)
     if (lightboxHistoryRef.current) {
       lightboxHistoryRef.current = false
@@ -235,7 +320,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     return {
       borderRadius: previewRadiusFor(photo),
       filter: cssMediaDisplayFilter(previewFilterFor(photo)),
-      transform: `translate3d(${zoomPan.x}px, ${zoomPan.y}px, 0) scale(${zoomScale})`,
+      transform: `translate3d(${zoomPan.x}px, ${zoomPan.y}px, 0) scale(${zoomScale})${lightboxRotation ? ` rotate(${lightboxRotation}deg)` : ''}`,
       transformOrigin: 'center',
       transition: pinchRef.current || panGestureRef.current ? 'filter 180ms ease' : 'transform 160ms ease, filter 180ms ease',
       touchAction: zoomScale > 1 ? 'none' : 'pan-y',
@@ -246,6 +331,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function handleMediaTouchStart(e: React.TouchEvent<HTMLElement>) {
     if (e.touches.length === 2) {
       e.stopPropagation()
+      clearRotateTimer()
       const mediaNode = e.currentTarget
       pinchRef.current = {
         distance: touchDistance(e.touches),
@@ -263,9 +349,27 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       if (touch) panGestureRef.current = { point: { x: touch.clientX, y: touch.clientY }, pan: panRef.current, moved: false }
       return
     }
+    if (e.touches.length === 1) {
+      const touch = e.touches[0]
+      rotateTouchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null
+      clearRotateTimer()
+      rotateHoldFiredRef.current = false
+      rotateTimerRef.current = window.setTimeout(() => {
+        rotateTimerRef.current = null
+        rotateHoldFiredRef.current = true
+        setLightboxRotation((prev) => ((prev + 90) % 360) as 0 | 90 | 180 | 270)
+      }, 600)
+    }
   }
 
   function handleMediaTouchMove(e: React.TouchEvent<HTMLElement>) {
+    if (rotateTimerRef.current !== null && e.touches.length === 1) {
+      const touch = e.touches[0]
+      const start = rotateTouchStartRef.current
+      if (touch && start && Math.hypot(touch.clientX - start.x, touch.clientY - start.y) > 10) {
+        clearRotateTimer()
+      }
+    }
     if (pinchRef.current && e.touches.length === 2) {
       e.stopPropagation()
       if (e.cancelable) e.preventDefault()
@@ -296,6 +400,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function handleMediaTouchEnd(e: React.TouchEvent<HTMLElement>) {
+    clearRotateTimer()
+    rotateTouchStartRef.current = null
+    if (rotateHoldFiredRef.current) {
+      rotateHoldFiredRef.current = false
+      e.stopPropagation()
+      if (e.cancelable) e.preventDefault()
+      return
+    }
     if (pinchRef.current) {
       e.stopPropagation()
       if (e.touches.length < 2) pinchRef.current = null
@@ -555,6 +667,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       reorderSuppressedClickRef.current = false
       return
     }
+    if (selectMode) {
+      const clicked = photos[index]
+      if (clicked) toggleSelection(clicked.id)
+      return
+    }
     const clicked = photos[index]
     if (clicked && flippedPhotoId === clicked.id) {
       setFlippedPhotoId(null)
@@ -579,6 +696,19 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     reorderDragIdRef.current = null
     setReorderDraggingId(null)
     setReorderTargetId(null)
+    const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    if (coarsePointer) {
+      if (!isOwner) return
+      if (selectMode) {
+        toggleSelection(photo.id)
+      } else {
+        setSelectMode(true)
+        setSelectedIds(new Set([photo.id]))
+        reorderSuppressedClickRef.current = true
+        window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
+      }
+      return
+    }
     const mediaName = mediaNameFor(photo)
     if (!mediaName) {
       showAppToast('No name is set for this media yet.', 'error')
@@ -729,7 +859,23 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  useEffect(() => () => clearReorderTimer(), [])
+  useEffect(() => () => {
+    clearReorderTimer()
+    if (rotateTimerRef.current != null) window.clearTimeout(rotateTimerRef.current)
+  }, [])
+
+  useEffect(() => {
+    if (arrangeMode && selectMode) exitSelectMode()
+  }, [arrangeMode, selectMode])
+
+  useEffect(() => {
+    if (!selectMode) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { e.preventDefault(); exitSelectMode() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectMode])
 
   useEffect(() => {
     if (!slideshowRequestId || !isOwner || handledSlideshowRequestRef.current === slideshowRequestId) return
@@ -837,6 +983,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setLightboxMediaNode(null)
     setLightboxRadiusMax(null)
     resetZoom()
+    setLightboxRotation(0)
     setSwipeAnimating(false)
     setSwipeOffset(0)
     lastTapRef.current = 0
@@ -988,6 +1135,22 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 {isGridFlipped && (
                   <div className="hush-grid-photo-back" style={{ borderRadius: mediaRadius }}>
                     <strong className="hush-photo-back-title">{mediaName}</strong>
+                  </div>
+                )}
+                {isOwner && selectMode && (
+                  <div
+                    className="absolute inset-0 pointer-events-none z-10"
+                    style={{ background: selectedIds.has(photo.id) ? 'rgba(37,79,34,0.28)' : 'transparent' }}
+                  >
+                    <span
+                      className="absolute top-2 left-2 w-6 h-6 rounded-full flex items-center justify-center"
+                      style={{
+                        background: selectedIds.has(photo.id) ? '#254F22' : 'rgba(253,250,245,0.88)',
+                        border: `2px solid ${selectedIds.has(photo.id) ? '#254F22' : 'rgba(37,79,34,0.40)'}`,
+                      }}
+                    >
+                      {selectedIds.has(photo.id) && <Check className="w-3.5 h-3.5" style={{ color: '#FDFAF5' }} />}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1161,6 +1324,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   <Download className="w-5 h-5" />
                 </button>
               )}
+              {isOwner && !slideshowMode && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); void setCoverPhoto(current) }}
+                  disabled={settingCover}
+                  title={coverPhotoId === current.id ? 'Clear album cover' : 'Set as album cover'}
+                  className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ background: 'rgba(255,255,255,0.15)', color: coverPhotoId === current.id ? '#F4C430' : '#FDFAF5' }}
+                >
+                  <Star className="w-5 h-5" fill={coverPhotoId === current.id ? '#F4C430' : 'none'} />
+                </button>
+              )}
               {isOwner && (
                 <>
                   {!slideshowMode && (
@@ -1319,6 +1493,51 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           </div>
         )
       })()}
+
+      {isOwner && selectMode && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[200] flex items-center justify-between gap-3 px-4 py-4 sm:px-6"
+          style={{
+            background: 'rgba(253,250,245,0.96)',
+            borderTop: '1px solid #DDD5C5',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="text-sm font-semibold rounded-xl px-3 py-1.5 transition hover:opacity-80"
+              style={{ background: '#EAF0E8', color: '#254F22' }}
+              onClick={() => setSelectedIds(new Set(photos.map((p) => p.id)))}
+            >
+              All
+            </button>
+            <span className="text-sm font-medium" style={{ color: '#254F22' }}>
+              {selectedIds.size} selected
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-xl px-4 py-2 text-sm font-semibold transition hover:opacity-80"
+              style={{ background: '#F5F0E8', color: '#7C5C3E' }}
+              onClick={exitSelectMode}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={selectedIds.size === 0 || bulkDeleting}
+              className="rounded-xl px-4 py-2 text-sm font-semibold transition hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: selectedIds.size > 0 ? '#C0392B' : '#DDD5C5', color: '#FDFAF5' }}
+              onClick={() => void bulkDeleteSelected()}
+            >
+              {bulkDeleting ? 'Deleting…' : `Delete ${selectedIds.size}`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {settingsPhoto && isOwner && (
         <PhotoSettingsModal

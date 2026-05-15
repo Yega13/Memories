@@ -39,6 +39,7 @@ type FullAlbum = {
   mobile_grid_columns?: MobileGridColumns | null
   slideshow_interval_ms?: number | null
   slideshow_animation?: SlideshowAnimation | null
+  cover_photo_id: string | null
   created_at: string
   retired_at: string | null
   user_id: string | null
@@ -47,7 +48,7 @@ type FullAlbum = {
 
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, created_at, retired_at, user_id, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, created_at, retired_at, user_id, password_hash'
 const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
 
 export async function GET(req: Request) {
@@ -134,6 +135,7 @@ async function buildResponse(album: FullAlbum) {
     mobile_grid_columns: album.mobile_grid_columns ?? 3,
     slideshow_interval_ms: album.slideshow_interval_ms ?? 4200,
     slideshow_animation: album.slideshow_animation ?? 'fade',
+    cover_photo_id: album.cover_photo_id ?? null,
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,

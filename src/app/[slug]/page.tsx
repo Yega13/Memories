@@ -246,6 +246,8 @@ export default function AlbumPage() {
           onPhotosReordered={handlePhotosReordered}
           slideshowRequestId={slideshowRequestId}
           arrangeMode={arrangeMode}
+          coverPhotoId={album.cover_photo_id}
+          onCoverSet={(photoId) => handleAlbumUpdated({ cover_photo_id: photoId })}
         />
 
         {!isOwner && (

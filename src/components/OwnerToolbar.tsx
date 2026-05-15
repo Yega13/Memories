@@ -521,6 +521,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
               ownerUrl={ownerUrl}
               qrUrl={qrUrl}
               shareUrl={shareUrl}
+              albumTitle={album.title ?? 'Album'}
               onClose={() => setShowShare(false)}
               onCopy={copy}
             />

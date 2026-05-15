@@ -24,6 +24,7 @@ export type Album = {
   slideshow_animation?: SlideshowAnimation
   password_protected?: boolean
   upload_caps?: { image: number; video: number }
+  cover_photo_id?: string | null
   created_at: string
 }
 

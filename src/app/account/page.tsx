@@ -76,10 +76,12 @@ type AccountAlbum = {
   custom_slug: string | null
   owner_token: string
   title: string
+  cover_photo_id: string | null
   created_at: string
 }
 
 type AccountMediaRow = {
+  id: string
   album_id: string
   media_type: 'image' | 'video'
   url: string
@@ -184,7 +186,7 @@ export default async function AccountPage({ searchParams }: Props) {
 
   const { data: accountAlbums } = await admin
     .from('albums')
-    .select('id, slug, custom_slug, owner_token, title, created_at')
+    .select('id, slug, custom_slug, owner_token, title, cover_photo_id, created_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .returns<AccountAlbum[]>()
@@ -193,7 +195,7 @@ export default async function AccountPage({ searchParams }: Props) {
   const { data: accountMedia } = accountAlbumIds.length
     ? await admin
         .from('photos')
-        .select('album_id, media_type, url, poster_url, created_at')
+        .select('id, album_id, media_type, url, poster_url, created_at')
         .in('album_id', accountAlbumIds)
         .order('created_at', { ascending: true })
         .returns<AccountMediaRow[]>()
@@ -201,7 +203,8 @@ export default async function AccountPage({ searchParams }: Props) {
 
   const albumsWithMedia = (accountAlbums ?? []).map((album) => {
     const albumMedia = (accountMedia ?? []).filter((row) => row.album_id === album.id)
-    const cover = albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
+    const pinned = album.cover_photo_id ? albumMedia.find((row) => row.id === album.cover_photo_id) : undefined
+    const cover = pinned ?? albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
     return {
       ...album,
       cover_url: cover ? (cover.media_type === 'video' ? cover.poster_url || cover.url : cover.url) : null,

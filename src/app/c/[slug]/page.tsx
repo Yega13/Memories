@@ -26,10 +26,12 @@ type AlbumSummary = {
   slug: string
   custom_slug: string | null
   title: string
+  cover_photo_id: string | null
   created_at: string
 }
 
 type MediaPreview = {
+  id: string
   album_id: string
   url: string
   poster_url: string | null
@@ -69,7 +71,7 @@ export default async function CollectionPage({ params }: Props) {
   const { data: albums } = albumIds.length
     ? await admin
         .from('albums')
-        .select('id, slug, custom_slug, title, created_at')
+        .select('id, slug, custom_slug, title, cover_photo_id, created_at')
         .in('id', albumIds)
         .returns<AlbumSummary[]>()
     : { data: [] as AlbumSummary[] }
@@ -77,7 +79,7 @@ export default async function CollectionPage({ params }: Props) {
   const { data: mediaRows } = albumIds.length
     ? await admin
         .from('photos')
-        .select('album_id, url, poster_url, media_type, created_at')
+        .select('id, album_id, url, poster_url, media_type, created_at')
         .in('album_id', albumIds)
         .order('created_at', { ascending: true })
         .returns<MediaPreview[]>()
@@ -88,7 +90,8 @@ export default async function CollectionPage({ params }: Props) {
       const album = (albums ?? []).find((candidate) => candidate.id === id)
       if (!album) return null
       const albumMedia = (mediaRows ?? []).filter((row) => row.album_id === id)
-      const cover = albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
+      const pinned = album.cover_photo_id ? albumMedia.find((row) => row.id === album.cover_photo_id) : undefined
+      const cover = pinned ?? albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
       return {
         ...album,
         cover_url: cover ? (cover.media_type === 'video' ? cover.poster_url || cover.url : cover.url) : null,
