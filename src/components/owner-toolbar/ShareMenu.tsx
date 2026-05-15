@@ -14,13 +14,24 @@ type Props = {
 }
 
 export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitle, onClose, onCopy }: Props) {
-  const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share
-
-  async function nativeShare() {
+  async function handleShare() {
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          url: shareUrl,
+          title: albumTitle,
+          text: `Check out "${albumTitle}" on Hushare`,
+        })
+        return
+      } catch {
+        // cancelled or unsupported — fall through to copy
+      }
+    }
     try {
-      await navigator.share({ url: shareUrl, title: albumTitle })
+      await navigator.clipboard.writeText(shareUrl)
+      onCopy('share')
     } catch {
-      // user cancelled or share failed — silently ignore
+      // ignore
     }
   }
 
@@ -36,16 +47,17 @@ export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitl
         </button>
       </div>
 
-      {canNativeShare && (
-        <button
-          className="hush-hover-lift w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 mb-2 text-left transition hover:opacity-90"
-          style={{ background: '#254F22', cursor: 'pointer' }}
-          onClick={nativeShare}
-        >
-          <span className="text-sm font-semibold" style={{ color: '#FDFAF5' }}>Share album</span>
-          <Share2 className="w-4 h-4 flex-none" style={{ color: '#FDFAF5' }} />
-        </button>
-      )}
+      <button
+        className="hush-hover-lift w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 mb-2 text-left transition hover:opacity-90"
+        style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', cursor: 'pointer' }}
+        onClick={handleShare}
+      >
+        <span>
+          <span className="block text-sm font-semibold" style={{ color: '#254F22' }}>Share album</span>
+          <span className="block text-xs" style={{ color: '#8B6F4E' }}>Send via messages, apps or copy</span>
+        </span>
+        <Share2 className="w-4 h-4 flex-none" style={{ color: '#7C5C3E' }} />
+      </button>
 
       <button
         className="hush-hover-lift w-full flex items-center justify-between gap-3 rounded-xl px-3 py-3 text-left transition hover:opacity-90"

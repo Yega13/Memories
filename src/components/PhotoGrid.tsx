@@ -126,7 +126,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
-  const [lightboxRotation, setLightboxRotation] = useState<0 | 90 | 180 | 270>(0)
+  const [lightboxFlipped, setLightboxFlipped] = useState(false)
   const [settingCover, setSettingCover] = useState(false)
 
   const viewerPhotos = slideshowPhotoIds
@@ -281,7 +281,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setSlideshowPaused(false)
     setSlideshowPhotoIds(null)
     setFlippedPhotoId(null)
-    setLightboxRotation(0)
+    setLightboxFlipped(false)
     setLightbox(null)
     if (lightboxHistoryRef.current) {
       lightboxHistoryRef.current = false
@@ -320,7 +320,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     return {
       borderRadius: previewRadiusFor(photo),
       filter: cssMediaDisplayFilter(previewFilterFor(photo)),
-      transform: `translate3d(${zoomPan.x}px, ${zoomPan.y}px, 0) scale(${zoomScale})${lightboxRotation ? ` rotate(${lightboxRotation}deg)` : ''}`,
+      transform: `translate3d(${zoomPan.x}px, ${zoomPan.y}px, 0) scale(${zoomScale})`,
       transformOrigin: 'center',
       transition: pinchRef.current || panGestureRef.current ? 'filter 180ms ease' : 'transform 160ms ease, filter 180ms ease',
       touchAction: zoomScale > 1 ? 'none' : 'pan-y',
@@ -357,7 +357,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       rotateTimerRef.current = window.setTimeout(() => {
         rotateTimerRef.current = null
         rotateHoldFiredRef.current = true
-        setLightboxRotation((prev) => ((prev + 90) % 360) as 0 | 90 | 180 | 270)
+        setLightboxFlipped(true)
       }, 600)
     }
   }
@@ -404,6 +404,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     rotateTouchStartRef.current = null
     if (rotateHoldFiredRef.current) {
       rotateHoldFiredRef.current = false
+      e.stopPropagation()
+      if (e.cancelable) e.preventDefault()
+      return
+    }
+    if (lightboxFlipped) {
+      setLightboxFlipped(false)
       e.stopPropagation()
       if (e.cancelable) e.preventDefault()
       return
@@ -983,7 +989,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setLightboxMediaNode(null)
     setLightboxRadiusMax(null)
     resetZoom()
-    setLightboxRotation(0)
+    setLightboxFlipped(false)
     setSwipeAnimating(false)
     setSwipeOffset(0)
     lastTapRef.current = 0
@@ -1246,7 +1252,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
               </div>
             ) : current.media_type === 'video' ? (
-              <div className={`hush-photo-flip w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
+              <div className={`hush-photo-flip relative w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
                 <video
                   src={current.url}
                   poster={current.poster_url || undefined}
@@ -1274,9 +1280,21 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   onTouchEnd={handleMediaTouchEnd}
                   onContextMenu={(e) => e.preventDefault()}
                 />
+                {lightboxFlipped && (
+                  <div
+                    className="absolute inset-0 flex flex-col items-center justify-center"
+                    style={{ background: 'rgba(37,79,34,0.93)', borderRadius: previewRadiusFor(current), backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                    onClick={(e) => { e.stopPropagation(); setLightboxFlipped(false) }}
+                  >
+                    {current.caption && <p className="text-xl font-semibold text-center px-6 leading-snug" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
+                    {current.author_name && <p className={`text-sm${current.caption ? ' mt-2' : ''}`} style={{ color: '#A8CFA5' }}>by {current.author_name}</p>}
+                    {!current.caption && !current.author_name && <p className="text-sm" style={{ color: 'rgba(253,250,245,0.5)' }}>No info set</p>}
+                    <p className="mt-4 text-xs" style={{ color: 'rgba(253,250,245,0.35)' }}>Tap to close</p>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className={`hush-photo-flip w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
+              <div className={`hush-photo-flip relative w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={current.url}
@@ -1297,6 +1315,18 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   onContextMenu={(e) => e.preventDefault()}
                   onDragStart={(e) => e.preventDefault()}
                 />
+                {lightboxFlipped && (
+                  <div
+                    className="absolute inset-0 flex flex-col items-center justify-center"
+                    style={{ background: 'rgba(37,79,34,0.93)', borderRadius: previewRadiusFor(current), backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                    onClick={(e) => { e.stopPropagation(); setLightboxFlipped(false) }}
+                  >
+                    {current.caption && <p className="text-xl font-semibold text-center px-6 leading-snug" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
+                    {current.author_name && <p className={`text-sm${current.caption ? ' mt-2' : ''}`} style={{ color: '#A8CFA5' }}>by {current.author_name}</p>}
+                    {!current.caption && !current.author_name && <p className="text-sm" style={{ color: 'rgba(253,250,245,0.5)' }}>No info set</p>}
+                    <p className="mt-4 text-xs" style={{ color: 'rgba(253,250,245,0.35)' }}>Tap to close</p>
+                  </div>
+                )}
               </div>
             )}
 

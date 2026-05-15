@@ -10,6 +10,7 @@ import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
 import PasswordGate from '@/components/PasswordGate'
+import GuestShareButton from '@/components/GuestShareButton'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 
 const DEFAULT_BG = '#FDFAF5'
@@ -232,6 +233,15 @@ export default function AlbumPage() {
 
       <div className="hush-container pb-12">
 
+        {!isOwner && (
+          <div className="flex justify-end mb-4">
+            <GuestShareButton
+              shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/${album.custom_slug ?? album.slug}`}
+              qrUrl={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`${typeof window !== 'undefined' ? window.location.origin : 'https://hushare.space'}/${album.custom_slug ?? album.slug}`)}`}
+              albumTitle={album.title}
+            />
+          </div>
+        )}
         <UploadZone album={album} onPhotoAdded={handlePhotoAdded} />
         <PhotoGrid
           album={album}
