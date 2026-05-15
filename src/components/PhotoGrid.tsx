@@ -501,6 +501,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     const tile = e.currentTarget
     const pointerId = e.pointerId
     reorderDragIdRef.current = photo.id
+    const holdDelay = arrangeMode && coarsePointer ? 150 : 1000
     reorderTimerRef.current = window.setTimeout(() => {
       reorderTimerRef.current = null
       reorderSuppressedClickRef.current = true
@@ -510,7 +511,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         if (tile.isConnected) tile.setPointerCapture(pointerId)
       } catch {
       }
-    }, 1000)
+    }, holdDelay)
   }
 
   function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
@@ -681,6 +682,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }
 
     const direction = deltaX < 0 ? -1 : 1
+    // Prevent iOS from synthesizing a click after the swipe, which would
+    // call closeLightbox() via the swipe div's onClick handler.
+    if (e.cancelable) e.preventDefault()
     setSwipeAnimating(true)
     setSwipeOffset(direction * window.innerWidth)
     window.setTimeout(() => {
@@ -893,7 +897,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   background: '#EDE7DB',
                   borderRadius: mediaRadius,
                   opacity: isReorderDragging ? 0.58 : 1,
-                  touchAction: reorderDraggingId ? 'none' : 'manipulation',
+                  touchAction: (arrangeMode || !!reorderDraggingId) ? 'none' : 'manipulation',
                 }}
                 onClick={() => handleTileClick(index)}
                 onPointerDown={(e) => startReorderPress(photo, e)}
