@@ -625,6 +625,19 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
     const rect = tile.getBoundingClientRect()
     reorderDragTileSizeRef.current = Math.round(Math.min(rect.width, rect.height) * 0.82)
+
+    if (!arrangeMode && !coarsePointer) {
+      // Desktop without arrange mode: long hold enters select mode
+      reorderTimerRef.current = window.setTimeout(() => {
+        reorderTimerRef.current = null
+        reorderSuppressedClickRef.current = true
+        window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
+        setSelectMode(true)
+        setSelectedIds(new Set([photo.id]))
+      }, 1000)
+      return
+    }
+
     const holdDelay = arrangeMode && coarsePointer ? 150 : 1000
     reorderTimerRef.current = window.setTimeout(() => {
       reorderTimerRef.current = null
@@ -1283,13 +1296,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 {lightboxFlipped && (
                   <div
                     className="absolute inset-0 flex flex-col items-center justify-center"
-                    style={{ background: 'rgba(37,79,34,0.93)', borderRadius: previewRadiusFor(current), backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                    style={{ background: 'rgba(253,250,245,0.97)', borderRadius: previewRadiusFor(current), backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
                     onClick={(e) => { e.stopPropagation(); setLightboxFlipped(false) }}
                   >
-                    {current.caption && <p className="text-xl font-semibold text-center px-6 leading-snug" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
-                    {current.author_name && <p className={`text-sm${current.caption ? ' mt-2' : ''}`} style={{ color: '#A8CFA5' }}>by {current.author_name}</p>}
-                    {!current.caption && !current.author_name && <p className="text-sm" style={{ color: 'rgba(253,250,245,0.5)' }}>No info set</p>}
-                    <p className="mt-4 text-xs" style={{ color: 'rgba(253,250,245,0.35)' }}>Tap to close</p>
+                    {current.caption && <p className="text-xl font-semibold text-center px-6 leading-snug" style={{ color: '#254F22' }}>{current.caption}</p>}
+                    {current.author_name && <p className={`text-sm${current.caption ? ' mt-2' : ''}`} style={{ color: '#7C5C3E' }}>by {current.author_name}</p>}
+                    {!current.caption && !current.author_name && <p className="text-sm" style={{ color: '#A89880' }}>No info set</p>}
+                    <p className="mt-4 text-xs" style={{ color: '#C5B9A8' }}>Tap to close</p>
                   </div>
                 )}
               </div>
@@ -1318,13 +1331,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 {lightboxFlipped && (
                   <div
                     className="absolute inset-0 flex flex-col items-center justify-center"
-                    style={{ background: 'rgba(37,79,34,0.93)', borderRadius: previewRadiusFor(current), backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                    style={{ background: 'rgba(253,250,245,0.97)', borderRadius: previewRadiusFor(current), backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
                     onClick={(e) => { e.stopPropagation(); setLightboxFlipped(false) }}
                   >
-                    {current.caption && <p className="text-xl font-semibold text-center px-6 leading-snug" style={{ color: '#FDFAF5' }}>{current.caption}</p>}
-                    {current.author_name && <p className={`text-sm${current.caption ? ' mt-2' : ''}`} style={{ color: '#A8CFA5' }}>by {current.author_name}</p>}
-                    {!current.caption && !current.author_name && <p className="text-sm" style={{ color: 'rgba(253,250,245,0.5)' }}>No info set</p>}
-                    <p className="mt-4 text-xs" style={{ color: 'rgba(253,250,245,0.35)' }}>Tap to close</p>
+                    {current.caption && <p className="text-xl font-semibold text-center px-6 leading-snug" style={{ color: '#254F22' }}>{current.caption}</p>}
+                    {current.author_name && <p className={`text-sm${current.caption ? ' mt-2' : ''}`} style={{ color: '#7C5C3E' }}>by {current.author_name}</p>}
+                    {!current.caption && !current.author_name && <p className="text-sm" style={{ color: '#A89880' }}>No info set</p>}
+                    <p className="mt-4 text-xs" style={{ color: '#C5B9A8' }}>Tap to close</p>
                   </div>
                 )}
               </div>
