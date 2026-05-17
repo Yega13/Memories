@@ -50,6 +50,7 @@ type Tier = {
   cadence: string;
   annual?: string;
   promo?: string;
+  renewText?: string;
   cta: string;
   // Free tier uses `href` for a normal Link; paid tiers use product IDs to
   // POST a checkout form to /api/checkout. Exactly one path applies per tier.
@@ -92,6 +93,7 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$40 / year - save 2 months",
     promo: "First month $1.99",
+    renewText: "Intro offer: $1.99 first month, then $4/month. Auto-renews until cancelled.",
     cta: "Get Pro",
     monthlyProductId: POLAR_PRO_MONTHLY,
     yearlyProductId: POLAR_PRO_YEARLY,
@@ -113,6 +115,7 @@ const tiers: Tier[] = [
     cadence: "per month",
     annual: "$100 / year - save 2 months",
     promo: "First month $6.99",
+    renewText: "Intro offer: $6.99 first month, then $10/month. Auto-renews until cancelled.",
     cta: "Get Studio",
     monthlyProductId: POLAR_STUDIO_MONTHLY,
     yearlyProductId: POLAR_STUDIO_YEARLY,
@@ -528,6 +531,11 @@ export default function PricingPage() {
                   >
                     {t.cta} <ArrowRight className="w-4 h-4" />
                   </button>
+                  {t.renewText && (
+                    <p className="mt-2 text-[11px] text-center leading-snug" style={{ color: t.highlight ? "rgba(253,250,245,0.60)" : "#A89880" }}>
+                      {t.renewText}
+                    </p>
+                  )}
                 </form>
               ) : (
                 <Link
@@ -549,7 +557,7 @@ export default function PricingPage() {
           className="text-center text-xs mt-6 italic"
           style={{ color: "#8B6F4E", fontFamily: "var(--font-serif)" }}
         >
-          Prices in USD. Pro &amp; Studio billed monthly; cancel anytime from your account dashboard.
+          Prices in USD &middot; Subscriptions auto-renew monthly or annually until cancelled &middot; Cancel anytime from your account dashboard &middot; No refunds except as required by law.
         </p>
       </section>
 

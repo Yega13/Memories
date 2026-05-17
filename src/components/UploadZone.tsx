@@ -152,6 +152,17 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   }, [pending])
 
   useEffect(() => {
+    if (!uploading) return
+    function onVisibilityChange() {
+      if (document.hidden) {
+        showAppToast('Keep this tab open — upload is in progress.', 'error')
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [uploading])
+
+  useEffect(() => {
     return () => {
       pendingRef.current.forEach((item) => URL.revokeObjectURL(item.preview))
     }
@@ -337,7 +348,17 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       }
     }
 
-    await Promise.all(Array.from({ length: concurrency }, () => worker()))
+    async function runWorkers() {
+      await Promise.all(Array.from({ length: concurrency }, () => worker()))
+    }
+
+    // Web Lock keeps the browser from throttling this tab while uploading.
+    // Falls back gracefully when the API is unavailable.
+    if (typeof navigator !== 'undefined' && 'locks' in navigator) {
+      await navigator.locks.request('hushare-upload', runWorkers)
+    } else {
+      await runWorkers()
+    }
 
     if (failed) {
       setUploading(false)

@@ -187,7 +187,48 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section number={6} heading="Changes">
+        <Section number={6} heading="DMCA / Copyright takedowns">
+          <p>
+            Hushare respects intellectual property rights and complies with the Digital
+            Millennium Copyright Act (&ldquo;DMCA&rdquo;). If you believe content uploaded to
+            Hushare infringes your copyright, you may submit a written takedown notice to our
+            designated agent:
+          </p>
+          <p className="mt-3 font-semibold" style={INK}>
+            DMCA Designated Agent — Hushare
+          </p>
+          <p className="mt-1 text-sm" style={{ color: "#8B6F4E" }}>
+            Registration Number: DMCA-1072882 (U.S. Copyright Office)
+          </p>
+          <p className="mt-1">
+            Email:{" "}
+            <a href="mailto:husharesupport@gmail.com" style={{ ...INK, fontWeight: 700 }}>
+              husharesupport@gmail.com
+            </a>
+          </p>
+          <p className="mt-3">Your notice must include:</p>
+          <ol className="mt-2 list-decimal space-y-2 pl-5">
+            <li>Identification of the copyrighted work you claim has been infringed.</li>
+            <li>The URL or other specific location of the allegedly infringing content on Hushare.</li>
+            <li>Your contact information (name, address, telephone number, email).</li>
+            <li>
+              A statement that you have a good-faith belief that the use is not authorised by the
+              copyright owner, its agent, or the law.
+            </li>
+            <li>
+              A statement, under penalty of perjury, that the information in your notice is
+              accurate and that you are the copyright owner or authorised to act on their behalf.
+            </li>
+            <li>Your physical or electronic signature.</li>
+          </ol>
+          <p className="mt-3">
+            Upon receiving a valid notice we will remove or disable access to the content promptly
+            and notify the uploader. Counter-notices may be submitted to the same address following
+            the standard DMCA counter-notice procedure.
+          </p>
+        </Section>
+
+        <Section number={7} heading="Changes">
           <p>
             We may update these terms as Hushare grows. The latest version will always live
             on this page.

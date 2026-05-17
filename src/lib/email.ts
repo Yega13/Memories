@@ -2,6 +2,7 @@ const VERIFIED_FROM = 'Hushare <noreply@hushare.space>'
 const FALLBACK_FROM = 'Hushare <onboarding@resend.dev>'
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
+const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
 
 function escapeHtml(str: string): string {
   return str
@@ -59,7 +60,10 @@ export async function sendPhotoNotificationEmail(
   <p style="margin:0;color:#B0A090;font-size:12px;">
     You received this because you own an album on
     <a href="${escapeHtml(SITE_URL)}" style="color:#B0A090;">Hushare</a>.
+    To stop receiving these emails, reply with "unsubscribe" or email
+    <a href="mailto:husharesupport@gmail.com" style="color:#B0A090;">husharesupport@gmail.com</a>.
   </p>
+  <p style="margin:6px 0 0;color:#B0A090;font-size:11px;">${escapeHtml(MAILING_ADDRESS)}</p>
 </div>`
 
   const text = [
@@ -69,6 +73,8 @@ export async function sendPhotoNotificationEmail(
     albumUrl,
     '',
     'You received this because you own an album on Hushare.',
+    'To unsubscribe, reply to this email or contact husharesupport@gmail.com.',
+    MAILING_ADDRESS,
   ].join('\n')
 
   await sendEmail(ownerEmail, subject, html, text)
@@ -102,7 +108,10 @@ export async function sendExpiryWarningEmail(
     are kept for 12 months after last activity.
     <a href="${escapeHtml(SITE_URL)}/pricing" style="color:#B0A090;">Upgrade to a paid plan</a>
     to keep your albums forever.
+    To stop receiving these emails, reply with "unsubscribe" or email
+    <a href="mailto:husharesupport@gmail.com" style="color:#B0A090;">husharesupport@gmail.com</a>.
   </p>
+  <p style="margin:6px 0 0;color:#B0A090;font-size:11px;">${escapeHtml(MAILING_ADDRESS)}</p>
 </div>`
 
   const text = [
@@ -115,6 +124,9 @@ export async function sendExpiryWarningEmail(
     '',
     'Free albums on Hushare are kept for 12 months after last activity.',
     `Upgrade to a paid plan to keep your albums forever: ${SITE_URL}/pricing`,
+    '',
+    'To unsubscribe, reply to this email or contact husharesupport@gmail.com.',
+    MAILING_ADDRESS,
   ].join('\n')
 
   await sendEmail(ownerEmail, subject, html, text)
