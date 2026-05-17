@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   const albumId = String(body.album_id ?? '').trim()
-  const rows = Array.isArray(body.photos) ? body.photos.slice(0, 20) : []
+  const rows = Array.isArray(body.photos) ? body.photos.slice(0, 100) : []
   if (!UUID_RE.test(albumId) || rows.length === 0) {
     return NextResponse.json({ error: 'Missing album or photos' }, { status: 400, headers: NO_STORE })
   }

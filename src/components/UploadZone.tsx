@@ -222,85 +222,64 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     })
   }
 
-  async function uploadPhoto(item: PendingItem): Promise<PhotoInsertRow> {
+  async function uploadItem(item: PendingItem): Promise<PhotoInsertRow> {
     const ext = extensionFor(item.file, item.kind)
     const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
     const filename = `${baseId}.${ext}`
-    const path = `${album.id}/${filename}`
 
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      const { error } = await supabase.storage
-        .from('Photos')
-        .upload(path, item.file, { contentType: item.file.type || undefined })
-
-      if (!error || isExistingObjectError(error.message)) {
-        return {
-          storage_path: path,
-          storage_backend: 'supabase',
-          url: supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl,
-          caption: item.caption.trim() || null,
-          author_name: item.author.trim() || null,
-          media_type: 'image',
-          poster_path: null,
-          poster_url: null,
-          duration_seconds: null,
+    if (item.kind === 'image') {
+      const path = `${album.id}/${filename}`
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { error } = await supabase.storage
+          .from('Photos')
+          .upload(path, item.file, { contentType: item.file.type || undefined })
+        if (!error || isExistingObjectError(error.message)) {
+          return {
+            storage_path: path,
+            storage_backend: 'supabase',
+            url: supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl,
+            caption: item.caption.trim() || null,
+            author_name: item.author.trim() || null,
+            media_type: 'image',
+            poster_path: null,
+            poster_url: null,
+            duration_seconds: null,
+          }
         }
+        if (!isRetriableStorageError(error.message) || attempt === 3) throw new Error(error.message)
+        await wait(450 * attempt)
       }
-
-      if (!isRetriableStorageError(error.message) || attempt === 3) {
-        throw new Error(error.message)
-      }
-
-      await wait(450 * attempt)
+      throw new Error('Upload failed')
     }
 
-    throw new Error('Upload failed')
-  }
-
-  async function uploadPhotoBatch(queue: PendingItem[]) {
-    const rows: PhotoInsertRow[] = []
-    let completed = 0
-    let cursor = 0
-    const concurrency = Math.min(3, queue.length)
-
-    setUploadStatus({
-      fileName: `${queue.length} photos`,
-      index: 0,
-      total: queue.length,
-      phase: 'Uploading photos',
-      percent: 8,
-    })
-
-    async function worker() {
-      while (cursor < queue.length) {
-        const item = queue[cursor]
-        cursor += 1
-        const row = await uploadPhoto(item)
-        rows.push(row)
-        completed += 1
-        setUploadStatus({
-          fileName: item.file.name,
-          index: completed,
-          total: queue.length,
-          phase: completed === queue.length ? 'Saving to album' : 'Uploading photos',
-          percent: Math.round((completed / queue.length) * 88),
-        })
+    // Video: upload file, generate poster, upload poster
+    const res = await uploadToR2(item.file, album.id, filename, 'video')
+    let posterPath: string | null = null
+    let posterUrl: string | null = null
+    let durationSeconds: number | null = null
+    const poster = await generateVideoPoster(item.file)
+    if (poster) {
+      const posterFilename = `${baseId}.poster.jpg`
+      const posterFile = new File([poster.blob], posterFilename, { type: 'image/jpeg' })
+      try {
+        const posterRes = await uploadToR2(posterFile, album.id, posterFilename, 'poster')
+        posterPath = posterRes.storage_path
+        posterUrl = posterRes.url
+      } catch {
       }
+      durationSeconds = poster.durationSeconds || null
     }
-
-    await Promise.all(Array.from({ length: concurrency }, () => worker()))
-
-    await saveUploadedRows(rows)
-
-    queue.forEach((item) => URL.revokeObjectURL(item.preview))
-    setPending((prev) => prev.filter((item) => !queue.includes(item)))
-    setUploadStatus({
-      fileName: `${queue.length} photos`,
-      index: queue.length,
-      total: queue.length,
-      phase: 'Done',
-      percent: 100,
-    })
+    return {
+      storage_path: res.storage_path,
+      storage_backend: 'r2',
+      url: res.url,
+      caption: item.caption.trim() || null,
+      author_name: item.author.trim() || null,
+      media_type: 'video',
+      poster_path: posterPath,
+      poster_url: posterUrl,
+      duration_seconds: durationSeconds,
+    }
   }
 
   async function uploadAll() {
@@ -310,139 +289,75 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     setUploadError('')
     setUploadStatus(null)
 
-    if (queue.every((item) => item.kind === 'image')) {
-      try {
-        await uploadPhotoBatch(queue)
-        setPending([])
-        setUploading(false)
-        setUploadStatus(null)
-        showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
-        onPhotoAdded()
-      } catch (e) {
-        const message = `Upload failed: ${e instanceof Error ? e.message : 'Network error'}`
-        setUploadError(message)
-        showAppToast(message, 'error')
-        setUploadStatus({
-          fileName: `${queue.length} photos`,
-          index: 0,
-          total: queue.length,
-          phase: 'Upload failed',
-          percent: 0,
-        })
-        setUploading(false)
+    const rows: PhotoInsertRow[] = []
+    let completed = 0
+    let cursor = 0
+    let failed = false
+    const concurrency = Math.min(6, queue.length)
+
+    setUploadStatus({
+      fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`,
+      index: 0,
+      total: queue.length,
+      phase: 'Uploading',
+      percent: 4,
+    })
+
+    async function worker() {
+      while (cursor < queue.length && !failed) {
+        const myIndex = cursor
+        cursor += 1
+        const item = queue[myIndex]
+        try {
+          const row = await uploadItem(item)
+          rows.push(row)
+          completed += 1
+          if (!failed) {
+            setUploadStatus({
+              fileName: item.file.name,
+              index: completed,
+              total: queue.length,
+              phase: completed === queue.length ? 'Saving to album' : 'Uploading',
+              percent: Math.max(4, Math.round((completed / queue.length) * 90)),
+            })
+          }
+        } catch (e) {
+          failed = true
+          const message = `Upload failed: ${e instanceof Error ? e.message : 'Network error'}`
+          setUploadError(message)
+          showAppToast(message, 'error')
+          setUploadStatus({
+            fileName: item.file.name,
+            index: completed,
+            total: queue.length,
+            phase: 'Upload failed',
+            percent: 0,
+          })
+        }
       }
+    }
+
+    await Promise.all(Array.from({ length: concurrency }, () => worker()))
+
+    if (failed) {
+      setUploading(false)
       return
     }
 
-    for (let i = 0; i < queue.length; i++) {
-      const item = queue[i]
-      const setCurrentStatus = (phase: string, percent: number) => {
-        setUploadStatus({
-          fileName: item.file.name,
-          index: i + 1,
-          total: queue.length,
-          phase,
-          percent,
-        })
+    try {
+      // API accepts up to 100 rows; chunk if needed
+      for (let i = 0; i < rows.length; i += 100) {
+        await saveUploadedRows(rows.slice(i, i + 100))
       }
-
-      setCurrentStatus('Preparing', 5)
-      const ext = extensionFor(item.file, item.kind)
-      const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
-      const filename = `${baseId}.${ext}`
-
-      let storagePath: string
-      let publicUrl: string
-      let storageBackend: 'supabase' | 'r2'
-
-      if (item.kind === 'video') {
-        try {
-          const res = await uploadToR2(item.file, album.id, filename, 'video', (percent) => {
-            setCurrentStatus('Uploading video', Math.max(8, Math.min(82, Math.round(percent * 0.82))))
-          })
-          storagePath = res.storage_path
-          publicUrl = res.url
-          storageBackend = 'r2'
-        } catch (e) {
-          const message = `Upload failed: ${(e as Error).message}`
-          setUploadError(message)
-          showAppToast(message, 'error')
-          setCurrentStatus('Upload failed', 0)
-          setUploading(false)
-          return
-        }
-      } else {
-        setCurrentStatus('Uploading photo', 35)
-        const path = `${album.id}/${filename}`
-        const { error: storageError } = await supabase.storage
-          .from('Photos')
-          .upload(path, item.file, { contentType: item.file.type || undefined })
-
-        if (storageError) {
-          const message = `Upload failed: ${storageError.message}`
-          setUploadError(message)
-          showAppToast(message, 'error')
-          setCurrentStatus('Upload failed', 0)
-          setUploading(false)
-          return
-        }
-
-        storagePath = path
-        publicUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
-        storageBackend = 'supabase'
-        setCurrentStatus('Photo uploaded', 82)
-      }
-
-      let posterPath: string | null = null
-      let posterUrl: string | null = null
-      let durationSeconds: number | null = null
-
-      if (item.kind === 'video') {
-        setCurrentStatus('Creating video thumbnail', 84)
-        const poster = await generateVideoPoster(item.file)
-        if (poster) {
-          const posterFilename = `${baseId}.poster.jpg`
-          const posterFile = new File([poster.blob], posterFilename, { type: 'image/jpeg' })
-          try {
-            const res = await uploadToR2(posterFile, album.id, posterFilename, 'poster', (percent) => {
-              setCurrentStatus('Uploading thumbnail', 84 + Math.round(percent * 0.1))
-            })
-            posterPath = res.storage_path
-            posterUrl = res.url
-          } catch {
-          }
-          durationSeconds = poster.durationSeconds || null
-        }
-      }
-
-      setCurrentStatus('Saving to album', 95)
-      const row: PhotoInsertRow = {
-        storage_path: storagePath,
-        storage_backend: storageBackend,
-        url: publicUrl,
-        caption: item.caption.trim() || null,
-        author_name: item.author.trim() || null,
-        media_type: item.kind,
-        poster_path: posterPath,
-        poster_url: posterUrl,
-        duration_seconds: durationSeconds,
-      }
-
-      try {
-        await saveUploadedRows([row])
-      } catch (e) {
-        const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded file'}`
-        setUploadError(message)
-        showAppToast(message, 'error')
-        setCurrentStatus('Save failed', 0)
-        setUploading(false)
-        return
-      }
-      setCurrentStatus('Done', 100)
-      URL.revokeObjectURL(item.preview)
-      setPending((prev) => prev.filter((candidate) => candidate !== item))
+    } catch (e) {
+      const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded files'}`
+      setUploadError(message)
+      showAppToast(message, 'error')
+      setUploading(false)
+      return
     }
 
+    queue.forEach((item) => URL.revokeObjectURL(item.preview))
     setPending([])
     setUploading(false)
     setUploadStatus(null)
