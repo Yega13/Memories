@@ -134,6 +134,34 @@ export default function AlbumPage() {
     fetchAlbum()
   }, [fetchAlbum])
 
+  // Real-time: new photos added by anyone appear instantly without refresh
+  useEffect(() => {
+    if (!album) return
+    const channel = supabase
+      .channel(`album-photos-${album.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'photos', filter: `album_id=eq.${album.id}` },
+        (payload) => {
+          const incoming = payload.new as Photo
+          setPhotos((prev) => {
+            if (prev.some((p) => p.id === incoming.id)) return prev
+            return [...prev, incoming]
+          })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'photos', filter: `album_id=eq.${album.id}` },
+        (payload) => {
+          setPhotos((prev) => prev.filter((p) => p.id !== (payload.old as Photo).id))
+        },
+      )
+      .subscribe()
+
+    return () => { void supabase.removeChannel(channel) }
+  }, [album?.id])
+
   const handlePhotoAdded = () => {
     if (album) fetchPhotos(album.id)
   }
