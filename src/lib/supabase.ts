@@ -25,6 +25,7 @@ export type Album = {
   password_protected?: boolean
   upload_caps?: { image: number; video: number }
   cover_photo_id?: string | null
+  reveal_at?: string | null
   created_at: string
 }
 

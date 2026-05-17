@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -51,6 +51,16 @@ type Props = {
   onToggleArrangeMode: () => void
 }
 
+// Convert a UTC ISO string from the DB to the value format for datetime-local input.
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  // datetime-local expects YYYY-MM-DDTHH:mm in local time
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export default function OwnerToolbar({ album, photos, ownerToken, userTier, mediaRadiusMax, onAlbumUpdated, onOpenSlideshow, arrangeMode, onToggleArrangeMode }: Props) {
   const [copied, setCopied] = useState<'share' | 'owner' | null>(null)
   const [showShare, setShowShare] = useState(false)
@@ -97,6 +107,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
   const [mediaSaved, setMediaSaved] = useState(false)
+
+  const [revealInput, setRevealInput] = useState(() => toDatetimeLocal(album.reveal_at ?? null))
+  const [revealSaving, setRevealSaving] = useState(false)
+  const [revealError, setRevealError] = useState('')
+  const [revealSaved, setRevealSaved] = useState(false)
 
   const shareRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -161,11 +176,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setSlideshowAnimation(album.slideshow_animation ?? 'fade')
       setMediaError('')
       setMediaSaved(false)
+      setRevealInput(toDatetimeLocal(album.reveal_at ?? null))
+      setRevealError('')
+      setRevealSaved(false)
       setOpenSection(null)
       setDeleteConfirm(false)
       setDeleteError('')
     }
-  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.mobile_grid_columns, album.slideshow_animation, album.slideshow_interval_ms, album.video_autoplay, showSettings])
+  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.mobile_grid_columns, album.reveal_at, album.slideshow_animation, album.slideshow_interval_ms, album.video_autoplay, showSettings])
 
   useEffect(() => {
     if (showSettings && canUseCollections) void loadCollections()
@@ -496,6 +514,37 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       showAppToast(message, 'error')
     } finally {
       setDeletingAlbum(false)
+    }
+  }
+
+  async function saveReveal(action: 'set' | 'clear') {
+    setRevealSaving(true)
+    setRevealError('')
+    setRevealSaved(false)
+    try {
+      const reveal_at = action === 'clear' ? null : revealInput
+      const res = await fetch('/api/album/reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: album.slug, owner_token: ownerToken, reveal_at }),
+      })
+      const result = (await res.json()) as { ok?: boolean; reveal_at?: string | null; error?: string }
+      if (!res.ok || !result.ok) {
+        const message = result.error ?? 'Could not save reveal time'
+        setRevealError(message)
+        showAppToast(message, 'error')
+        return
+      }
+      onAlbumUpdated({ reveal_at: result.reveal_at ?? null })
+      setRevealInput(toDatetimeLocal(result.reveal_at ?? null))
+      setRevealSaved(true)
+      showAppToast(action === 'clear' ? 'Reveal time cleared.' : 'Reveal time saved.')
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Network error'
+      setRevealError(message)
+      showAppToast(message, 'error')
+    } finally {
+      setRevealSaving(false)
     }
   }
 
@@ -1189,6 +1238,59 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     >
                       {collectionSaving ? 'Creating...' : 'Create collection'}
                     </button>
+                  </div>
+                )}
+              </section>
+
+              <section style={settingsSectionStyle}>
+                <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('reveal')}>
+                  <Clock className="w-4 h-4" style={{ color: '#7C5C3E' }} />
+                  <span style={sectionTitle}>Delayed reveal</span>
+                  {album.reveal_at && new Date(album.reveal_at) > new Date() && (
+                    <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#254F22', letterSpacing: '0.06em' }}>Active</span>
+                  )}
+                  <ChevronDown
+                    className="ml-auto w-4 h-4 transition-transform"
+                    style={{ color: '#A89880', transform: openSection === 'reveal' ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  />
+                </button>
+                {openSection === 'reveal' && (
+                  <div className="px-4 pb-4">
+                    <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
+                      Guests see a countdown until this time. You can always view the album with your owner link.
+                    </p>
+                    <input
+                      type="datetime-local"
+                      value={revealInput}
+                      onChange={(e) => {
+                        setRevealInput(e.target.value)
+                        setRevealSaved(false)
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                      style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
+                    />
+                    {revealError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{revealError}</p>}
+                    {revealSaved && !revealError && <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>}
+                    <div className="flex items-center gap-2 mt-3">
+                      <button
+                        onClick={() => saveReveal('set')}
+                        disabled={revealSaving || !revealInput}
+                        className="hush-press flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                        style={{ background: '#254F22', color: '#FDFAF5' }}
+                      >
+                        {revealSaving ? 'Saving...' : 'Set reveal time'}
+                      </button>
+                      {album.reveal_at && (
+                        <button
+                          onClick={() => saveReveal('clear')}
+                          disabled={revealSaving}
+                          className="hush-press text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
+                          style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </section>

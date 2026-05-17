@@ -51,10 +51,9 @@ export async function GET(req: Request) {
       const buffer = Buffer.from(await upstream.arrayBuffer())
       const { default: sharp } = await import('sharp')
       const stripped = await sharp(buffer)
-        .withMetadata(false)
         .jpeg({ quality: 100 })
         .toBuffer()
-      return new NextResponse(stripped, {
+      return new NextResponse(new Uint8Array(stripped), {
         headers: {
           'Content-Type': 'image/jpeg',
           'Content-Disposition': disposition,

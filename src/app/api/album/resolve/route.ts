@@ -40,6 +40,7 @@ type FullAlbum = {
   slideshow_interval_ms?: number | null
   slideshow_animation?: SlideshowAnimation | null
   cover_photo_id: string | null
+  reveal_at: string | null
   created_at: string
   retired_at: string | null
   user_id: string | null
@@ -48,12 +49,13 @@ type FullAlbum = {
 
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, created_at, retired_at, user_id, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, reveal_at, created_at, retired_at, user_id, password_hash'
 const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const slug = (searchParams.get('slug') ?? '').trim()
+  const ownerToken = (searchParams.get('owner_token') ?? '').trim()
   if (!slug) {
     return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
   }
@@ -67,7 +69,7 @@ export async function GET(req: Request) {
     if (byRandom.retired_at) {
       return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
     }
-    return await buildResponse(byRandom)
+    return await buildResponse(byRandom, ownerToken)
   }
 
   // Custom-slug lookup. Tier-gated.
@@ -85,10 +87,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
   }
 
-  return await buildResponse(byCustom)
+  return await buildResponse(byCustom, ownerToken)
 }
 
-async function buildResponse(album: FullAlbum) {
+async function buildResponse(album: FullAlbum, ownerToken = '') {
   // Owner tier drives both the upload cap returned to the client AND the
   // password-enforcement decision. Compute it once.
   const ownerTier = await getUserTierById(album.user_id)
@@ -121,7 +123,19 @@ async function buildResponse(album: FullAlbum) {
     }
   }
 
-  const safe: PublicAlbum & { password_protected: boolean; upload_caps: typeof upload_caps } = {
+  // Reveal gate — guests see a countdown until reveal_at; owners bypass it.
+  if (album.reveal_at && !ownerToken && new Date(album.reveal_at) > new Date()) {
+    return NextResponse.json(
+      {
+        album: null,
+        reveal_at: album.reveal_at,
+        summary: { id: album.id, slug: album.slug, title: album.title },
+      },
+      { headers: NO_STORE },
+    )
+  }
+
+  const safe: PublicAlbum & { password_protected: boolean; upload_caps: typeof upload_caps; reveal_at: string | null } = {
     id: album.id,
     slug: album.slug,
     custom_slug: album.custom_slug,
@@ -136,6 +150,7 @@ async function buildResponse(album: FullAlbum) {
     slideshow_interval_ms: album.slideshow_interval_ms ?? 4200,
     slideshow_animation: album.slideshow_animation ?? 'fade',
     cover_photo_id: album.cover_photo_id ?? null,
+    reveal_at: album.reveal_at ?? null,
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,
@@ -170,7 +185,7 @@ async function lookupAlbum(
       console.error('[album/resolve] legacy album lookup failed:', legacyError.message)
       return null
     }
-    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade' } : null
+    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade', reveal_at: null } : null
   }
 
   console.error('[album/resolve] album lookup failed:', error.message)

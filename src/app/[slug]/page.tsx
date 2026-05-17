@@ -10,6 +10,7 @@ import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
 import PasswordGate from '@/components/PasswordGate'
+import RevealCountdown from '@/components/RevealCountdown'
 import GuestShareButton from '@/components/GuestShareButton'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 
@@ -55,9 +56,11 @@ export default function AlbumPage() {
   const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
   const [slideshowRequestId, setSlideshowRequestId] = useState(0)
   const [arrangeMode, setArrangeMode] = useState(false)
+  const [revealGate, setRevealGate] = useState<{ revealAt: string; summary: { id: string; slug: string; title: string } } | null>(null)
 
   const fetchAlbum = useCallback(async () => {
     setPasswordGate(null)
+    setRevealGate(null)
     setOwnerAccessDenied(false)
     const qs = new URLSearchParams({ slug })
     if (ownerToken) qs.set('owner_token', ownerToken)
@@ -67,17 +70,23 @@ export default function AlbumPage() {
     type ResolveResponse = {
       album: Album | null
       password_required?: boolean
+      reveal_at?: string
       summary?: { id: string; slug: string; title: string }
       password_protected?: boolean
     }
     const json = (await res.json().catch(() => ({}))) as ResolveResponse
-    if (!res.ok && !json.password_required) {
+    if (!res.ok && !json.password_required && !json.reveal_at) {
       setNotFound(true)
       setLoading(false)
       return
     }
     if (json.password_required && json.summary) {
       setPasswordGate(json.summary)
+      setLoading(false)
+      return
+    }
+    if (json.reveal_at && json.summary) {
+      setRevealGate({ revealAt: json.reveal_at, summary: json.summary })
       setLoading(false)
       return
     }
@@ -205,6 +214,20 @@ export default function AlbumPage() {
         title={passwordGate.title}
         onUnlocked={() => {
           setPasswordGate(null)
+          setLoading(true)
+          fetchAlbum()
+        }}
+      />
+    )
+  }
+
+  if (revealGate) {
+    return (
+      <RevealCountdown
+        revealAt={revealGate.revealAt}
+        title={revealGate.summary.title}
+        onUnlocked={() => {
+          setRevealGate(null)
           setLoading(true)
           fetchAlbum()
         }}
