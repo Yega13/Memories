@@ -126,6 +126,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false)
   const [lightboxFlipped, setLightboxFlipped] = useState(false)
   const [settingCover, setSettingCover] = useState(false)
 
@@ -204,6 +205,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function exitSelectMode() {
     setSelectMode(false)
     setSelectedIds(new Set())
+    setBulkDeleteConfirming(false)
   }
 
   function toggleSelection(photoId: string) {
@@ -240,6 +242,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       }
     }
     setBulkDeleting(false)
+    setBulkDeleteConfirming(false)
     exitSelectMode()
     if (failed > 0) showAppToast(`${deleted} deleted, ${failed} failed.`, 'error')
     else showAppToast(`${deleted} photo${deleted !== 1 ? 's' : ''} deleted.`)
