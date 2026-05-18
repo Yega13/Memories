@@ -203,8 +203,9 @@ export default async function AccountPage({ searchParams }: Props) {
 
   const albumsWithMedia = (accountAlbums ?? []).map((album) => {
     const albumMedia = (accountMedia ?? []).filter((row) => row.album_id === album.id)
+    // Same logic as /c/[slug] — null cover_photo_id means the owner cleared it; don't fall back.
     const pinned = album.cover_photo_id ? albumMedia.find((row) => row.id === album.cover_photo_id) : undefined
-    const cover = pinned ?? albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
+    const cover = pinned ?? (album.cover_photo_id === null ? undefined : (albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]))
     return {
       ...album,
       cover_url: cover ? (cover.media_type === 'video' ? cover.poster_url || cover.url : cover.url) : null,

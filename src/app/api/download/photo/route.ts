@@ -88,22 +88,28 @@ export async function GET(req: Request) {
   const contentLength = upstream.headers.get('content-length')
   const disposition = `attachment; filename="${encodeURIComponent(name)}"`
 
-  // Strip EXIF from JPEGs that are small enough to buffer safely in Workers memory.
-  // IMPORTANT: once we call arrayBuffer() the body is consumed — if stripping throws
-  // we still need to return the bytes (just without stripping).
+  // Strip EXIF from JPEGs. We always buffer if it looks like a JPEG, because Supabase doesn't
+  // always send Content-Length — relying on the header to gate buffering meant stripping was
+  // silently skipped in production and EXIF leaked through.
   const isJpeg = /jpe?g/i.test(contentType) || /\.jpe?g$/i.test(name)
-  const knownBytes = contentLength ? parseInt(contentLength, 10) : Infinity
-  if (isJpeg && knownBytes <= MAX_EXIF_STRIP_BYTES) {
-    const original = new Uint8Array(await upstream.arrayBuffer())
-    let stripped: Uint8Array = original
-    try {
-      stripped = stripExifFromJpeg(original)
-    } catch {
-      // Malformed JPEG — fall through with original bytes
+  if (isJpeg) {
+    const buf = await upstream.arrayBuffer()
+    const original = new Uint8Array(buf)
+    if (original.byteLength <= MAX_EXIF_STRIP_BYTES) {
+      let stripped: Uint8Array = original
+      try {
+        stripped = stripExifFromJpeg(original)
+      } catch {
+        // Malformed JPEG — fall through with original bytes
+      }
+      // Wrap in Blob — TypeScript's BodyInit union is finicky about Uint8Array variants across
+      // Next.js + Workers type defs, but Blob is always accepted.
+      return new NextResponse(new Blob([stripped as BlobPart], { type: 'image/jpeg' }), {
+        headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': disposition, ...NO_STORE },
+      })
     }
-    // Wrap in Blob — TypeScript's BodyInit union is finicky about Uint8Array variants across
-    // Next.js + Workers type defs, but Blob is always accepted.
-    return new NextResponse(new Blob([stripped as BlobPart], { type: 'image/jpeg' }), {
+    // Too big to safely strip in Workers memory — return original bytes without stripping.
+    return new NextResponse(new Blob([original as BlobPart], { type: 'image/jpeg' }), {
       headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': disposition, ...NO_STORE },
     })
   }

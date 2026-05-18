@@ -119,6 +119,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
     const file = e.target.files?.[0]
     if (!file) return
     setSelfieFile(file)
+    setErrorMsg('')
     setSelfiePreview((prev) => {
       if (prev) URL.revokeObjectURL(prev)
       return URL.createObjectURL(file)
@@ -146,6 +147,14 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
       }
 
       if (!res.ok) {
+        // 422 = client-facing, user-recoverable (no face / unindexed). Send them back to the
+        // selfie step with an inline message so they can retake — don't dump them into the
+        // generic error screen which has a "Try again" button that re-runs indexing pointlessly.
+        if (res.status === 422) {
+          setErrorMsg(json.error ?? 'Could not find a face in this photo.')
+          setStep('selfie')
+          return
+        }
         setStep('error')
         setErrorMsg(json.error ?? `Search failed (${res.status})`)
         return
@@ -240,6 +249,14 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
             {/* SELFIE */}
             {step === 'selfie' && (
               <div className="flex flex-col gap-5 py-4">
+                {errorMsg && (
+                  <div
+                    className="rounded-xl px-4 py-3 text-sm text-center"
+                    style={{ background: 'rgba(192,57,43,0.15)', color: '#F4A89B', border: '1px solid rgba(192,57,43,0.35)' }}
+                  >
+                    {errorMsg}
+                  </div>
+                )}
                 <p className="text-sm text-center" style={{ color: '#A8C9A3' }}>
                   Take or upload a photo of yourself — we&apos;ll find every photo you appear in.
                 </p>

@@ -58,10 +58,11 @@ async function uploadToR2(
   })
 }
 
-// Large video upload via R2 multipart — splits the file into ≤85 MB chunks,
-// each sent through the Worker (under the 100 MB body limit). No extra
-// credentials needed; uses the existing R2 bucket binding.
-const CHUNK_SIZE = 85 * 1024 * 1024
+// Large video upload via R2 multipart — splits the file into chunks each sent through the Worker
+// (under Cloudflare's 100 MB body limit and well below the 30 s Worker wall-clock). 50 MB feels
+// like the right tradeoff: fewer round-trips than 25 MB chunks, but slow uploads at 5 Mbps still
+// finish each chunk in <90 s and have plenty of room before TCP retransmits would time us out.
+const CHUNK_SIZE = 50 * 1024 * 1024
 
 async function uploadVideoMultipart(
   file: File,
@@ -202,9 +203,10 @@ type PhotoInsertRow = {
   duration_seconds: number | null
 }
 
-// Files above this threshold use multipart chunked upload (each chunk ≤85 MB).
-// Below it, the file is sent as a single Worker request.
-const MULTIPART_THRESHOLD = 85 * 1024 * 1024
+// Files above this threshold use multipart chunked upload. Below it, the file is sent as a
+// single Worker request. Match the threshold to the chunk size so a file just over the threshold
+// gets split into ~2 chunks, not 1.
+const MULTIPART_THRESHOLD = 50 * 1024 * 1024
 
 const HEIC_EXT_RE = /\.(heic|heif)$/i
 const HEIC_MIME_TYPES = new Set([
@@ -236,13 +238,19 @@ function jpegNameFor(file: File): string {
   return `${withoutExt || 'photo'}.jpg`
 }
 
+const HEIC_CONVERSION_TIMEOUT_MS = 45_000
+
 async function convertHeicToJpeg(file: File): Promise<File> {
   const { default: heic2any } = await import('heic2any')
-  const converted = await heic2any({
-    blob: file,
-    toType: 'image/jpeg',
-    quality: 0.9,
-  })
+  // heic2any is WASM that runs on the main thread. On some HEIC files it hangs indefinitely
+  // (broken metadata, unsupported codec, etc.). Race against a timeout so one bad file can't
+  // freeze the upload queue and force a page refresh.
+  const converted = await Promise.race([
+    heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 }),
+    new Promise<never>((_, reject) => window.setTimeout(
+      () => reject(new Error('HEIC conversion timed out')), HEIC_CONVERSION_TIMEOUT_MS,
+    )),
+  ])
   const blob = Array.isArray(converted) ? converted[0] : converted
   return new File([blob], jpegNameFor(file), {
     type: 'image/jpeg',
@@ -290,7 +298,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const next: PendingItem[] = []
     const rejected: string[] = []
 
-    for (const file of Array.from(files)) {
+    const filesArr = Array.from(files)
+    for (let idx = 0; idx < filesArr.length; idx++) {
+      const file = filesArr[idx]
       const kind = detectKind(file)
       if (!kind) {
         rejected.push(`${file.name}: unsupported file type`)
@@ -306,10 +316,17 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
       let uploadFile = file
       if (kind === 'image' && isHeicFile(file)) {
+        // Yield to the browser before each HEIC conversion so the "Preparing…" UI can repaint.
+        // heic2any blocks the main thread for a few seconds per file; without yielding the user
+        // sees a frozen page.
+        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)))
         try {
           uploadFile = await convertHeicToJpeg(file)
-        } catch {
-          rejected.push(`${file.name}: could not convert HEIC to JPG`)
+        } catch (err) {
+          const msg = err instanceof Error && err.message === 'HEIC conversion timed out'
+            ? `${file.name}: HEIC conversion took too long — file may be corrupted`
+            : `${file.name}: could not convert HEIC to JPG`
+          rejected.push(msg)
           continue
         }
         if (uploadFile.size > cap) {

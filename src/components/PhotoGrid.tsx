@@ -680,11 +680,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   // Mobile long-press → enter bulk-select. Uses native touch events because Android Chrome's
   // pointer events are flaky for hold detection. Skips arrange mode (pointer-event drag handles
   // that with setPointerCapture).
+  const longPressScrollYRef = useRef(0)
   function handleTilePointerTouchStart(photo: Photo, e: React.TouchEvent<HTMLDivElement>) {
     if (!isOwner || !ownerToken || reorderSaving || arrangeMode) return
     if (e.touches.length !== 1) return
     const t = e.touches[0]
     longPressOriginRef.current = { x: t.clientX, y: t.clientY }
+    longPressScrollYRef.current = window.scrollY
     clearReorderTimer()
     reorderTimerRef.current = window.setTimeout(() => {
       reorderTimerRef.current = null
@@ -695,16 +697,25 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 800)
       setSelectMode(true)
       setSelectedIds(new Set([photo.id]))
-    }, 500)
+    }, 550)
   }
 
   function handleTileTouchMove(e: React.TouchEvent<HTMLDivElement>) {
     if (!longPressOriginRef.current || reorderTimerRef.current == null) return
+    // Belt-and-suspenders cancel: if the page is scrolling, that's a definitive scroll gesture
+    // regardless of how small the finger delta on the element looks.
+    if (Math.abs(window.scrollY - longPressScrollYRef.current) > 3) {
+      clearReorderTimer()
+      longPressOriginRef.current = null
+      return
+    }
     const t = e.touches[0]
     if (!t) return
     const dx = Math.abs(t.clientX - longPressOriginRef.current.x)
     const dy = Math.abs(t.clientY - longPressOriginRef.current.y)
-    if (dx > 15 || dy > 15) {
+    // Tightened from 15 to 8 — 15 was forgiving enough that slow scrolls fell under the
+    // threshold for the full 500 ms and the timer fired mid-scroll.
+    if (dx > 8 || dy > 8) {
       clearReorderTimer()
       longPressOriginRef.current = null
     }
