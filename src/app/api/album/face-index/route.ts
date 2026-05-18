@@ -9,6 +9,16 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 const BATCH = 15
 
 export async function POST(req: Request) {
+  try {
+    return await handlePost(req)
+  } catch (err) {
+    const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+    console.error('[face-index] unhandled:', msg)
+    return NextResponse.json({ error: msg }, { status: 500, headers: NO_STORE })
+  }
+}
+
+async function handlePost(req: Request) {
   let body: { slug?: string }
   try {
     body = await req.json()
