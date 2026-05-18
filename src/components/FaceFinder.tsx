@@ -43,13 +43,13 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug: albumSlug }),
         })
+        const bodyText = await res.text()
         let json: { indexed: number; remaining: number; error?: string }
         try {
-          json = (await res.json()) as { indexed: number; remaining: number; error?: string }
+          json = JSON.parse(bodyText) as { indexed: number; remaining: number; error?: string }
         } catch {
-          const text = await res.text().catch(() => `HTTP ${res.status}`)
           setStep('error')
-          setErrorMsg(`Server error (${res.status}): ${text.slice(0, 200)}`)
+          setErrorMsg(`Server error (${res.status}): ${bodyText.slice(0, 200) || '(empty response)'}`)
           return
         }
         if (!res.ok) {

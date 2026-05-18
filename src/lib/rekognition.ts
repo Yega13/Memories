@@ -5,6 +5,7 @@ import {
   SearchFacesByImageCommand,
   DeleteFacesCommand,
 } from '@aws-sdk/client-rekognition'
+import { FetchHttpHandler } from '@smithy/fetch-http-handler'
 
 export function createRekognitionClient() {
   return new RekognitionClient({
@@ -13,6 +14,9 @@ export function createRekognitionClient() {
       accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
       secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
     },
+    // Cloudflare Workers doesn't support Node.js https module;
+    // force the fetch-based handler so the SDK works in Workers
+    requestHandler: new FetchHttpHandler(),
   })
 }
 
