@@ -6,7 +6,9 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-const BATCH = 15
+// Keep small — each photo is fetched, base64-encoded, and sent to Rekognition in memory.
+// 15 photos × ~4 MB = ~60 MB of base64 strings in parallel, which hits Workers' 128 MB limit.
+const BATCH = 5
 
 export async function POST(req: Request) {
   try {
@@ -67,25 +69,17 @@ async function handlePost(req: Request) {
   let indexed = 0
   const errors: string[] = []
 
-  await Promise.all(
-    toIndex.map(async (photo) => {
-      try {
-        const faceIds = await indexPhotoFaces(album.id, photo.id, photo.url)
-        await admin
-          .from('photos')
-          .update({ face_ids: faceIds })
-          .eq('id', photo.id)
-        indexed++
-      } catch {
-        errors.push(photo.id)
-        // Mark as processed with empty array so we don't retry endlessly on bad images
-        await admin
-          .from('photos')
-          .update({ face_ids: [] })
-          .eq('id', photo.id)
-      }
-    }),
-  )
+  // Sequential — avoids holding multiple large base64 images in memory simultaneously
+  for (const photo of toIndex) {
+    try {
+      const faceIds = await indexPhotoFaces(album.id, photo.id, photo.url)
+      await admin.from('photos').update({ face_ids: faceIds }).eq('id', photo.id)
+      indexed++
+    } catch {
+      errors.push(photo.id)
+      await admin.from('photos').update({ face_ids: [] }).eq('id', photo.id)
+    }
+  }
 
   const stillRemaining = Math.max(0, (remaining ?? 0) - toIndex.length)
 

@@ -1017,8 +1017,28 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => observer.observe(tile))
     window.addEventListener('resize', measureTiles)
 
+    // Start downloading images 1200px before they enter the viewport.
+    // Uses new Image() so the browser caches the file; when the lazy <img> finally
+    // activates it loads instantly from cache instead of showing white.
+    const preloadObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue
+          const imgEl = entry.target.querySelector<HTMLImageElement>('img')
+          if (imgEl?.src) {
+            const loader = new window.Image()
+            loader.src = imgEl.src
+          }
+          preloadObserver.unobserve(entry.target)
+        }
+      },
+      { rootMargin: '1200px' },
+    )
+    grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => preloadObserver.observe(tile))
+
     return () => {
       observer.disconnect()
+      preloadObserver.disconnect()
       window.removeEventListener('resize', measureTiles)
     }
   }, [photos, onRadiusMaxChange])
@@ -1100,6 +1120,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   borderRadius: mediaRadius,
                   opacity: isReorderDragging ? 0.58 : 1,
                   touchAction: (arrangeMode || !!reorderDraggingId) ? 'none' : 'manipulation',
+                  WebkitTouchCallout: 'none',
+                  userSelect: 'none',
                 }}
                 onClick={() => handleTileClick(index)}
                 onPointerDown={(e) => startReorderPress(photo, e)}
