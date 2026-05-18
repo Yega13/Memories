@@ -12,7 +12,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://hushare.space";
 
 const PAGE_TITLE = "Pricing";
 const PAGE_DESCRIPTION =
-  "Hushare pricing - a generous free tier, plus Pro and Studio plans for password-protected albums, custom URLs, HD video, and no inactivity expiry.";
+  "Hushare pricing - a generous free tier, plus Pro and Max plans for password-protected albums, custom URLs, HD video, and no inactivity expiry.";
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -109,19 +109,20 @@ const tiers: Tier[] = [
     ],
   },
   {
-    name: "Studio",
+    name: "Max",
     tagline: "For photographers & event planners",
     price: "$10",
     cadence: "per month",
     annual: "$100 / year - save 2 months",
     promo: "First month $6.99",
     renewText: "Intro offer: $6.99 first month, then $10/month. Auto-renews until cancelled.",
-    cta: "Get Studio",
+    cta: "Get Max",
     monthlyProductId: POLAR_STUDIO_MONTHLY,
     yearlyProductId: POLAR_STUDIO_YEARLY,
     highlight: false,
     features: [
       "Everything in Pro, plus -",
+      "Face finder — guests find their own photos by selfie",
       "Manage many albums from one dashboard",
       "Custom branding (logo, colours, cover image)",
       "Client-ready download links",
@@ -133,20 +134,20 @@ const tiers: Tier[] = [
 
 const billingFaq = [
   {
-    q: "Do I need a Hushare account for Pro or Studio?",
-    a: "Yes - paid plans need a free Hushare account so we can attach your subscription to a stable identity (and so you can manage or cancel it anytime). Sign in with your email at the top of any page; no password needed, just a magic link. Your account is free forever; only Pro and Studio cost money.",
+    q: "Do I need a Hushare account for Pro or Max?",
+    a: "Yes - paid plans need a free Hushare account so we can attach your subscription to a stable identity (and so you can manage or cancel it anytime). Sign in with your email at the top of any page; no password needed, just a magic link. Your account is free forever; only Pro and Max cost money.",
   },
   {
     q: "Why does Free not need an account?",
-    a: "Free albums are designed for the moment - share a link, everyone adds photos, done. We do not want sign-up to be a barrier for one-off events. Pro and Studio need an account because subscriptions need to belong to someone.",
+    a: "Free albums are designed for the moment - share a link, everyone adds photos, done. We do not want sign-up to be a barrier for one-off events. Pro and Max need an account because subscriptions need to belong to someone.",
   },
   {
-    q: "What happens to my free albums if I cancel Pro or Studio?",
+    q: "What happens to my free albums if I cancel Pro or Max?",
     a: "Nothing changes for guests. Your albums revert to Free behaviour - the password and custom URL are removed, the album becomes accessible by its original random link, and the 12-month inactivity rule applies again.",
   },
   {
-    q: "What do Studio Collections do?",
-    a: "Collections are Studio-only pages that group several albums under one public /c/... link. They are built for photographers, planners, and families who need to present or manage related albums together instead of sending many separate links.",
+    q: "What do Max Collections do?",
+    a: "Collections are Max-only pages that group several albums under one public /c/... link. They are built for photographers, planners, and families who need to present or manage related albums together instead of sending many separate links.",
   },
   {
     q: "Can I recover a lost owner link?",
@@ -162,11 +163,11 @@ const billingFaq = [
   },
   {
     q: "Do you offer annual pricing?",
-    a: "Yes - Pro is $40/year and Studio is $100/year, both with two months free compared to paying month-by-month. Choose annual at checkout. Want to lock it in before launch? Email us and we'll honour the annual price for your first year.",
+    a: "Yes - Pro is $40/year and Max is $100/year, both with two months free compared to paying month-by-month. Choose annual at checkout. Want to lock it in before launch? Email us and we'll honour the annual price for your first year.",
   },
   {
     q: "Is there a first-month discount?",
-    a: "Yes - Pro is $1.99 for the first month, then $4/month after. Studio is $6.99 for the first month, then $10/month. The discount applies once per account, on monthly plans, and renews at the standard rate from month two.",
+    a: "Yes - Pro is $1.99 for the first month, then $4/month after. Max is $6.99 for the first month, then $10/month. The discount applies once per account, on monthly plans, and renews at the standard rate from month two.",
   },
   {
     q: "Which currencies do you accept?",
@@ -174,7 +175,7 @@ const billingFaq = [
   },
   {
     q: "Is there a discount for non-profits or weddings?",
-    a: "Registered non-profits can contact support for a manual Studio discount. For one-off weddings, a single month of Pro usually covers it; we do not currently offer a wedding-specific discount.",
+    a: "Registered non-profits can contact support for a manual Max discount. For one-off weddings, a single month of Pro usually covers it; we do not currently offer a wedding-specific discount.",
   },
 ];
 
@@ -246,7 +247,7 @@ const jsonLd = {
         },
         {
           "@type": "Offer",
-          name: "Hushare Studio (monthly)",
+          name: "Hushare Max (monthly)",
           price: "10",
           priceCurrency: "USD",
           priceSpecification: {
@@ -260,7 +261,7 @@ const jsonLd = {
         },
         {
           "@type": "Offer",
-          name: "Hushare Studio (annual)",
+          name: "Hushare Max (annual)",
           price: "100",
           priceCurrency: "USD",
           priceSpecification: {

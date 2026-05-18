@@ -129,7 +129,7 @@ export default async function AccountPage({ searchParams }: Props) {
               No account dashboard yet
             </h1>
             <p className="text-sm leading-relaxed mb-5" style={{ color: '#5C4A3C' }}>
-              The account dashboard is reserved for Hushare Pro and Studio subscribers.
+              The account dashboard is reserved for Hushare Pro and Max subscribers.
               You&apos;re signed in as <strong className="break-all">{user.email}</strong>,
               but you don&apos;t have an active subscription.
             </p>
@@ -145,7 +145,7 @@ export default async function AccountPage({ searchParams }: Props) {
   const tierLabel = subscription
     ? subscription.tier === 'pro'
       ? 'Hushare Pro'
-      : 'Hushare Studio'
+      : 'Hushare Max'
     : null
   const periodEnd = subscription?.current_period_end
     ? new Date(subscription.current_period_end).toLocaleDateString(undefined, {
@@ -154,12 +154,12 @@ export default async function AccountPage({ searchParams }: Props) {
         day: 'numeric',
       })
     : null
-  const planName = isAdmin ? 'Hushare Admin' : tierLabel ?? 'Studio test access'
+  const planName = isAdmin ? 'Hushare Admin' : tierLabel ?? 'Max test access'
   const isStudio = isAdmin || subscription?.tier === 'studio' || !subscription
   const planFeatures = isAdmin
-    ? ['Everything enabled', 'Studio Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
+    ? ['Everything enabled', 'Max Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
     : isStudio
-    ? ['Studio Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
+    ? ['Max Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
     : ['Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
   const nextLabel = subscription?.cancel_at_period_end ? 'Access ends' : 'Next renewal'
   const admin = createAdminClient()
@@ -486,7 +486,7 @@ export default async function AccountPage({ searchParams }: Props) {
             {[
               ['Customize albums', 'Change album colors and stock backgrounds from each owner toolbar.'],
               ['Protect important links', 'Use passwords and custom URLs on Pro and Studio albums.'],
-              [isStudio ? 'Build Collections' : 'Upgrade for Collections', isStudio ? 'Create public /c/... pages that group related albums.' : 'Collections are available on Studio.'],
+              [isStudio ? 'Build Collections' : 'Upgrade for Collections', isStudio ? 'Create public /c/... pages that group related albums.' : 'Collections are available on Max.'],
             ].map(([title, copy]) => (
               <div key={title} className="hush-hover-lift rounded-2xl p-5" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
                 <h3 className="font-semibold mb-2" style={{ color: '#254F22' }}>{title}</h3>

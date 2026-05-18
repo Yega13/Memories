@@ -26,6 +26,7 @@ export type Album = {
   upload_caps?: { image: number; video: number }
   cover_photo_id?: string | null
   reveal_at?: string | null
+  face_finder_enabled?: boolean
   created_at: string
 }
 

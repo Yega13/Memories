@@ -288,7 +288,7 @@ export default function AlbumPage() {
 
         {!isOwner && (
           <div className="flex items-center justify-end gap-2 mb-4">
-            {photos.some((p) => p.media_type !== 'video') && (
+            {album.face_finder_enabled && photos.some((p) => p.media_type !== 'video') && (
               <button
                 onClick={() => setShowFaceFinder(true)}
                 className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition hover:opacity-80"

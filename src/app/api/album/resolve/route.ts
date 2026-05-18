@@ -135,7 +135,7 @@ async function buildResponse(album: FullAlbum, ownerToken = '') {
     )
   }
 
-  const safe: PublicAlbum & { password_protected: boolean; upload_caps: typeof upload_caps; reveal_at: string | null } = {
+  const safe: PublicAlbum & { password_protected: boolean; upload_caps: typeof upload_caps; reveal_at: string | null; face_finder_enabled: boolean } = {
     id: album.id,
     slug: album.slug,
     custom_slug: album.custom_slug,
@@ -151,6 +151,7 @@ async function buildResponse(album: FullAlbum, ownerToken = '') {
     slideshow_animation: album.slideshow_animation ?? 'fade',
     cover_photo_id: album.cover_photo_id ?? null,
     reveal_at: album.reveal_at ?? null,
+    face_finder_enabled: ownerTier === 'studio',
     created_at: album.created_at,
     password_protected: !!album.password_hash,
     upload_caps,
