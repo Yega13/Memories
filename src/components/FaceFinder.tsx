@@ -43,10 +43,18 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug: albumSlug }),
         })
-        const json = (await res.json()) as { indexed: number; remaining: number; error?: string }
+        let json: { indexed: number; remaining: number; error?: string }
+        try {
+          json = (await res.json()) as { indexed: number; remaining: number; error?: string }
+        } catch {
+          const text = await res.text().catch(() => `HTTP ${res.status}`)
+          setStep('error')
+          setErrorMsg(`Server error (${res.status}): ${text.slice(0, 200)}`)
+          return
+        }
         if (!res.ok) {
           setStep('error')
-          setErrorMsg(json.error ?? 'Indexing failed')
+          setErrorMsg(json.error ?? `Indexing failed (${res.status})`)
           return
         }
         done += json.indexed
