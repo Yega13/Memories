@@ -126,7 +126,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [selectMode, setSelectMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
-  const [bulkDeleteConfirming, setBulkDeleteConfirming] = useState(false)
+  const [, setBulkDeleteConfirming] = useState(false)
   const [lightboxFlipped, setLightboxFlipped] = useState(false)
   const [settingCover, setSettingCover] = useState(false)
 

@@ -68,7 +68,7 @@ export async function POST(req: Request) {
           .update({ face_ids: faceIds })
           .eq('id', photo.id)
         indexed++
-      } catch (err) {
+      } catch {
         errors.push(photo.id)
         // Mark as processed with empty array so we don't retry endlessly on bad images
         await admin

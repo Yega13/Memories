@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
-import { storagePathFromPublicPhotoUrl } from '@/lib/storage-path'
 
 export const runtime = 'nodejs'
 

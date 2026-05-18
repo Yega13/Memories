@@ -181,12 +181,13 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
             {step === 'selfie' && (
               <div className="flex flex-col gap-5 py-4">
                 <p className="text-sm text-center" style={{ color: '#A8C9A3' }}>
-                  Take or upload a photo of yourself — we'll find every photo you appear in.
+                  Take or upload a photo of yourself — we&apos;ll find every photo you appear in.
                 </p>
 
                 {selfiePreview ? (
                   <div className="flex flex-col items-center gap-4">
                     <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={selfiePreview}
                         alt="Your selfie"
@@ -287,6 +288,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
                           className="relative aspect-square rounded-xl overflow-hidden hover:opacity-90 transition"
                           style={{ border: '1px solid rgba(123,175,118,0.2)' }}
                         >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={photo.url}
                             alt={photo.caption ?? 'Photo'}
@@ -332,6 +334,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
           style={{ background: 'rgba(0,0,0,0.92)' }}
           onClick={() => setLightbox(null)}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={lightbox.url}
             alt={lightbox.caption ?? 'Photo'}

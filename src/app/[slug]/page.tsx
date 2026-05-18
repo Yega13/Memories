@@ -171,6 +171,8 @@ export default function AlbumPage() {
       .subscribe()
 
     return () => { void supabase.removeChannel(channel) }
+  // album?.id is intentional — reconnecting on every album field change would thrash the subscription
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [album?.id])
 
   const handlePhotoAdded = () => {
