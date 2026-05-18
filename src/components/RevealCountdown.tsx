@@ -49,78 +49,108 @@ export default function RevealCountdown({ revealAt, title, onUnlocked }: Props) 
     return () => clearInterval(id)
   }, [revealAt, onUnlocked, timeLeft.total])
 
+  const revealDate = new Date(revealAt)
+  const formattedDate = revealDate.toLocaleString([], {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center gap-8 px-6 text-center"
+      className="min-h-screen flex flex-col items-center justify-center px-6"
       style={{ background: '#1A2B1A' }}
     >
-      <Image
-        src="/logo/logo-dark-transparent.png"
-        alt="Hushare"
-        width={618}
-        height={146}
-        className="hush-logo opacity-80"
-        style={{ width: 'auto', filter: 'brightness(0) invert(1)' }}
-        draggable={false}
-      />
+      <div className="flex flex-col items-center gap-10 max-w-sm w-full text-center">
+        <Image
+          src="/logo/logo-dark-transparent.png"
+          alt="Hushare"
+          width={618}
+          height={146}
+          className="hush-logo"
+          style={{ width: 'auto', maxWidth: '140px', filter: 'brightness(0) invert(1)', opacity: 0.55 }}
+          draggable={false}
+        />
 
-      <div>
-        <p
-          className="text-sm font-semibold uppercase tracking-[0.18em] mb-3"
-          style={{ color: '#7BAF76', letterSpacing: '0.2em' }}
+        <div>
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.22em] mb-4"
+            style={{ color: '#5C7A59' }}
+          >
+            Photos coming soon
+          </p>
+          <h1
+            style={{
+              fontFamily: 'var(--font-serif)',
+              color: '#FDFAF5',
+              fontSize: 'clamp(1.6rem, 5vw, 2.6rem)',
+              lineHeight: 1.15,
+              fontWeight: 700,
+            }}
+          >
+            {title}
+          </h1>
+        </div>
+
+        <div className="w-full">
+          <div className="flex items-end justify-center gap-1">
+            {timeLeft.days > 0 && (
+              <>
+                <Unit value={timeLeft.days} label="days" />
+                <Sep />
+              </>
+            )}
+            <Unit value={timeLeft.hours} label="hrs" />
+            <Sep />
+            <Unit value={timeLeft.minutes} label="min" />
+            <Sep />
+            <Unit value={timeLeft.seconds} label="sec" />
+          </div>
+        </div>
+
+        <div
+          className="w-full rounded-2xl px-5 py-4 text-left"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
         >
-          Coming soon
-        </p>
-        <h1
-          className="text-3xl font-bold mb-2"
-          style={{ fontFamily: 'var(--font-serif)', color: '#FDFAF5', fontSize: 'clamp(1.8rem, 4vw, 3rem)' }}
-        >
-          {title}
-        </h1>
-        <p className="text-sm" style={{ color: '#A8C9A3' }}>
-          Photos will be revealed when the countdown ends.
+          <p className="text-[11px] uppercase tracking-widest mb-1" style={{ color: '#3D5C3A' }}>
+            Reveals on
+          </p>
+          <p className="text-sm font-medium" style={{ color: '#A8C9A3' }}>
+            {formattedDate}
+          </p>
+        </div>
+
+        <p className="text-[11px]" style={{ color: '#2E4A2C' }}>
+          This page will reload automatically when the time arrives.
         </p>
       </div>
-
-      <div className="flex items-end gap-4">
-        {timeLeft.days > 0 && (
-          <Unit value={timeLeft.days} label="days" />
-        )}
-        <Unit value={timeLeft.hours} label="hours" />
-        <Separator />
-        <Unit value={timeLeft.minutes} label="min" />
-        <Separator />
-        <Unit value={timeLeft.seconds} label="sec" />
-      </div>
-
-      <p className="text-xs max-w-xs" style={{ color: '#5C7A59' }}>
-        The page will automatically load once the time is up.
-      </p>
     </div>
   )
 }
 
 function Unit({ value, label }: { value: number; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center" style={{ minWidth: '4.5rem' }}>
       <span
         className="font-mono font-bold tabular-nums"
-        style={{ fontSize: 'clamp(2.4rem, 7vw, 4.5rem)', color: '#FDFAF5', lineHeight: 1 }}
+        style={{ fontSize: 'clamp(2.8rem, 10vw, 5rem)', color: '#FDFAF5', lineHeight: 1, letterSpacing: '-0.02em' }}
       >
         {pad(value)}
       </span>
-      <span className="text-[10px] uppercase tracking-widest" style={{ color: '#5C7A59' }}>
+      <span className="text-[10px] uppercase tracking-widest mt-1" style={{ color: '#3D5C3A' }}>
         {label}
       </span>
     </div>
   )
 }
 
-function Separator() {
+function Sep() {
   return (
     <span
-      className="font-mono font-bold pb-6"
-      style={{ fontSize: 'clamp(2rem, 6vw, 3.5rem)', color: '#3A5F38', lineHeight: 1 }}
+      className="font-mono font-bold"
+      style={{ fontSize: 'clamp(2rem, 8vw, 4rem)', color: 'rgba(61,92,58,0.5)', lineHeight: 1, paddingBottom: '1.6rem', margin: '0 2px' }}
     >
       :
     </span>

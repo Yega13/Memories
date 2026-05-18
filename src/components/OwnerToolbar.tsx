@@ -522,7 +522,17 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setRevealError('')
     setRevealSaved(false)
     try {
-      const reveal_at = action === 'clear' ? null : revealInput
+      // Convert the datetime-local string (local time) to a UTC ISO string before
+      // sending, otherwise the server (UTC) stores it as UTC directly.
+      let reveal_at: string | null = null
+      if (action === 'set' && revealInput) {
+        const parsed = new Date(revealInput)
+        if (isNaN(parsed.getTime())) {
+          setRevealError('Invalid date')
+          return
+        }
+        reveal_at = parsed.toISOString()
+      }
       const res = await fetch('/api/album/reveal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1244,53 +1254,94 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
 
               <section style={settingsSectionStyle}>
                 <button type="button" className="hush-motion" style={accordionButton} onClick={() => toggleSection('reveal')}>
-                  <Clock className="w-4 h-4" style={{ color: '#7C5C3E' }} />
+                  <Clock className="w-4 h-4" style={{ color: album.reveal_at && new Date(album.reveal_at) > new Date() ? '#254F22' : '#7C5C3E' }} />
                   <span style={sectionTitle}>Delayed reveal</span>
                   {album.reveal_at && new Date(album.reveal_at) > new Date() && (
-                    <span className="ml-auto text-[10px] font-semibold uppercase" style={{ color: '#254F22', letterSpacing: '0.06em' }}>Active</span>
+                    <span
+                      className="ml-auto text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full"
+                      style={{ background: 'rgba(37,79,34,0.10)', color: '#254F22' }}
+                    >
+                      Active
+                    </span>
                   )}
                   <ChevronDown
-                    className="ml-auto w-4 h-4 transition-transform"
+                    className={`${album.reveal_at && new Date(album.reveal_at) > new Date() ? '' : 'ml-auto'} w-4 h-4 transition-transform`}
                     style={{ color: '#A89880', transform: openSection === 'reveal' ? 'rotate(180deg)' : 'rotate(0deg)' }}
                   />
                 </button>
                 {openSection === 'reveal' && (
-                  <div className="px-4 pb-4">
-                    <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
-                      Guests see a countdown until this time. You can always view the album with your owner link.
-                    </p>
-                    <input
-                      type="datetime-local"
-                      value={revealInput}
-                      onChange={(e) => {
-                        setRevealInput(e.target.value)
-                        setRevealSaved(false)
-                      }}
-                      className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                      style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
-                    />
-                    {revealError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{revealError}</p>}
-                    {revealSaved && !revealError && <p className="text-xs mt-2" style={{ color: '#254F22' }}>Saved.</p>}
-                    <div className="flex items-center gap-2 mt-3">
+                  <div className="px-4 pb-4 space-y-3">
+                    {album.reveal_at && (() => {
+                      const revealDate = new Date(album.reveal_at)
+                      const isFuture = revealDate > new Date()
+                      return (
+                        <div
+                          className="flex items-start gap-2.5 rounded-xl px-3 py-2.5"
+                          style={{
+                            background: isFuture ? 'rgba(37,79,34,0.07)' : 'rgba(139,111,78,0.09)',
+                            border: `1px solid ${isFuture ? 'rgba(37,79,34,0.18)' : 'rgba(139,111,78,0.22)'}`,
+                          }}
+                        >
+                          <Clock className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: isFuture ? '#254F22' : '#8B6F4E' }} />
+                          <div>
+                            <p className="text-[11px] font-semibold leading-none mb-1" style={{ color: isFuture ? '#254F22' : '#8B6F4E' }}>
+                              {isFuture ? 'Unlocks on' : 'Already revealed'}
+                            </p>
+                            <p className="text-xs" style={{ color: '#5C4A3C' }}>
+                              {revealDate.toLocaleString([], {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    <div>
+                      <p className="text-[11px] font-medium mb-1.5" style={{ color: '#8B6F4E' }}>
+                        {album.reveal_at ? 'Change time' : 'Photos unlock for guests at'}
+                      </p>
+                      <input
+                        type="datetime-local"
+                        value={revealInput}
+                        onChange={(e) => { setRevealInput(e.target.value); setRevealSaved(false) }}
+                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
+                        style={inputStyle}
+                      />
+                    </div>
+
+                    {revealError && <p className="text-xs" style={{ color: '#C0392B' }}>{revealError}</p>}
+
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => saveReveal('set')}
                         disabled={revealSaving || !revealInput}
                         className="hush-press flex-1 text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                         style={{ background: '#254F22', color: '#FDFAF5' }}
                       >
-                        {revealSaving ? 'Saving...' : 'Set reveal time'}
+                        {revealSaving ? 'Saving…' : revealSaved ? '✓ Saved' : 'Save'}
                       </button>
                       {album.reveal_at && (
                         <button
                           onClick={() => saveReveal('clear')}
                           disabled={revealSaving}
-                          className="hush-press text-sm rounded-lg py-2 px-3 transition hover:opacity-90 disabled:opacity-50"
-                          style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #DDD5C5' }}
+                          className="hush-press text-sm rounded-lg py-2 px-3 transition hover:opacity-80 disabled:opacity-50"
+                          style={{ background: 'transparent', color: '#8B6F4E', border: '1px solid #DDD5C5' }}
                         >
-                          Clear
+                          Remove
                         </button>
                       )}
                     </div>
+
+                    {!album.reveal_at && (
+                      <p className="text-[11px] leading-relaxed" style={{ color: '#A89880' }}>
+                        You can always view the album with your owner link.
+                      </p>
+                    )}
                   </div>
                 )}
               </section>
