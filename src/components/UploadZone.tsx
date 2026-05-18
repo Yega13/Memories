@@ -135,6 +135,10 @@ type PhotoInsertRow = {
   duration_seconds: number | null
 }
 
+// Files above this threshold bypass the Cloudflare Worker 100 MB body limit via presigned R2 PUT.
+// Below it, the Worker path is used (simpler, works without R2 credentials configured).
+const PRESIGN_THRESHOLD = 90 * 1024 * 1024
+
 const HEIC_EXT_RE = /\.(heic|heif)$/i
 const HEIC_MIME_TYPES = new Set([
   'image/heic',
@@ -307,8 +311,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       throw new Error('Upload failed')
     }
 
-    // Video: upload directly to R2 via presigned URL (bypasses Workers 100 MB limit)
-    const res = await uploadVideoPresigned(item.file, album.id, filename)
+    // Large videos use presigned PUT directly to R2 (bypasses Workers 100 MB body limit).
+    // Small videos go through the Worker path — simpler and works without R2 credentials.
+    const res = item.file.size > PRESIGN_THRESHOLD
+      ? await uploadVideoPresigned(item.file, album.id, filename)
+      : await uploadToR2(item.file, album.id, filename, 'video')
     let posterPath: string | null = null
     let posterUrl: string | null = null
     let durationSeconds: number | null = null
@@ -352,7 +359,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     let completed = 0
     let cursor = 0
     let failed = false
-    const concurrency = Math.min(6, queue.length)
+    const concurrency = Math.min(3, queue.length)
 
     setUploadStatus({
       fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`,
