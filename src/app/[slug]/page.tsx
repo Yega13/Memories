@@ -12,6 +12,7 @@ import OwnerToolbar from '@/components/OwnerToolbar'
 import PasswordGate from '@/components/PasswordGate'
 import RevealCountdown from '@/components/RevealCountdown'
 import GuestShareButton from '@/components/GuestShareButton'
+import FaceFinder from '@/components/FaceFinder'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 
 const DEFAULT_BG = '#FDFAF5'
@@ -56,6 +57,7 @@ export default function AlbumPage() {
   const [passwordGate, setPasswordGate] = useState<{ id: string; slug: string; title: string } | null>(null)
   const [slideshowRequestId, setSlideshowRequestId] = useState(0)
   const [arrangeMode, setArrangeMode] = useState(false)
+  const [showFaceFinder, setShowFaceFinder] = useState(false)
   const [revealGate, setRevealGate] = useState<{ revealAt: string; summary: { id: string; slug: string; title: string } } | null>(null)
 
   const fetchAlbum = useCallback(async () => {
@@ -285,13 +287,34 @@ export default function AlbumPage() {
       <div className="hush-container pb-12">
 
         {!isOwner && (
-          <div className="flex justify-end mb-4">
+          <div className="flex items-center justify-end gap-2 mb-4">
+            {photos.some((p) => p.media_type !== 'video') && (
+              <button
+                onClick={() => setShowFaceFinder(true)}
+                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition hover:opacity-80"
+                style={{ color: '#254F22', background: 'rgba(253,250,245,0.84)', border: '1px solid #DDD5C5' }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                  <path d="M11 8a3 3 0 1 0 0 6"/>
+                </svg>
+                Find my photos
+              </button>
+            )}
             <GuestShareButton
               shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/${album.custom_slug ?? album.slug}`}
               qrUrl={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`${typeof window !== 'undefined' ? window.location.origin : 'https://hushare.space'}/${album.custom_slug ?? album.slug}`)}`}
               albumTitle={album.title}
             />
           </div>
+        )}
+
+        {showFaceFinder && (
+          <FaceFinder
+            albumSlug={album.custom_slug ?? album.slug}
+            photos={photos}
+            onClose={() => setShowFaceFinder(false)}
+          />
         )}
         <UploadZone album={album} onPhotoAdded={handlePhotoAdded} />
         <PhotoGrid
