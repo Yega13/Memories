@@ -90,6 +90,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const reorderSuppressedClickRef = useRef(false)
   const reorderDragPointerRef = useRef<Point | null>(null)
   const reorderDragTileSizeRef = useRef<number>(90)
+  // Origin of a mobile long-press in progress. Used to distinguish a still hold (-> enter select
+  // mode) from a scroll gesture. iOS fires pointercancel/pointerleave during gesture detection
+  // without real movement, so we cannot rely on those to cancel; we cancel on real pointermove
+  // distance instead.
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null)
   const lastTapRef = useRef(0)
   const rotateTimerRef = useRef<number | null>(null)
   const rotateTouchStartRef = useRef<Point | null>(null)
@@ -631,10 +636,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (e.button !== 0 || !isOwner || !ownerToken || reorderSaving) return
     const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
     if (coarsePointer && !arrangeMode) {
-      // Mobile long-press (600ms) enters bulk-select. Cancelled automatically by
-      // finishReorder (pointerup/pointercancel) so short taps and scroll don't trigger.
+      // Mobile long-press (600 ms) enters bulk-select. Cancelled only on pointerup (finger lifted)
+      // or significant pointermove distance (scroll). pointercancel/pointerleave are ignored —
+      // iOS fires them spuriously during gesture detection even when the user is holding still.
+      longPressOriginRef.current = { x: e.clientX, y: e.clientY }
       reorderTimerRef.current = window.setTimeout(() => {
         reorderTimerRef.current = null
+        longPressOriginRef.current = null
         reorderSuppressedClickRef.current = true
         window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
         setSelectMode(true)
@@ -677,6 +685,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
+    // Mobile long-press wait phase: cancel the timer if the user moves enough to look like a scroll.
+    if (longPressOriginRef.current && reorderTimerRef.current != null) {
+      const dx = Math.abs(e.clientX - longPressOriginRef.current.x)
+      const dy = Math.abs(e.clientY - longPressOriginRef.current.y)
+      if (dx > 10 || dy > 10) {
+        clearReorderTimer()
+        longPressOriginRef.current = null
+      }
+      return
+    }
     if (!reorderDragIdRef.current || !reorderDraggingId) return
     e.preventDefault()
     reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
@@ -687,7 +705,16 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function finishReorder(e: React.PointerEvent<HTMLDivElement>) {
+    // Mobile long-press wait phase: only pointerup (finger actually lifted) should cancel the timer.
+    // pointercancel fires aggressively on iOS during gesture detection without real intent to abort.
+    if (longPressOriginRef.current && reorderTimerRef.current != null) {
+      if (e.type !== 'pointerup') return
+      clearReorderTimer()
+      longPressOriginRef.current = null
+      return
+    }
     clearReorderTimer()
+    longPressOriginRef.current = null
     const dragId = reorderDraggingId
     const targetId = reorderTargetId
     reorderDragIdRef.current = null
@@ -1129,8 +1156,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 onPointerUp={finishReorder}
                 onPointerCancel={finishReorder}
                 onPointerLeave={(e) => {
-                  if (!reorderDraggingId) clearReorderTimer()
-                  else handleReorderMove(e)
+                  if (reorderDraggingId) {
+                    handleReorderMove(e)
+                    return
+                  }
+                  // Same reasoning as finishReorder: don't auto-cancel a mobile long-press
+                  // wait on pointerleave; iOS fires it during gesture detection.
+                  if (longPressOriginRef.current && reorderTimerRef.current != null) return
+                  clearReorderTimer()
                 }}
                 onContextMenu={(e) => toggleGridCardBack(photo, e)}
                 onDragStart={(e) => e.preventDefault()}
