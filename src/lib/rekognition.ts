@@ -163,8 +163,23 @@ export async function searchFacesByImage(
 
 export async function deleteFaces(albumId: string, faceIds: string[]) {
   if (!faceIds.length) return
-  await rekognitionPost('DeleteFaces', {
-    CollectionId: collectionId(albumId),
-    FaceIds: faceIds,
-  })
+  // Rekognition caps DeleteFaces at 4096 IDs per call — chunk just in case (paranoid but cheap).
+  const CHUNK = 4000
+  for (let i = 0; i < faceIds.length; i += CHUNK) {
+    await rekognitionPost('DeleteFaces', {
+      CollectionId: collectionId(albumId),
+      FaceIds: faceIds.slice(i, i + CHUNK),
+    })
+  }
+}
+
+// Removes the entire Rekognition collection for an album. Called on album delete to clean up
+// all indexed faces in one shot (avoids paginating through DeleteFaces).
+export async function deleteCollection(albumId: string) {
+  try {
+    await rekognitionPost('DeleteCollection', { CollectionId: collectionId(albumId) })
+  } catch (err: unknown) {
+    // ResourceNotFoundException means it never existed (no faces were ever indexed). Ignore.
+    if ((err as { name?: string }).name !== 'ResourceNotFoundException') throw err
+  }
 }

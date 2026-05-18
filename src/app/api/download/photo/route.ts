@@ -13,6 +13,46 @@ const NO_STORE = { 'Cache-Control': 'private, no-store' }
 // Max image size to buffer for EXIF stripping. Larger files stream through.
 const MAX_EXIF_STRIP_BYTES = 25 * 1024 * 1024
 
+// Pure-JS EXIF/APP1 strip for JPEG. Works in Cloudflare Workers (sharp does not).
+// Walks the segment list and drops APP1 (where EXIF lives); copies everything else verbatim.
+function stripExifFromJpeg(bytes: Uint8Array): Uint8Array {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return bytes
+  const keep: Uint8Array[] = [bytes.subarray(0, 2)]
+  let i = 2
+  while (i < bytes.length - 1) {
+    if (bytes[i] !== 0xff) break
+    const marker = bytes[i + 1]
+    // SOS (start of scan) — image data follows; copy the remainder verbatim
+    if (marker === 0xda) {
+      keep.push(bytes.subarray(i))
+      break
+    }
+    // Standalone markers without a length field (RSTn / SOI / EOI / TEM)
+    if ((marker >= 0xd0 && marker <= 0xd9) || marker === 0x01) {
+      keep.push(bytes.subarray(i, i + 2))
+      i += 2
+      continue
+    }
+    if (i + 4 > bytes.length) break
+    const segLen = (bytes[i + 2] << 8) | bytes[i + 3]
+    const segEnd = i + 2 + segLen
+    if (segEnd > bytes.length) break
+    // Drop APP1 (EXIF). Keep everything else, including APP0 (JFIF) for compatibility.
+    if (marker !== 0xe1) {
+      keep.push(bytes.subarray(i, segEnd))
+    }
+    i = segEnd
+  }
+  const total = keep.reduce((sum, c) => sum + c.length, 0)
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const c of keep) {
+    out.set(c, offset)
+    offset += c.length
+  }
+  return out
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const rawUrl = searchParams.get('url') ?? ''
@@ -49,24 +89,21 @@ export async function GET(req: Request) {
   const disposition = `attachment; filename="${encodeURIComponent(name)}"`
 
   // Strip EXIF from JPEGs that are small enough to buffer safely in Workers memory.
-  // IMPORTANT: once we call arrayBuffer() the body is consumed — if sharp fails we
-  // must return the buffered data directly, not attempt to stream upstream.body.
+  // IMPORTANT: once we call arrayBuffer() the body is consumed — if stripping throws
+  // we still need to return the bytes (just without stripping).
   const isJpeg = /jpe?g/i.test(contentType) || /\.jpe?g$/i.test(name)
   const knownBytes = contentLength ? parseInt(contentLength, 10) : Infinity
   if (isJpeg && knownBytes <= MAX_EXIF_STRIP_BYTES) {
-    const buffer = Buffer.from(await upstream.arrayBuffer())
+    const original = new Uint8Array(await upstream.arrayBuffer())
+    let stripped: Uint8Array = original
     try {
-      const { default: sharp } = await import('sharp')
-      const stripped = await sharp(buffer).jpeg({ quality: 100 }).toBuffer()
-      return new NextResponse(new Uint8Array(stripped), {
-        headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': disposition, ...NO_STORE },
-      })
+      stripped = stripExifFromJpeg(original)
     } catch {
-      // sharp not available (e.g. Workers) — return original buffer without EXIF stripping
-      return new NextResponse(buffer, {
-        headers: { 'Content-Type': contentType, 'Content-Disposition': disposition, ...NO_STORE },
-      })
+      // Malformed JPEG — fall through with original bytes
     }
+    return new NextResponse(stripped, {
+      headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': disposition, ...NO_STORE },
+    })
   }
 
   // Stream videos and large/non-JPEG images directly — buffering a large video

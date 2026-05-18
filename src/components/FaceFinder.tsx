@@ -32,6 +32,16 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
   const runIndexing = useCallback(async () => {
     if (indexingDone.current) return
 
+    // Fast path: if every image we already know about has face_ids set, skip the network
+    // round-trip entirely and jump straight to the selfie step.
+    if (imagePhotos.length > 0 && imagePhotos.every((p) => p.face_ids != null)) {
+      setTotal(imagePhotos.length)
+      setIndexed(imagePhotos.length)
+      indexingDone.current = true
+      setStep('selfie')
+      return
+    }
+
     // Step 1: fetch all unindexed photo IDs so workers can be assigned non-overlapping subsets
     let ids: string[] = []
     let dbTotal = imagePhotos.length
@@ -92,11 +102,24 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
     runIndexing()
   }, [runIndexing])
 
+  // Revoke whatever object URL is currently set when the modal unmounts. Tracking via ref so
+  // the cleanup function sees the latest value at unmount time, not the value at mount.
+  const selfiePreviewRef = useRef<string | null>(null)
+  useEffect(() => { selfiePreviewRef.current = selfiePreview }, [selfiePreview])
+  useEffect(() => {
+    return () => {
+      if (selfiePreviewRef.current) URL.revokeObjectURL(selfiePreviewRef.current)
+    }
+  }, [])
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setSelfieFile(file)
-    setSelfiePreview(URL.createObjectURL(file))
+    setSelfiePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
   }
 
   async function handleSearch() {
@@ -134,6 +157,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
   }
 
   function reset() {
+    if (selfiePreview) URL.revokeObjectURL(selfiePreview)
     setSelfieFile(null)
     setSelfiePreview(null)
     setMatches([])

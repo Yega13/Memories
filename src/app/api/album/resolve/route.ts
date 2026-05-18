@@ -156,7 +156,8 @@ async function buildResponse(album: FullAlbum, ownerToken = '') {
     password_protected: !!album.password_hash,
     upload_caps,
   }
-  await touchAlbumActivity(album.id)
+  // Fire-and-forget — the response shouldn't wait on this best-effort DB write.
+  void touchAlbumActivity(album.id)
   return NextResponse.json({ album: safe }, { headers: NO_STORE })
 }
 
@@ -194,10 +195,15 @@ async function lookupAlbum(
 }
 
 async function touchAlbumActivity(albumId: string) {
-  const admin = createAdminClient()
-  const { error } = await admin
-    .from('albums')
-    .update({ last_activity_at: new Date().toISOString() })
-    .eq('id', albumId)
-  if (error) console.error('[album/resolve] activity touch failed:', error.message)
+  try {
+    const admin = createAdminClient()
+    const { error } = await admin
+      .from('albums')
+      .update({ last_activity_at: new Date().toISOString() })
+      .eq('id', albumId)
+    if (error) console.error('[album/resolve] activity touch failed:', error.message)
+  } catch (err) {
+    // Swallow — this runs detached from the response so an unhandled rejection would just log.
+    console.error('[album/resolve] activity touch threw:', err instanceof Error ? err.message : String(err))
+  }
 }

@@ -50,16 +50,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Order must include every media item in this album' }, { status: 400, headers: NO_STORE })
   }
 
-  for (let index = 0; index < photoIds.length; index++) {
-    const { error } = await admin
-      .from('photos')
-      .update({ sort_order: index })
-      .eq('id', photoIds[index])
-      .eq('album_id', access.album.id)
-    if (error) {
-      console.error('[photos/reorder] update failed:', error.message)
-      return NextResponse.json({ error: 'Could not save media order' }, { status: 500, headers: NO_STORE })
-    }
+  // Parallelize the per-row updates — sequentially this was ~50 ms × N round-trips, which made
+  // reordering large albums feel laggy. Supabase handles a couple dozen concurrent updates fine.
+  const results = await Promise.all(
+    photoIds.map((id, index) =>
+      admin
+        .from('photos')
+        .update({ sort_order: index })
+        .eq('id', id)
+        .eq('album_id', access.album.id),
+    ),
+  )
+  const failure = results.find((r) => r.error)
+  if (failure?.error) {
+    console.error('[photos/reorder] update failed:', failure.error.message)
+    return NextResponse.json({ error: 'Could not save media order' }, { status: 500, headers: NO_STORE })
   }
 
   return NextResponse.json({ ok: true }, { headers: NO_STORE })

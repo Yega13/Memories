@@ -172,6 +172,16 @@ export default function AlbumPage() {
           setPhotos((prev) => prev.filter((p) => p.id !== deletedId))
         },
       )
+      .on(
+        'postgres_changes',
+        // UPDATE: keeps guests in sync when the owner changes a photo's caption, filter, radius,
+        // sort_order, etc. Without this they'd see stale data until refresh.
+        { event: 'UPDATE', schema: 'public', table: 'photos', filter: `album_id=eq.${album.id}` },
+        (payload) => {
+          const updated = payload.new as Photo
+          setPhotos((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
+        },
+      )
       .subscribe()
 
     return () => { void supabase.removeChannel(channel) }

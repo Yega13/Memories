@@ -225,24 +225,27 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (!ownerToken || selectedIds.size === 0) return
     setBulkDeleting(true)
     const ids = [...selectedIds]
-    const results = await Promise.allSettled(
-      ids.map((id) =>
-        fetch('/api/album/photo/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug, owner_token: ownerToken, photo_id: id }),
-        }),
-      ),
-    )
+    // Server max is 200 per request — chunk just in case.
+    const CHUNK = 200
     let deleted = 0
     let failed = 0
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i]
-      if (result.status === 'fulfilled' && result.value.ok) {
-        onPhotoDeleted(ids[i])
-        deleted++
-      } else {
-        failed++
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const batch = ids.slice(i, i + CHUNK)
+      try {
+        const res = await fetch('/api/album/photo/bulk-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, owner_token: ownerToken, photo_ids: batch }),
+        })
+        const body = (await res.json().catch(() => ({}))) as { deleted?: number; error?: string }
+        if (res.ok && typeof body.deleted === 'number') {
+          deleted += body.deleted
+          for (const id of batch) onPhotoDeleted(id)
+        } else {
+          failed += batch.length
+        }
+      } catch {
+        failed += batch.length
       }
     }
     setBulkDeleting(false)
@@ -380,7 +383,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (pinchRef.current && e.touches.length === 2) {
       e.stopPropagation()
       if (e.cancelable) e.preventDefault()
-      const nextScale = Math.max(1, Math.min(4, pinchRef.current.scale * (touchDistance(e.touches) / pinchRef.current.distance)))
+      // Cap at 10x to prevent crazy memory blowups while still letting users zoom past the image's natural size
+      const nextScale = Math.max(1, Math.min(10, pinchRef.current.scale * (touchDistance(e.touches) / pinchRef.current.distance)))
       const ratio = nextScale / Math.max(1, pinchRef.current.scale)
       const startPan = pinchRef.current.pan
       const center = pinchRef.current.center
@@ -634,22 +638,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || !isOwner || !ownerToken || reorderSaving) return
+    // Mobile long-press (touch) is handled by the native touch handlers below — Android Chrome's
+    // pointer events are unreliable for hold detection (pointercancel fires aggressively, the
+    // browser's own context-menu gesture eats the timer). Only proceed here for mouse/pen and
+    // for touch when we're actually in arrange mode (which needs setPointerCapture for drag).
+    if (e.pointerType === 'touch' && !arrangeMode) return
     const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    if (coarsePointer && !arrangeMode) {
-      // Mobile long-press (600 ms) enters bulk-select. Cancelled only on pointerup (finger lifted)
-      // or significant pointermove distance (scroll). pointercancel/pointerleave are ignored —
-      // iOS fires them spuriously during gesture detection even when the user is holding still.
-      longPressOriginRef.current = { x: e.clientX, y: e.clientY }
-      reorderTimerRef.current = window.setTimeout(() => {
-        reorderTimerRef.current = null
-        longPressOriginRef.current = null
-        reorderSuppressedClickRef.current = true
-        window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
-        setSelectMode(true)
-        setSelectedIds(new Set([photo.id]))
-      }, 600)
-      return
-    }
     clearReorderTimer()
     const tile = e.currentTarget
     const pointerId = e.pointerId
@@ -684,17 +678,49 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }, holdDelay)
   }
 
-  function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
-    // Mobile long-press wait phase: cancel the timer if the user moves enough to look like a scroll.
-    if (longPressOriginRef.current && reorderTimerRef.current != null) {
-      const dx = Math.abs(e.clientX - longPressOriginRef.current.x)
-      const dy = Math.abs(e.clientY - longPressOriginRef.current.y)
-      if (dx > 10 || dy > 10) {
-        clearReorderTimer()
-        longPressOriginRef.current = null
-      }
-      return
+  // Mobile long-press → enter bulk-select. Uses native touch events because Android Chrome's
+  // pointer events are flaky for hold detection. Skips arrange mode (pointer-event drag handles
+  // that with setPointerCapture).
+  function handleTilePointerTouchStart(photo: Photo, e: React.TouchEvent<HTMLDivElement>) {
+    if (!isOwner || !ownerToken || reorderSaving || arrangeMode) return
+    if (e.touches.length !== 1) return
+    const t = e.touches[0]
+    longPressOriginRef.current = { x: t.clientX, y: t.clientY }
+    clearReorderTimer()
+    reorderTimerRef.current = window.setTimeout(() => {
+      reorderTimerRef.current = null
+      longPressOriginRef.current = null
+      // Suppress the click and any subsequent contextmenu (Android Chrome fires it ~600 ms in)
+      // for a window long enough to outlast the gesture.
+      reorderSuppressedClickRef.current = true
+      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 800)
+      setSelectMode(true)
+      setSelectedIds(new Set([photo.id]))
+    }, 500)
+  }
+
+  function handleTileTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (!longPressOriginRef.current || reorderTimerRef.current == null) return
+    const t = e.touches[0]
+    if (!t) return
+    const dx = Math.abs(t.clientX - longPressOriginRef.current.x)
+    const dy = Math.abs(t.clientY - longPressOriginRef.current.y)
+    if (dx > 15 || dy > 15) {
+      clearReorderTimer()
+      longPressOriginRef.current = null
     }
+  }
+
+  function handleTileTouchEnd() {
+    // Short tap — cancel the pending long-press timer. If the timer already fired, this is a
+    // no-op (reorderTimerRef.current is null) and select mode stays.
+    if (reorderTimerRef.current != null) {
+      clearReorderTimer()
+      longPressOriginRef.current = null
+    }
+  }
+
+  function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!reorderDragIdRef.current || !reorderDraggingId) return
     e.preventDefault()
     reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
@@ -705,16 +731,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function finishReorder(e: React.PointerEvent<HTMLDivElement>) {
-    // Mobile long-press wait phase: only pointerup (finger actually lifted) should cancel the timer.
-    // pointercancel fires aggressively on iOS during gesture detection without real intent to abort.
-    if (longPressOriginRef.current && reorderTimerRef.current != null) {
-      if (e.type !== 'pointerup') return
-      clearReorderTimer()
-      longPressOriginRef.current = null
-      return
-    }
     clearReorderTimer()
-    longPressOriginRef.current = null
     const dragId = reorderDraggingId
     const targetId = reorderTargetId
     reorderDragIdRef.current = null
@@ -762,6 +779,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     e.preventDefault()
     e.stopPropagation()
     if (arrangeMode) return
+    // If our touch long-press timer just fired (Android Chrome's native contextmenu fires
+    // ~600 ms in on long-press), suppress this — otherwise the contextmenu handler would
+    // toggle the photo we just selected back off.
+    if (reorderSuppressedClickRef.current) return
     clearReorderTimer()
     reorderDragIdRef.current = null
     setReorderDraggingId(null)
@@ -1160,11 +1181,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                     handleReorderMove(e)
                     return
                   }
-                  // Same reasoning as finishReorder: don't auto-cancel a mobile long-press
-                  // wait on pointerleave; iOS fires it during gesture detection.
-                  if (longPressOriginRef.current && reorderTimerRef.current != null) return
                   clearReorderTimer()
                 }}
+                onTouchStart={(e) => handleTilePointerTouchStart(photo, e)}
+                onTouchMove={handleTileTouchMove}
+                onTouchEnd={handleTileTouchEnd}
                 onContextMenu={(e) => toggleGridCardBack(photo, e)}
                 onDragStart={(e) => e.preventDefault()}
               >

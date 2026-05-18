@@ -2,6 +2,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { createAdminClient } from '@/lib/supabase/admin'
 import type { R2Env } from '@/lib/r2'
 import { storagePathFromPublicPhotoUrl } from '@/lib/storage-path'
+import { deleteCollection } from '@/lib/rekognition'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -63,6 +64,14 @@ export async function deleteAlbumAssetsAndRows(
 
   await admin.from('collection_albums').delete().eq('album_id', album.id)
   await admin.from('photos').delete().eq('album_id', album.id)
+
+  // Drop the Rekognition collection (and all its faces) for this album. Best-effort — never
+  // block the album delete on AWS being reachable.
+  try {
+    await deleteCollection(album.id)
+  } catch (e) {
+    console.error('[album/delete] Rekognition deleteCollection failed:', e instanceof Error ? e.message : String(e))
+  }
 
   const { error: deleteError } = await admin.from('albums').delete().eq('id', album.id)
   if (deleteError) {

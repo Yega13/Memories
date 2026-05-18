@@ -4,6 +4,7 @@ import type { R2Env } from '@/lib/r2'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { deleteFaces } from '@/lib/rekognition'
 
 export const runtime = 'nodejs'
 
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: photo, error: photoError } = await admin
     .from('photos')
-    .select('id, album_id, storage_path, storage_backend, poster_path')
+    .select('id, album_id, storage_path, storage_backend, poster_path, face_ids')
     .eq('id', photoId)
     .maybeSingle<{
       id: string
@@ -44,6 +45,7 @@ export async function POST(req: Request) {
       storage_path: string
       storage_backend: 'supabase' | 'r2'
       poster_path: string | null
+      face_ids: string[] | null
     }>()
 
   if (photoError || !photo) {
@@ -79,6 +81,20 @@ export async function POST(req: Request) {
   if (dbError) {
     console.error('[photo/delete] DB delete failed:', dbError.message)
     return NextResponse.json({ error: 'Could not delete photo' }, { status: 500, headers: NO_STORE })
+  }
+
+  // If this photo was the album's cover, clear that reference so the gallery doesn't break.
+  await admin.from('albums').update({ cover_photo_id: null }).eq('id', photo.album_id).eq('cover_photo_id', photoId)
+
+  // Remove any indexed faces from Rekognition. Best-effort: don't fail the delete if AWS is
+  // unreachable — the photo is already gone. Without this, deleted photos' faces would stay in
+  // the collection forever, costing money and potentially matching future selfie searches.
+  if (photo.face_ids && photo.face_ids.length > 0) {
+    try {
+      await deleteFaces(photo.album_id, photo.face_ids)
+    } catch (e) {
+      console.error('[photo/delete] Rekognition deleteFaces failed:', e instanceof Error ? e.message : String(e))
+    }
   }
 
   return NextResponse.json({ ok: true }, { headers: NO_STORE })

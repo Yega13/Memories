@@ -81,23 +81,20 @@ async function uploadVideoMultipart(
   const { uploadId, key } = initBody
   if (!uploadId || !key) throw new Error('Invalid upload init response')
 
-  // Step 2: upload chunks sequentially (each is a separate Worker request)
+  // Step 2: upload chunks sequentially (each is a separate Worker request).
+  // Each chunk is retried up to 3 times on transient failures — without this, a single
+  // dropped TCP connection on flaky mobile data would tank the entire video upload.
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
   const parts: { partNumber: number; etag: string }[] = []
   let uploadedBytes = 0
 
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE
-    const end = Math.min(start + CHUNK_SIZE, file.size)
-    const chunk = file.slice(start, end)
-
-    const form = new FormData()
-    form.append('uploadId', uploadId)
-    form.append('key', key)
-    form.append('partNumber', String(i + 1))
-    form.append('chunk', chunk)
-
-    const part = await new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
+  async function uploadChunkOnce(partNumber: number, chunk: Blob, end: number, start: number) {
+    return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
+      const form = new FormData()
+      form.append('uploadId', uploadId!)
+      form.append('key', key!)
+      form.append('partNumber', String(partNumber))
+      form.append('chunk', chunk)
       const xhr = new XMLHttpRequest()
       xhr.open('POST', '/api/upload/r2/multipart?action=chunk')
       xhr.upload.onprogress = (event) => {
@@ -111,12 +108,39 @@ async function uploadVideoMultipart(
         if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
           resolve({ partNumber: body.partNumber, etag: body.etag })
         } else {
-          reject(new Error(body.error || `Chunk ${i + 1} failed: ${xhr.status}`))
+          reject(new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`))
         }
       }
-      xhr.onerror = () => reject(new Error(`Network error on chunk ${i + 1}`))
+      xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
       xhr.send(form)
     })
+  }
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE
+    const end = Math.min(start + CHUNK_SIZE, file.size)
+    const chunk = file.slice(start, end)
+    const partNumber = i + 1
+
+    let part: { partNumber: number; etag: string } | null = null
+    let lastErr: Error | null = null
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        part = await uploadChunkOnce(partNumber, chunk, end, start)
+        break
+      } catch (e) {
+        lastErr = e instanceof Error ? e : new Error(String(e))
+        if (attempt < 3) await wait(1000 * attempt)
+      }
+    }
+    if (!part) {
+      fetch('/api/upload/r2/multipart?action=abort', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadId, key }),
+      }).catch(() => {})
+      throw lastErr ?? new Error(`Chunk ${partNumber} failed`)
+    }
 
     parts.push(part)
     uploadedBytes += end - start
@@ -402,7 +426,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const rows: (PhotoInsertRow | null)[] = new Array(queue.length).fill(null)
     let completed = 0
     let cursor = 0
-    const concurrency = Math.min(3, queue.length)
+    // Desktop can handle more parallel uploads than mobile — coarse pointers (phone/tablet) get 3
+    // so we don't saturate cell data; mouse/pen devices get 5 to make better use of the connection.
+    const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    const concurrency = Math.min(coarsePointer ? 3 : 5, queue.length)
 
     setUploadStatus({
       fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`,
