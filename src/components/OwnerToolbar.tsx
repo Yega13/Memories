@@ -10,6 +10,7 @@ import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
 import { showAppToast, storeAppToast } from '@/components/AppToast'
 import BackgroundLibraryModal from '@/components/owner-toolbar/BackgroundLibraryModal'
+import RevealDatePicker from '@/components/RevealDatePicker'
 import ShareMenu from '@/components/owner-toolbar/ShareMenu'
 import {
   addAlbumToCollectionRequest,
@@ -1305,12 +1306,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       <p className="text-[11px] font-medium mb-1.5" style={{ color: '#8B6F4E' }}>
                         {album.reveal_at ? 'Change time' : 'Photos unlock for guests at'}
                       </p>
-                      <input
-                        type="datetime-local"
+                      <RevealDatePicker
                         value={revealInput}
-                        onChange={(e) => { setRevealInput(e.target.value); setRevealSaved(false) }}
-                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                        style={inputStyle}
+                        onChange={(v) => { setRevealInput(v); setRevealSaved(false) }}
                       />
                     </div>
 

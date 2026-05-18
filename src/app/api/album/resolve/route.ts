@@ -143,7 +143,7 @@ async function buildResponse(album: FullAlbum, ownerToken = '') {
     description: album.description,
     background_theme: album.background_theme,
     media_radius: album.media_radius ?? 12,
-    video_autoplay: !!album.video_autoplay,
+    video_autoplay: album.video_autoplay !== false, // null = on by default
     media_filter: album.media_filter ?? 'none',
     media_hover: album.media_hover ?? 'none',
     mobile_grid_columns: album.mobile_grid_columns ?? 3,
@@ -186,7 +186,7 @@ async function lookupAlbum(
       console.error('[album/resolve] legacy album lookup failed:', legacyError.message)
       return null
     }
-    return legacy ? { ...legacy, media_radius: 12, video_autoplay: false, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade', reveal_at: null } : null
+    return legacy ? { ...legacy, media_radius: 12, video_autoplay: true, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade', reveal_at: null } : null
   }
 
   console.error('[album/resolve] album lookup failed:', error.message)
