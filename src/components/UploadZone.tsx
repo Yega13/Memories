@@ -58,6 +58,50 @@ async function uploadToR2(
   })
 }
 
+// Large video upload: get a presigned PUT URL then upload directly to R2,
+// bypassing the Cloudflare Worker 100 MB request body limit.
+async function uploadVideoPresigned(
+  file: File,
+  albumId: string,
+  filename: string,
+  onProgress?: (percent: number) => void,
+): Promise<R2UploadResult> {
+  // Step 1: get presigned URL from our Worker
+  const presignRes = await fetch('/api/upload/r2/presign', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ albumId, filename, contentType: file.type || 'video/mp4', size: file.size }),
+  })
+  let presignBody: { error?: string; presignedUrl?: string; storage_path?: string; url?: string } = {}
+  try { presignBody = await presignRes.json() } catch { /* ignore */ }
+  if (!presignRes.ok) {
+    throw new Error(presignBody.error || `Presign failed: ${presignRes.status}`)
+  }
+  const { presignedUrl, storage_path, url } = presignBody
+  if (!presignedUrl || !storage_path || !url) {
+    throw new Error('Invalid presign response')
+  }
+
+  // Step 2: PUT directly to R2 (no Worker in the path — no size limit)
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', presignedUrl)
+    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) return
+      onProgress?.(Math.round((event.loaded / event.total) * 100))
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve()
+      else reject(new Error(`Direct upload failed: ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('Network error during direct video upload'))
+    xhr.send(file)
+  })
+
+  return { storage_path, url }
+}
+
 type Props = {
   album: Album
   onPhotoAdded: () => void
@@ -263,8 +307,8 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       throw new Error('Upload failed')
     }
 
-    // Video: upload file, generate poster, upload poster
-    const res = await uploadToR2(item.file, album.id, filename, 'video')
+    // Video: upload directly to R2 via presigned URL (bypasses Workers 100 MB limit)
+    const res = await uploadVideoPresigned(item.file, album.id, filename)
     let posterPath: string | null = null
     let posterUrl: string | null = null
     let durationSeconds: number | null = null
