@@ -631,7 +631,18 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || !isOwner || !ownerToken || reorderSaving) return
     const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    if (coarsePointer && !arrangeMode) return
+    if (coarsePointer && !arrangeMode) {
+      // Mobile long-press (600ms) enters bulk-select. Cancelled automatically by
+      // finishReorder (pointerup/pointercancel) so short taps and scroll don't trigger.
+      reorderTimerRef.current = window.setTimeout(() => {
+        reorderTimerRef.current = null
+        reorderSuppressedClickRef.current = true
+        window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
+        setSelectMode(true)
+        setSelectedIds(new Set([photo.id]))
+      }, 600)
+      return
+    }
     clearReorderTimer()
     const tile = e.currentTarget
     const pointerId = e.pointerId

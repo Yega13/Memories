@@ -288,7 +288,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
     if (item.kind === 'image') {
       const path = `${album.id}/${filename}`
-      for (let attempt = 1; attempt <= 3; attempt += 1) {
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
         const { error } = await supabase.storage
           .from('Photos')
           .upload(path, item.file, { contentType: item.file.type || undefined })
@@ -305,8 +305,8 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
             duration_seconds: null,
           }
         }
-        if (!isRetriableStorageError(error.message) || attempt === 3) throw new Error(error.message)
-        await wait(450 * attempt)
+        if (!isRetriableStorageError(error.message) || attempt === 5) throw new Error(error.message)
+        await wait(500 * attempt) // 500, 1000, 1500, 2000ms
       }
       throw new Error('Upload failed')
     }
