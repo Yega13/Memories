@@ -175,9 +175,10 @@ export default function AlbumPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [album?.id])
 
-  const handlePhotoAdded = () => {
-    if (album) fetchPhotos(album.id)
-  }
+  // Realtime INSERT subscription handles new photos — no manual refetch needed here.
+  // Calling fetchPhotos on each upload caused concurrent DB fetches that raced each other
+  // and overwrote state, making newly-uploaded photos disappear until page refresh.
+  const handlePhotoAdded = () => {}
 
   const handlePhotoDeleted = (photoId: string) => {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))

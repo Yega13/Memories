@@ -31,41 +31,58 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
 
   const runIndexing = useCallback(async () => {
     if (indexingDone.current) return
-    setTotal(imagePhotos.length)
 
-    let remaining = imagePhotos.length
-    let done = 0
-
-    while (remaining > 0) {
-      try {
-        const res = await fetch('/api/album/face-index', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug: albumSlug }),
-        })
-        const bodyText = await res.text()
-        let json: { indexed: number; remaining: number; error?: string }
-        try {
-          json = JSON.parse(bodyText) as { indexed: number; remaining: number; error?: string }
-        } catch {
-          setStep('error')
-          setErrorMsg(`Server error (${res.status}): ${bodyText.slice(0, 200) || '(empty response)'}`)
-          return
-        }
-        if (!res.ok) {
-          setStep('error')
-          setErrorMsg(json.error ?? `Indexing failed (${res.status})`)
-          return
-        }
-        done += json.indexed
-        remaining = json.remaining
-        setIndexed(done)
-      } catch {
+    // Step 1: fetch all unindexed photo IDs so workers can be assigned non-overlapping subsets
+    let ids: string[] = []
+    let dbTotal = imagePhotos.length
+    try {
+      const res = await fetch(`/api/album/face-index?slug=${encodeURIComponent(albumSlug)}`)
+      if (!res.ok) {
         setStep('error')
-        setErrorMsg('Network error during indexing. Please try again.')
+        setErrorMsg('Failed to start indexing. Please try again.')
         return
       }
+      const data = (await res.json()) as { ids: string[]; total: number }
+      ids = data.ids
+      dbTotal = data.total || imagePhotos.length
+    } catch {
+      setStep('error')
+      setErrorMsg('Network error during indexing. Please try again.')
+      return
     }
+
+    const alreadyIndexed = Math.max(0, dbTotal - ids.length)
+    setTotal(dbTotal)
+    setIndexed(alreadyIndexed)
+
+    if (ids.length === 0) {
+      indexingDone.current = true
+      setStep('selfie')
+      return
+    }
+
+    // Step 2: 5 concurrent workers, each assigned every 5th photo (interleaved)
+    // Each worker processes its photos one at a time — each request ~5 s, well within 30 s limit
+    const CONCURRENT = 5
+    let done = 0
+
+    async function indexWorker(startIdx: number) {
+      for (let i = startIdx; i < ids.length; i += CONCURRENT) {
+        try {
+          await fetch('/api/album/face-index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug: albumSlug, photoId: ids[i] }),
+          })
+        } catch {
+          // network error on a single photo — continue with the rest
+        }
+        done++
+        setIndexed(alreadyIndexed + done)
+      }
+    }
+
+    await Promise.all(Array.from({ length: CONCURRENT }, (_, i) => indexWorker(i)))
 
     indexingDone.current = true
     setStep('selfie')

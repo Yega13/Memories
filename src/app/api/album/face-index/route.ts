@@ -6,9 +6,46 @@ export const runtime = 'nodejs'
 export const maxDuration = 60
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-// Keep small — each photo is fetched, base64-encoded, and sent to Rekognition in memory.
-// 15 photos × ~4 MB = ~60 MB of base64 strings in parallel, which hits Workers' 128 MB limit.
-const BATCH = 5
+
+async function resolveAlbum(slug: string) {
+  const admin = createAdminClient()
+  const { data: album } = await admin
+    .from('albums')
+    .select('id')
+    .or(`slug.eq.${slug},custom_slug.eq.${slug}`)
+    .maybeSingle<{ id: string }>()
+  return { admin, album }
+}
+
+// GET: returns all unindexed photo IDs so the client can distribute work across concurrent workers
+export async function GET(req: Request) {
+  const slug = new URL(req.url).searchParams.get('slug')?.trim() ?? ''
+  if (!slug) return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
+
+  const { admin, album } = await resolveAlbum(slug)
+  if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+
+  await ensureCollection(album.id)
+
+  const { data: unindexed } = await admin
+    .from('photos')
+    .select('id')
+    .eq('album_id', album.id)
+    .is('face_ids', null)
+    .neq('media_type', 'video')
+    .order('created_at', { ascending: true })
+
+  const { count: total } = await admin
+    .from('photos')
+    .select('id', { count: 'exact', head: true })
+    .eq('album_id', album.id)
+    .neq('media_type', 'video')
+
+  return NextResponse.json(
+    { ids: unindexed?.map((p) => p.id) ?? [], total: total ?? 0 },
+    { headers: NO_STORE },
+  )
+}
 
 export async function POST(req: Request) {
   try {
@@ -21,7 +58,7 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
-  let body: { slug?: string }
+  let body: { slug?: string; photoId?: string }
   try {
     body = await req.json()
   } catch {
@@ -29,36 +66,47 @@ async function handlePost(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  if (!slug) {
-    return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
+  if (!slug) return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
+
+  const { admin, album } = await resolveAlbum(slug)
+  if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+
+  const photoId = body.photoId ? String(body.photoId).trim() : null
+
+  if (photoId) {
+    // Targeted mode: process exactly one photo (called by concurrent FaceFinder workers)
+    const { data: photo } = await admin
+      .from('photos')
+      .select('id, url, face_ids')
+      .eq('id', photoId)
+      .eq('album_id', album.id)
+      .maybeSingle<{ id: string; url: string; face_ids: string[] | null }>()
+
+    if (!photo) return NextResponse.json({ error: 'Photo not found' }, { status: 404, headers: NO_STORE })
+    // Already indexed by a concurrent worker — skip silently
+    if (photo.face_ids !== null) return NextResponse.json({ indexed: 0 }, { headers: NO_STORE })
+
+    try {
+      const faceIds = await indexPhotoFaces(album.id, photo.id, photo.url)
+      await admin.from('photos').update({ face_ids: faceIds }).eq('id', photo.id)
+      return NextResponse.json({ indexed: 1 }, { headers: NO_STORE })
+    } catch {
+      await admin.from('photos').update({ face_ids: [] }).eq('id', photo.id)
+      return NextResponse.json({ indexed: 0 }, { headers: NO_STORE })
+    }
   }
 
-  const admin = createAdminClient()
-
-  const { data: album } = await admin
-    .from('albums')
-    .select('id')
-    .or(`slug.eq.${slug},custom_slug.eq.${slug}`)
-    .maybeSingle<{ id: string }>()
-
-  if (!album) {
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
-
-  await ensureCollection(album.id)
-
-  // Find unindexed image photos (face_ids IS NULL means not yet processed)
+  // Fallback scan mode (single photo at a time to stay within the 30 s Worker limit)
   const { data: photos } = await admin
     .from('photos')
-    .select('id, url, media_type')
+    .select('id, url')
     .eq('album_id', album.id)
     .is('face_ids', null)
     .neq('media_type', 'video')
-    .limit(BATCH)
+    .limit(1)
 
   const toIndex = photos ?? []
 
-  // Count remaining after this batch
   const { count: remaining } = await admin
     .from('photos')
     .select('id', { count: 'exact', head: true })
@@ -67,24 +115,18 @@ async function handlePost(req: Request) {
     .neq('media_type', 'video')
 
   let indexed = 0
-  const errors: string[] = []
-
-  // Sequential — avoids holding multiple large base64 images in memory simultaneously
   for (const photo of toIndex) {
     try {
       const faceIds = await indexPhotoFaces(album.id, photo.id, photo.url)
       await admin.from('photos').update({ face_ids: faceIds }).eq('id', photo.id)
       indexed++
     } catch {
-      errors.push(photo.id)
       await admin.from('photos').update({ face_ids: [] }).eq('id', photo.id)
     }
   }
 
-  const stillRemaining = Math.max(0, (remaining ?? 0) - toIndex.length)
-
   return NextResponse.json(
-    { indexed, errors: errors.length, remaining: stillRemaining },
+    { indexed, remaining: Math.max(0, (remaining ?? 0) - toIndex.length) },
     { headers: NO_STORE },
   )
 }
