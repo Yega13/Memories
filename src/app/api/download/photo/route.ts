@@ -101,7 +101,9 @@ export async function GET(req: Request) {
     } catch {
       // Malformed JPEG — fall through with original bytes
     }
-    return new NextResponse(Buffer.from(stripped), {
+    // Wrap in Blob — TypeScript's BodyInit union is finicky about Uint8Array variants across
+    // Next.js + Workers type defs, but Blob is always accepted.
+    return new NextResponse(new Blob([stripped as BlobPart], { type: 'image/jpeg' }), {
       headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': disposition, ...NO_STORE },
     })
   }
