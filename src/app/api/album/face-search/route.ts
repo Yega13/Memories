@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createRekognitionClient, ensureCollection, searchFacesByImage } from '@/lib/rekognition'
+import { ensureCollection, searchFacesByImage } from '@/lib/rekognition'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -57,12 +57,11 @@ export async function POST(req: Request) {
     )
   }
 
-  const rek = createRekognitionClient()
-  await ensureCollection(rek, album.id)
+  await ensureCollection(album.id)
 
   let matches: { photoId: string; similarity: number }[]
   try {
-    matches = await searchFacesByImage(rek, album.id, selfieBytes)
+    matches = await searchFacesByImage(album.id, selfieBytes)
   } catch (err: unknown) {
     const name = (err as { name?: string }).name
     if (name === 'InvalidParameterException') {

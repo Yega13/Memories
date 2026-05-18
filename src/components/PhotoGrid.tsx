@@ -562,8 +562,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function downloadPhoto(photo: Photo) {
-    const baseName = photo.caption?.trim() || (photo.media_type === 'video' ? 'video' : 'photo')
-    const ext = photo.url.split('?')[0].split('.').pop() ?? (photo.media_type === 'video' ? 'mp4' : 'jpg')
+    const urlExt = photo.url.split('?')[0].split('.').pop()?.toLowerCase()
+    const ext = urlExt && urlExt.length <= 5 ? urlExt : (photo.media_type === 'video' ? 'mp4' : 'jpg')
+    let baseName = photo.caption?.trim()
+    if (!baseName) {
+      const dateStr = photo.created_at
+        ? new Date(photo.created_at).toISOString().slice(0, 10)
+        : null
+      baseName = dateStr
+        ? `${photo.media_type === 'video' ? 'video' : 'photo'}_${dateStr}`
+        : (photo.media_type === 'video' ? 'video' : 'photo')
+    }
     const filename = `${baseName}.${ext}`
     const a = document.createElement('a')
     a.href = `/api/download/photo?url=${encodeURIComponent(photo.url)}&name=${encodeURIComponent(filename)}`

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createRekognitionClient, ensureCollection, indexPhotoFaces } from '@/lib/rekognition'
+import { ensureCollection, indexPhotoFaces } from '@/lib/rekognition'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -33,7 +33,6 @@ async function handlePost(req: Request) {
 
   const admin = createAdminClient()
 
-  // Resolve album
   const { data: album } = await admin
     .from('albums')
     .select('id')
@@ -44,8 +43,7 @@ async function handlePost(req: Request) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
 
-  const rek = createRekognitionClient()
-  await ensureCollection(rek, album.id)
+  await ensureCollection(album.id)
 
   // Find unindexed image photos (face_ids IS NULL means not yet processed)
   const { data: photos } = await admin
@@ -72,7 +70,7 @@ async function handlePost(req: Request) {
   await Promise.all(
     toIndex.map(async (photo) => {
       try {
-        const faceIds = await indexPhotoFaces(rek, album.id, photo.id, photo.url)
+        const faceIds = await indexPhotoFaces(album.id, photo.id, photo.url)
         await admin
           .from('photos')
           .update({ face_ids: faceIds })

@@ -6,10 +6,10 @@ export type MediaKind = 'image' | 'video'
 const MB = 1024 * 1024
 
 export const FREE_IMAGE_BYTES = 25 * MB
-export const FREE_VIDEO_BYTES = 50 * MB
+export const FREE_VIDEO_BYTES = 200 * MB
 
 export const PRO_IMAGE_BYTES = 200 * MB
-export const PRO_VIDEO_BYTES = 200 * MB
+export const PRO_VIDEO_BYTES = 500 * MB
 
 export type UploadCaps = { image: number; video: number }
 
