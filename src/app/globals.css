@@ -1501,7 +1501,7 @@ html {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  /* No overflow:hidden — would clip the image when pinch-zoomed past its natural bounds. */
 }
 
 .hush-grid-photo-back {

@@ -96,6 +96,9 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
 
     indexingDone.current = true
     setStep('selfie')
+    // imagePhotos is a derived array — depending on the full reference would re-create runIndexing
+    // every render and is unnecessary because indexingDone.current already guards against re-runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [albumSlug, imagePhotos.length])
 
   useEffect(() => {

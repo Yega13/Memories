@@ -383,8 +383,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (pinchRef.current && e.touches.length === 2) {
       e.stopPropagation()
       if (e.cancelable) e.preventDefault()
-      // Cap at 10x to prevent crazy memory blowups while still letting users zoom past the image's natural size
-      const nextScale = Math.max(1, Math.min(10, pinchRef.current.scale * (touchDistance(e.touches) / pinchRef.current.distance)))
+      const nextScale = Math.max(1, Math.min(4, pinchRef.current.scale * (touchDistance(e.touches) / pinchRef.current.distance)))
       const ratio = nextScale / Math.max(1, pinchRef.current.scale)
       const startPan = pinchRef.current.pan
       const center = pinchRef.current.center

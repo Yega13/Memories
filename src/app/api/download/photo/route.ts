@@ -101,7 +101,7 @@ export async function GET(req: Request) {
     } catch {
       // Malformed JPEG — fall through with original bytes
     }
-    return new NextResponse(stripped, {
+    return new NextResponse(Buffer.from(stripped), {
       headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': disposition, ...NO_STORE },
     })
   }
