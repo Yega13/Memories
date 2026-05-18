@@ -58,47 +58,90 @@ async function uploadToR2(
   })
 }
 
-// Large video upload: get a presigned PUT URL then upload directly to R2,
-// bypassing the Cloudflare Worker 100 MB request body limit.
-async function uploadVideoPresigned(
+// Large video upload via R2 multipart — splits the file into ≤85 MB chunks,
+// each sent through the Worker (under the 100 MB body limit). No extra
+// credentials needed; uses the existing R2 bucket binding.
+const CHUNK_SIZE = 85 * 1024 * 1024
+
+async function uploadVideoMultipart(
   file: File,
   albumId: string,
   filename: string,
   onProgress?: (percent: number) => void,
 ): Promise<R2UploadResult> {
-  // Step 1: get presigned URL from our Worker
-  const presignRes = await fetch('/api/upload/r2/presign', {
+  // Step 1: init
+  const initRes = await fetch('/api/upload/r2/multipart?action=init', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ albumId, filename, contentType: file.type || 'video/mp4', size: file.size }),
+    body: JSON.stringify({ albumId, filename, contentType: file.type || 'video/mp4', totalSize: file.size }),
   })
-  let presignBody: { error?: string; presignedUrl?: string; storage_path?: string; url?: string } = {}
-  try { presignBody = await presignRes.json() } catch { /* ignore */ }
-  if (!presignRes.ok) {
-    throw new Error(presignBody.error || `Presign failed: ${presignRes.status}`)
-  }
-  const { presignedUrl, storage_path, url } = presignBody
-  if (!presignedUrl || !storage_path || !url) {
-    throw new Error('Invalid presign response')
+  let initBody: { error?: string; uploadId?: string; key?: string } = {}
+  try { initBody = await initRes.json() } catch { /* ignore */ }
+  if (!initRes.ok) throw new Error(initBody.error || `Upload init failed: ${initRes.status}`)
+  const { uploadId, key } = initBody
+  if (!uploadId || !key) throw new Error('Invalid upload init response')
+
+  // Step 2: upload chunks sequentially (each is a separate Worker request)
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+  const parts: { partNumber: number; etag: string }[] = []
+  let uploadedBytes = 0
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE
+    const end = Math.min(start + CHUNK_SIZE, file.size)
+    const chunk = file.slice(start, end)
+
+    const form = new FormData()
+    form.append('uploadId', uploadId)
+    form.append('key', key)
+    form.append('partNumber', String(i + 1))
+    form.append('chunk', chunk)
+
+    const part = await new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', '/api/upload/r2/multipart?action=chunk')
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return
+        const chunkUploaded = event.loaded / event.total * (end - start)
+        onProgress?.(Math.round((uploadedBytes + chunkUploaded) / file.size * 95))
+      }
+      xhr.onload = () => {
+        let body: { error?: string; partNumber?: number; etag?: string } = {}
+        try { body = JSON.parse(xhr.responseText || '{}') } catch {}
+        if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
+          resolve({ partNumber: body.partNumber, etag: body.etag })
+        } else {
+          reject(new Error(body.error || `Chunk ${i + 1} failed: ${xhr.status}`))
+        }
+      }
+      xhr.onerror = () => reject(new Error(`Network error on chunk ${i + 1}`))
+      xhr.send(form)
+    })
+
+    parts.push(part)
+    uploadedBytes += end - start
+    onProgress?.(Math.round(uploadedBytes / file.size * 95))
   }
 
-  // Step 2: PUT directly to R2 (no Worker in the path — no size limit)
-  await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', presignedUrl)
-    xhr.setRequestHeader('Content-Type', file.type || 'video/mp4')
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) return
-      onProgress?.(Math.round((event.loaded / event.total) * 100))
-    }
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve()
-      else reject(new Error(`Direct upload failed: ${xhr.status}`))
-    }
-    xhr.onerror = () => reject(new Error('Network error during direct video upload'))
-    xhr.send(file)
+  // Step 3: complete
+  const completeRes = await fetch('/api/upload/r2/multipart?action=complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uploadId, key, parts }),
   })
-
+  let completeBody: { error?: string; storage_path?: string; url?: string } = {}
+  try { completeBody = await completeRes.json() } catch { /* ignore */ }
+  if (!completeRes.ok) {
+    // Best-effort abort to avoid leaving incomplete uploads in R2
+    fetch('/api/upload/r2/multipart?action=abort', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uploadId, key }),
+    }).catch(() => {})
+    throw new Error(completeBody.error || `Upload complete failed: ${completeRes.status}`)
+  }
+  const { storage_path, url } = completeBody
+  if (!storage_path || !url) throw new Error('Invalid upload complete response')
   return { storage_path, url }
 }
 
@@ -135,9 +178,9 @@ type PhotoInsertRow = {
   duration_seconds: number | null
 }
 
-// Files above this threshold bypass the Cloudflare Worker 100 MB body limit via presigned R2 PUT.
-// Below it, the Worker path is used (simpler, works without R2 credentials configured).
-const PRESIGN_THRESHOLD = 90 * 1024 * 1024
+// Files above this threshold use multipart chunked upload (each chunk ≤85 MB).
+// Below it, the file is sent as a single Worker request.
+const MULTIPART_THRESHOLD = 85 * 1024 * 1024
 
 const HEIC_EXT_RE = /\.(heic|heif)$/i
 const HEIC_MIME_TYPES = new Set([
@@ -311,10 +354,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       throw new Error('Upload failed')
     }
 
-    // Large videos use presigned PUT directly to R2 (bypasses Workers 100 MB body limit).
-    // Small videos go through the Worker path — simpler and works without R2 credentials.
-    const res = item.file.size > PRESIGN_THRESHOLD
-      ? await uploadVideoPresigned(item.file, album.id, filename)
+    // Large videos use multipart chunked upload (85 MB chunks, each under Workers 100 MB limit).
+    // Small videos are sent as a single Worker request.
+    const res = item.file.size > MULTIPART_THRESHOLD
+      ? await uploadVideoMultipart(item.file, album.id, filename)
       : await uploadToR2(item.file, album.id, filename, 'video')
     let posterPath: string | null = null
     let posterUrl: string | null = null
@@ -355,10 +398,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     setUploadError('')
     setUploadStatus(null)
 
-    const rows: PhotoInsertRow[] = []
+    // rows is index-parallel to queue so order is preserved on save
+    const rows: (PhotoInsertRow | null)[] = new Array(queue.length).fill(null)
     let completed = 0
     let cursor = 0
-    let failed = false
     const concurrency = Math.min(3, queue.length)
 
     setUploadStatus({
@@ -370,36 +413,25 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     })
 
     async function worker() {
-      while (cursor < queue.length && !failed) {
+      while (cursor < queue.length) {
         const myIndex = cursor
         cursor += 1
         const item = queue[myIndex]
         try {
           const row = await uploadItem(item)
-          rows.push(row)
-          completed += 1
-          if (!failed) {
-            setUploadStatus({
-              fileName: item.file.name,
-              index: completed,
-              total: queue.length,
-              phase: completed === queue.length ? 'Saving to album' : 'Uploading',
-              percent: Math.max(4, Math.round((completed / queue.length) * 90)),
-            })
-          }
+          rows[myIndex] = row
         } catch (e) {
-          failed = true
-          const message = `Upload failed: ${e instanceof Error ? e.message : 'Network error'}`
-          setUploadError(message)
-          showAppToast(message, 'error')
-          setUploadStatus({
-            fileName: item.file.name,
-            index: completed,
-            total: queue.length,
-            phase: 'Upload failed',
-            percent: 0,
-          })
+          // Leave rows[myIndex] as null — item stays in pending for retry
+          console.warn('[upload] item failed:', item.file.name, e instanceof Error ? e.message : e)
         }
+        completed += 1
+        setUploadStatus({
+          fileName: item.file.name,
+          index: completed,
+          total: queue.length,
+          phase: completed === queue.length ? 'Saving to album' : 'Uploading',
+          percent: Math.max(4, Math.round((completed / queue.length) * 90)),
+        })
       }
     }
 
@@ -415,30 +447,42 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       await runWorkers()
     }
 
-    if (failed) {
-      setUploading(false)
-      return
-    }
+    const successRows = rows.filter((r): r is PhotoInsertRow => r !== null)
+    const failedItems = queue.filter((_, i) => rows[i] === null)
 
-    try {
-      // API accepts up to 100 rows; chunk if needed
-      for (let i = 0; i < rows.length; i += 100) {
-        await saveUploadedRows(rows.slice(i, i + 100))
+    if (successRows.length > 0) {
+      try {
+        for (let i = 0; i < successRows.length; i += 100) {
+          await saveUploadedRows(successRows.slice(i, i + 100))
+        }
+      } catch (e) {
+        const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded files'}`
+        setUploadError(message)
+        showAppToast(message, 'error')
+        setUploading(false)
+        return
       }
-    } catch (e) {
-      const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded files'}`
-      setUploadError(message)
-      showAppToast(message, 'error')
-      setUploading(false)
-      return
+      onPhotoAdded()
     }
 
-    queue.forEach((item) => URL.revokeObjectURL(item.preview))
-    setPending([])
+    // Revoke URLs for items that succeeded; keep failed ones alive in pending
+    queue.forEach((item, i) => { if (rows[i] !== null) URL.revokeObjectURL(item.preview) })
+
+    if (failedItems.length > 0) {
+      setPending(failedItems)
+      const msg = successRows.length > 0
+        ? `${successRows.length} uploaded, ${failedItems.length} failed — tap Upload to retry`
+        : `${failedItems.length} file${failedItems.length !== 1 ? 's' : ''} failed — tap Upload to retry`
+      setUploadError(msg)
+      showAppToast(msg, 'error')
+    } else {
+      queue.forEach((item) => URL.revokeObjectURL(item.preview))
+      setPending([])
+      showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
+    }
+
     setUploading(false)
     setUploadStatus(null)
-    showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
-    onPhotoAdded()
   }
 
   async function saveUploadedRows(rows: PhotoInsertRow[]) {

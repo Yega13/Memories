@@ -7,7 +7,6 @@ import { formatDuration } from '@/lib/media'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
-import Image from 'next/image'
 import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings, Star } from 'lucide-react'
 
 type Props = {
@@ -1017,6 +1016,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     observer.observe(grid)
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => observer.observe(tile))
     window.addEventListener('resize', measureTiles)
+
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', measureTiles)
@@ -1114,15 +1114,18 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 onDragStart={(e) => e.preventDefault()}
               >
                 {thumbSrc && !isBroken ? (
-                  <Image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
                     src={thumbSrc}
                     alt={photo.caption || ''}
-                    fill
-                    sizes="(min-width: 1536px) 16vw, (min-width: 1280px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
-                    className={mediaImageClass(hover)}
-                    style={{ '--hush-media-filter': filter } as React.CSSProperties}
-                    unoptimized
+                    loading="lazy"
+                    decoding="async"
                     draggable={false}
+                    className={mediaImageClass(hover)}
+                    style={{
+                      position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+                      '--hush-media-filter': filter,
+                    } as React.CSSProperties}
                     onError={() => {
                       if (!isVideo) markBroken(photo.id)
                     }}
