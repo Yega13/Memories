@@ -48,28 +48,29 @@ export async function GET(req: Request) {
   const contentLength = upstream.headers.get('content-length')
   const disposition = `attachment; filename="${encodeURIComponent(name)}"`
 
-  // Strip EXIF from JPEGs that are small enough to buffer safely in Workers memory
+  // Strip EXIF from JPEGs that are small enough to buffer safely in Workers memory.
+  // IMPORTANT: once we call arrayBuffer() the body is consumed — if sharp fails we
+  // must return the buffered data directly, not attempt to stream upstream.body.
   const isJpeg = /jpe?g/i.test(contentType) || /\.jpe?g$/i.test(name)
   const knownBytes = contentLength ? parseInt(contentLength, 10) : Infinity
   if (isJpeg && knownBytes <= MAX_EXIF_STRIP_BYTES) {
+    const buffer = Buffer.from(await upstream.arrayBuffer())
     try {
-      const buffer = Buffer.from(await upstream.arrayBuffer())
       const { default: sharp } = await import('sharp')
       const stripped = await sharp(buffer).jpeg({ quality: 100 }).toBuffer()
       return new NextResponse(new Uint8Array(stripped), {
-        headers: {
-          'Content-Type': 'image/jpeg',
-          'Content-Disposition': disposition,
-          ...NO_STORE,
-        },
+        headers: { 'Content-Type': 'image/jpeg', 'Content-Disposition': disposition, ...NO_STORE },
       })
     } catch {
-      // sharp failed — fall through to streaming passthrough
+      // sharp not available (e.g. Workers) — return original buffer without EXIF stripping
+      return new NextResponse(buffer, {
+        headers: { 'Content-Type': contentType, 'Content-Disposition': disposition, ...NO_STORE },
+      })
     }
   }
 
-  // Stream videos and large/non-JPEG images directly — buffering a 200 MB
-  // video into Workers memory causes crashes and "Site wasn't available".
+  // Stream videos and large/non-JPEG images directly — buffering a large video
+  // into Workers memory causes crashes and "Site wasn't available".
   const responseHeaders: Record<string, string> = {
     'Content-Type': contentType,
     'Content-Disposition': disposition,

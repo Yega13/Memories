@@ -33,7 +33,8 @@ function uint8ToBase64(bytes: Uint8Array): string {
 }
 
 async function rekognitionPost(operation: string, body: unknown): Promise<unknown> {
-  const region = process.env.AWS_REGION ?? 'eu-north-1'
+  // eu-west-1 (Ireland) is the default — eu-north-1 doesn't have Rekognition
+  const region = process.env.AWS_REGION ?? 'eu-west-1'
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID ?? ''
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY ?? ''
 

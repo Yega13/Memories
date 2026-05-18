@@ -268,7 +268,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     let posterPath: string | null = null
     let posterUrl: string | null = null
     let durationSeconds: number | null = null
-    const poster = await generateVideoPoster(item.file)
+    // 12s timeout prevents mobile browsers from hanging on poster generation
+    const poster = await Promise.race([
+      generateVideoPoster(item.file),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
+    ])
     if (poster) {
       const posterFilename = `${baseId}.poster.jpg`
       const posterFile = new File([poster.blob], posterFilename, { type: 'image/jpeg' })
