@@ -117,7 +117,9 @@ export async function POST(req: Request) {
 
   const key = `${albumId}/${filename}`
   try {
-    await bucket.put(key, await file.arrayBuffer(), {
+    // Pass the Blob directly — avoids buffering the whole file into an ArrayBuffer
+    // inside the Worker, which would hit the 128 MB memory limit for large videos.
+    await bucket.put(key, file, {
       httpMetadata: { contentType },
     })
   } catch (e) {
