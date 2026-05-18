@@ -163,9 +163,13 @@ export default function AlbumPage() {
       )
       .on(
         'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'photos', filter: `album_id=eq.${album.id}` },
+        // No server-side filter on DELETE — Postgres only writes the PK to WAL by default
+        // (REPLICA IDENTITY FULL would be needed). Filter client-side instead: any photo not
+        // in our current list is a no-op, so this is safe in a multi-album environment.
+        { event: 'DELETE', schema: 'public', table: 'photos' },
         (payload) => {
-          setPhotos((prev) => prev.filter((p) => p.id !== (payload.old as Photo).id))
+          const deletedId = (payload.old as { id: string }).id
+          setPhotos((prev) => prev.filter((p) => p.id !== deletedId))
         },
       )
       .subscribe()

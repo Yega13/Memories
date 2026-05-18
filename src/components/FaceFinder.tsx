@@ -109,11 +109,19 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
       form.append('selfie', selfieFile)
 
       const res = await fetch('/api/album/face-search', { method: 'POST', body: form })
-      const json = (await res.json()) as { matches?: Match[]; error?: string }
+      const bodyText = await res.text()
+      let json: { matches?: Match[]; error?: string }
+      try {
+        json = JSON.parse(bodyText) as { matches?: Match[]; error?: string }
+      } catch {
+        setStep('error')
+        setErrorMsg(`Server error (${res.status}): ${bodyText.slice(0, 300) || '(empty response)'}`)
+        return
+      }
 
       if (!res.ok) {
         setStep('error')
-        setErrorMsg(json.error ?? 'Search failed')
+        setErrorMsg(json.error ?? `Search failed (${res.status})`)
         return
       }
 
