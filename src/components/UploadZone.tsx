@@ -515,10 +515,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const rows: (PhotoInsertRow | null)[] = new Array(queue.length).fill(null)
     let completed = 0
     let cursor = 0
-    // Desktop can handle more parallel uploads than mobile — coarse pointers (phone/tablet) get 3
-    // so we don't saturate cell data; mouse/pen devices get 5 to make better use of the connection.
-    const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    const concurrency = Math.min(coarsePointer ? 3 : 5, queue.length)
+    const concurrency = 1
 
     setUploadStatus({
       fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`,
