@@ -58,10 +58,11 @@ async function uploadToR2(
   })
 }
 
-// Large video upload via R2 multipart — splits the file into chunks each sent through the Worker
-// (under Cloudflare's 100 MB body limit). 25 MB feels right: smaller per-chunk failures cost
-// less to retry, and on mobile data 25 MB finishes in 40 s at 5 Mbps — well within any timeout.
-const CHUNK_SIZE = 25 * 1024 * 1024
+// Large video upload via R2 multipart — splits the file into chunks each sent through the Worker.
+// Down to 10 MB after 3+ min videos kept failing on chunk 1 with network errors. Smaller chunks
+// = each connection holds open for less time, less surface area for Cloudflare/mobile-carrier
+// proxies to drop the connection mid-upload. More chunks per video but the retry path is cheap.
+const CHUNK_SIZE = 10 * 1024 * 1024
 
 async function uploadVideoMultipart(
   file: File,
@@ -213,7 +214,7 @@ type PhotoInsertRow = {
 // Files above this threshold use multipart chunked upload. Below it, the file is sent as a
 // single Worker request. Match the threshold to the chunk size so a file just over the threshold
 // gets split into ~2 chunks, not 1.
-const MULTIPART_THRESHOLD = 25 * 1024 * 1024
+const MULTIPART_THRESHOLD = 10 * 1024 * 1024
 
 const HEIC_EXT_RE = /\.(heic|heif)$/i
 const HEIC_MIME_TYPES = new Set([
@@ -245,33 +246,88 @@ function jpegNameFor(file: File): string {
   return `${withoutExt || 'photo'}.jpg`
 }
 
-const HEIC_CONVERSION_TIMEOUT_MS = 90_000
+const HEIC_CONVERSION_TIMEOUT_MS = 120_000
+
+// Singleton worker. Reused across all conversions so we don't re-pay the WASM bootstrap cost
+// (heic2any pulls in ~3 MB of libheif bytes on first use).
+let heicWorker: Worker | null = null
+let heicWorkerBroken = false
+let heicJobId = 0
+const heicJobs = new Map<number, { resolve: (jpeg: Blob) => void; reject: (err: Error) => void }>()
+
+function getHeicWorker(): Worker | null {
+  if (heicWorkerBroken) return null
+  if (heicWorker) return heicWorker
+  try {
+    heicWorker = new Worker(new URL('@/lib/heic-worker.ts', import.meta.url), { type: 'module' })
+    heicWorker.addEventListener('message', (e: MessageEvent<{ id: number; jpeg?: Blob; error?: string }>) => {
+      const { id, jpeg, error } = e.data
+      const job = heicJobs.get(id)
+      if (!job) return
+      heicJobs.delete(id)
+      if (jpeg) job.resolve(jpeg)
+      else job.reject(new Error(error ?? 'HEIC conversion failed'))
+    })
+    heicWorker.addEventListener('error', (event) => {
+      // Worker bootstrap failed — fall back to main-thread conversion for all pending jobs.
+      heicWorkerBroken = true
+      heicWorker = null
+      heicJobs.forEach(({ reject }) => reject(new Error(`HEIC worker crashed: ${event.message || 'unknown'}`)))
+      heicJobs.clear()
+    })
+    return heicWorker
+  } catch {
+    heicWorkerBroken = true
+    return null
+  }
+}
+
+async function convertHeicViaWorker(file: File): Promise<File> {
+  const worker = getHeicWorker()
+  if (!worker) throw new Error('HEIC worker unavailable')
+  const buffer = await file.arrayBuffer()
+  const id = ++heicJobId
+  let timeoutId: number | null = null
+  const blob: Blob = await new Promise<Blob>((resolve, reject) => {
+    heicJobs.set(id, {
+      resolve: (b) => { if (timeoutId !== null) window.clearTimeout(timeoutId); resolve(b) },
+      reject: (e) => { if (timeoutId !== null) window.clearTimeout(timeoutId); reject(e) },
+    })
+    timeoutId = window.setTimeout(() => {
+      if (!heicJobs.has(id)) return
+      heicJobs.delete(id)
+      reject(new Error('HEIC conversion timed out'))
+    }, HEIC_CONVERSION_TIMEOUT_MS)
+    // Transfer the ArrayBuffer so the worker owns it (zero-copy, frees main-thread memory).
+    worker.postMessage({ id, buffer }, [buffer])
+  })
+  return new File([blob], jpegNameFor(file), {
+    type: 'image/jpeg',
+    lastModified: file.lastModified,
+  })
+}
+
+async function convertHeicOnMainThread(file: File): Promise<File> {
+  // Fallback when the worker bootstrap fails (e.g. old browser, blocked worker source).
+  // This will freeze the UI during the decode — that's the original problem, but it's
+  // strictly better than refusing to convert at all.
+  const { default: heic2any } = await import('heic2any')
+  const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 })
+  const blob = Array.isArray(converted) ? converted[0] : converted
+  return new File([blob], jpegNameFor(file), {
+    type: 'image/jpeg',
+    lastModified: file.lastModified,
+  })
+}
 
 async function convertHeicToJpeg(file: File): Promise<File> {
-  // heic2any has to run on the main thread (it uses canvas APIs that aren't available in Web
-  // Workers, and the OffscreenCanvas-based alternative is a much bigger rewrite). The UI WILL
-  // block briefly during the WASM decode; we minimize the damage by:
-  //   - yielding to the browser before each call so the "Preparing…" UI repaints
-  //   - racing against a generous timeout so a corrupt file doesn't lock the queue forever
-  //   - chunking: process one file at a time in the caller, with a yield between each.
-  const { default: heic2any } = await import('heic2any')
-  let timeoutId: number | null = null
   try {
-    const converted = await Promise.race([
-      heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 }),
-      new Promise<never>((_, reject) => {
-        timeoutId = window.setTimeout(
-          () => reject(new Error('HEIC conversion timed out')), HEIC_CONVERSION_TIMEOUT_MS,
-        )
-      }),
-    ])
-    const blob = Array.isArray(converted) ? converted[0] : converted
-    return new File([blob], jpegNameFor(file), {
-      type: 'image/jpeg',
-      lastModified: file.lastModified,
-    })
-  } finally {
-    if (timeoutId !== null) window.clearTimeout(timeoutId)
+    return await convertHeicViaWorker(file)
+  } catch (err) {
+    // Only fall back to main-thread if the WORKER itself is broken. Genuine conversion failures
+    // (corrupt file, timeout) shouldn't trigger a freezing main-thread retry.
+    if (heicWorkerBroken) return convertHeicOnMainThread(file)
+    throw err
   }
 }
 
