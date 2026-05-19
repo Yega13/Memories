@@ -59,10 +59,10 @@ async function uploadToR2(
 }
 
 // Large video upload via R2 multipart — splits the file into chunks each sent through the Worker.
-// Down to 10 MB after 3+ min videos kept failing on chunk 1 with network errors. Smaller chunks
-// = each connection holds open for less time, less surface area for Cloudflare/mobile-carrier
-// proxies to drop the connection mid-upload. More chunks per video but the retry path is cheap.
-const CHUNK_SIZE = 10 * 1024 * 1024
+// Down to 5 MB after 10-min videos still failed on chunk 1 with network errors at 10 MB. Smaller
+// chunks = each connection holds open for less time, halving exposure to mid-flight drops by
+// carrier proxies or Cloudflare's edge. More chunks per video but the retry path is cheap.
+const CHUNK_SIZE = 5 * 1024 * 1024
 
 async function uploadVideoMultipart(
   file: File,
@@ -214,7 +214,7 @@ type PhotoInsertRow = {
 // Files above this threshold use multipart chunked upload. Below it, the file is sent as a
 // single Worker request. Match the threshold to the chunk size so a file just over the threshold
 // gets split into ~2 chunks, not 1.
-const MULTIPART_THRESHOLD = 10 * 1024 * 1024
+const MULTIPART_THRESHOLD = 5 * 1024 * 1024
 
 const HEIC_EXT_RE = /\.(heic|heif)$/i
 const HEIC_MIME_TYPES = new Set([
@@ -273,14 +273,22 @@ function getHeicWorker(): Worker | null {
       else job.reject(new Error(error ?? 'HEIC conversion failed'))
     })
     heicWorker.addEventListener('error', (event) => {
-      // Worker bootstrap failed — fall back to main-thread conversion for all pending jobs.
+      // Worker bootstrap failed. Log the actual reason so we can diagnose from the console
+      // instead of guessing. The fallback to main-thread conversion follows.
+      const reason = event.message || event.filename || 'unknown'
+      console.error('[heic-worker] bootstrap/runtime error:', reason, event)
       heicWorkerBroken = true
       heicWorker = null
-      heicJobs.forEach(({ reject }) => reject(new Error(`HEIC worker crashed: ${event.message || 'unknown'}`)))
+      heicJobs.forEach(({ reject }) => reject(new Error(`HEIC worker error: ${reason}`)))
       heicJobs.clear()
     })
+    heicWorker.addEventListener('messageerror', (event) => {
+      // Fires when postMessage payload couldn't be deserialized — usually a Transferable issue.
+      console.error('[heic-worker] messageerror:', event)
+    })
     return heicWorker
-  } catch {
+  } catch (err) {
+    console.error('[heic-worker] failed to construct Worker:', err)
     heicWorkerBroken = true
     return null
   }
@@ -400,10 +408,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         try {
           uploadFile = await convertHeicToJpeg(file)
         } catch (err) {
-          const msg = err instanceof Error && err.message === 'HEIC conversion timed out'
-            ? `${file.name}: HEIC conversion took too long — file may be corrupted`
-            : `${file.name}: could not convert HEIC to JPG`
-          rejected.push(msg)
+          // Surface the real error so we can tell apart worker-bootstrap failures, timeouts,
+          // and actual heic2any decode errors. The generic message was hiding the root cause.
+          const errMsg = err instanceof Error ? err.message : String(err)
+          rejected.push(`${file.name}: HEIC failed (${errMsg})`)
           continue
         }
         if (uploadFile.size > cap) {

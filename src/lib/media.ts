@@ -79,12 +79,22 @@ export async function generateVideoPoster(file: File): Promise<PosterResult | nu
     const h = video.videoHeight
     if (!w || !h) return null
 
+    // Cap the poster's longest dimension at 720 px. The poster is used as a grid thumbnail and
+    // the lightbox stand-in, neither of which need full source resolution. Allocating a 1920×1080
+    // (or 3840×2160) canvas + doing the full-res drawImage on the main thread was the cause of
+    // the 20–30 s "freeze" users were seeing before chunk uploads even started.
+    const MAX_POSTER_DIM = 720
+    const longest = Math.max(w, h)
+    const scale = longest > MAX_POSTER_DIM ? MAX_POSTER_DIM / longest : 1
+    const cw = Math.max(1, Math.round(w * scale))
+    const ch = Math.max(1, Math.round(h * scale))
+
     const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
+    canvas.width = cw
+    canvas.height = ch
     const ctx = canvas.getContext('2d')
     if (!ctx) return null
-    ctx.drawImage(video, 0, 0, w, h)
+    ctx.drawImage(video, 0, 0, cw, ch)
 
     const blob = await new Promise<Blob | null>((resolve) =>
       canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85),
@@ -93,8 +103,8 @@ export async function generateVideoPoster(file: File): Promise<PosterResult | nu
 
     return {
       blob,
-      width: w,
-      height: h,
+      width: cw,
+      height: ch,
       durationSeconds: Number.isFinite(video.duration) ? video.duration : 0,
     }
   } catch {
