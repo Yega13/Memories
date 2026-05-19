@@ -41,6 +41,17 @@ function mediaImageClass(hover: Album['media_hover']): string {
   return classes.join(' ')
 }
 
+function streamFrameSrc(photo: Photo, autoplay: boolean): string {
+  const base = photo.stream_iframe_url || (photo.stream_uid ? `https://iframe.videodelivery.net/${photo.stream_uid}` : '')
+  if (!base) return ''
+  const url = new URL(base)
+  if (autoplay) {
+    url.searchParams.set('autoplay', 'true')
+    url.searchParams.set('muted', 'true')
+  }
+  return url.toString()
+}
+
 type Point = { x: number; y: number }
 
 function touchDistance(touches: React.TouchList): number {
@@ -573,6 +584,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function downloadPhoto(photo: Photo) {
+    if (photo.storage_backend === 'stream') {
+      showAppToast('Streamed videos cannot be downloaded yet.', 'error')
+      return
+    }
     const urlExt = photo.url.split('?')[0].split('.').pop()?.toLowerCase()
     const ext = urlExt && urlExt.length <= 5 ? urlExt : (photo.media_type === 'video' ? 'mp4' : 'jpg')
     let baseName = photo.caption?.trim()
@@ -1165,7 +1180,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           // For videos, drop the poster src entirely if the poster failed to load so the tile
           // shows the placeholder + Play icon instead of a broken-image icon under the overlay.
           const thumbSrc = isVideo
-            ? (posterBroken.has(photo.id) ? '' : (photo.poster_url || ''))
+            ? (posterBroken.has(photo.id) ? '' : (photo.stream_thumbnail_url || photo.poster_url || ''))
             : photo.url
           const isBroken = broken.has(photo.id)
           const mediaRadius = previewRadiusFor(photo)
@@ -1404,13 +1419,27 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               </div>
             )}
 
-            {!current.url || broken.has(current.id) ? (
+            {(!current.url && !current.stream_uid) || broken.has(current.id) ? (
               // Same fallback for missing URL (legacy rows where url is null/empty) and for
               // media that failed to load. <video src=""> doesn't reliably fire an error event,
               // so we have to guard explicitly here instead of relying only on onError.
               <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
                 <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
+              </div>
+            ) : current.media_type === 'video' && current.stream_uid ? (
+              <div className={`hush-photo-flip relative w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
+                <iframe
+                  src={streamFrameSrc(current, slideshowMode ? !slideshowPaused : !!album.video_autoplay)}
+                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                  allowFullScreen
+                  className="block aspect-video max-h-[min(65vh,680px)] w-[min(92vw,1100px)] max-w-full"
+                  style={{ background: '#000', border: 0, borderRadius: previewRadiusFor(current) }}
+                  onClick={(e) => e.stopPropagation()}
+                  onLoad={(e) => {
+                    setLightboxMediaNode(e.currentTarget)
+                  }}
+                />
               </div>
             ) : current.media_type === 'video' ? (
               <div className={`hush-photo-flip relative w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
@@ -1515,7 +1544,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 </div>
               )}
 
-              {!slideshowMode && (
+              {!slideshowMode && current.storage_backend !== 'stream' && (
                 <button onClick={(e) => { e.stopPropagation(); downloadPhoto(current) }} disabled={broken.has(current.id)} className="p-2 rounded-lg transition hover:opacity-80 disabled:opacity-40 disabled:cursor-not-allowed" style={{ background: 'rgba(255,255,255,0.15)', color: '#FDFAF5' }} title="Download">
                   <Download className="w-5 h-5" />
                 </button>
@@ -1557,7 +1586,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               <div className="hush-slideshow-strip" data-scroll-allowed="true" onClick={(e) => e.stopPropagation()}>
                 {viewerPhotos.map((photo, index) => {
                   const isActive = index === lightbox
-                  const thumbSrc = photo.media_type === 'video' ? photo.poster_url || '' : photo.url
+                  const thumbSrc = photo.media_type === 'video' ? photo.stream_thumbnail_url || photo.poster_url || '' : photo.url
                   return (
                     <button
                       key={photo.id}
@@ -1617,7 +1646,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
             <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-5" data-scroll-allowed="true">
               {photos.map((photo) => {
                 const selected = slideshowSelectedIds.has(photo.id)
-                const thumbSrc = photo.media_type === 'video' ? photo.poster_url || '' : photo.url
+                const thumbSrc = photo.media_type === 'video' ? photo.stream_thumbnail_url || photo.poster_url || '' : photo.url
                 return (
                   <button
                     key={photo.id}
@@ -1658,7 +1687,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         const ghost = photos.find((p) => p.id === reorderDraggingId)
         if (!ghost) return null
         const size = reorderDragTileSizeRef.current
-        const thumbSrc = ghost.media_type === 'video' ? ghost.poster_url || '' : ghost.url
+        const thumbSrc = ghost.media_type === 'video' ? ghost.stream_thumbnail_url || ghost.poster_url || '' : ghost.url
         return (
           <div
             style={{

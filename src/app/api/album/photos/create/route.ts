@@ -10,17 +10,20 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 
 type PhotoRow = {
   storage_path?: string
-  storage_backend?: 'supabase' | 'r2'
+  storage_backend?: 'supabase' | 'r2' | 'stream'
   url?: string
   caption?: string | null
   author_name?: string | null
   media_type?: 'image' | 'video'
   poster_path?: string | null
   poster_url?: string | null
+  stream_uid?: string | null
+  stream_iframe_url?: string | null
+  stream_thumbnail_url?: string | null
   duration_seconds?: number | null
 }
 
-const STORAGE_BACKENDS = new Set(['supabase', 'r2'])
+const STORAGE_BACKENDS = new Set(['supabase', 'r2', 'stream'])
 const MEDIA_TYPES = new Set(['image', 'video'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -76,7 +79,7 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   if (!storageBackend || !STORAGE_BACKENDS.has(storageBackend)) return null
   if (!mediaType || !MEDIA_TYPES.has(mediaType)) return null
   if (mediaType === 'image' && storageBackend !== 'supabase') return null
-  if (mediaType === 'video' && storageBackend !== 'r2') return null
+  if (mediaType === 'video' && storageBackend !== 'r2' && storageBackend !== 'stream') return null
 
   return {
     album_id: albumId,
@@ -88,6 +91,9 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
     media_type: mediaType,
     poster_path: mediaTextOrNull(row.poster_path, 256),
     poster_url: mediaTextOrNull(row.poster_url, 2048),
+    stream_uid: mediaTextOrNull(row.stream_uid, 128),
+    stream_iframe_url: mediaTextOrNull(row.stream_iframe_url, 2048),
+    stream_thumbnail_url: mediaTextOrNull(row.stream_thumbnail_url, 2048),
     duration_seconds: numberOrNull(row.duration_seconds),
   }
 }

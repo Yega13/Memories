@@ -16,6 +16,11 @@ import { showAppToast } from '@/components/AppToast'
 import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
 type R2UploadResult = { storage_path: string; url: string }
+type StreamUploadResult = {
+  stream_uid: string
+  stream_iframe_url: string
+  stream_thumbnail_url: string
+}
 
 async function uploadToR2(
   file: File | Blob,
@@ -63,6 +68,7 @@ async function uploadToR2(
 // chunks = each connection holds open for less time, halving exposure to mid-flight drops by
 // carrier proxies or Cloudflare's edge. More chunks per video but the retry path is cheap.
 const CHUNK_SIZE = 5 * 1024 * 1024
+const STREAM_CHUNK_SIZE = 5 * 1024 * 1024
 type ChunkTransport = 'form' | 'raw'
 
 function prefersRawChunkUpload(): boolean {
@@ -204,6 +210,105 @@ async function uploadVideoMultipart(
   return { storage_path, url }
 }
 
+async function getStreamUploadOffset(uploadUrl: string): Promise<number | null> {
+  try {
+    const res = await fetch(uploadUrl, {
+      method: 'HEAD',
+      headers: { 'Tus-Resumable': '1.0.0' },
+    })
+    if (!res.ok) return null
+    const offset = Number(res.headers.get('Upload-Offset'))
+    return Number.isFinite(offset) && offset >= 0 ? offset : null
+  } catch {
+    return null
+  }
+}
+
+async function uploadVideoToStream(
+  file: File,
+  albumId: string,
+  filename: string,
+  onProgress?: (percent: number) => void,
+): Promise<StreamUploadResult> {
+  const initRes = await fetch('/api/upload/stream/tus', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      albumId,
+      filename,
+      contentType: file.type || 'video/mp4',
+      totalSize: file.size,
+    }),
+  })
+  const initBody = await initRes.json().catch(() => ({})) as {
+    error?: string
+    uploadUrl?: string
+    stream_uid?: string
+    stream_iframe_url?: string
+    stream_thumbnail_url?: string
+  }
+  if (!initRes.ok || !initBody.uploadUrl || !initBody.stream_uid || !initBody.stream_iframe_url || !initBody.stream_thumbnail_url) {
+    throw new Error(initBody.error || `Stream upload init failed: ${initRes.status}`)
+  }
+
+  let offset = 0
+  while (offset < file.size) {
+    const start = offset
+    const end = Math.min(start + STREAM_CHUNK_SIZE, file.size)
+    const chunk = file.slice(start, end)
+
+    let lastErr: Error | null = null
+    for (let attempt = 1; attempt <= 8; attempt++) {
+      try {
+        offset = await new Promise<number>((resolve, reject) => {
+          const xhr = new XMLHttpRequest()
+          xhr.open('PATCH', initBody.uploadUrl!)
+          xhr.setRequestHeader('Tus-Resumable', '1.0.0')
+          xhr.setRequestHeader('Upload-Offset', String(start))
+          xhr.setRequestHeader('Content-Type', 'application/offset+octet-stream')
+          xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return
+            const sent = start + event.loaded
+            onProgress?.(Math.round(Math.min(95, (sent / file.size) * 95)))
+          }
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              const nextOffset = Number(xhr.getResponseHeader('Upload-Offset') ?? end)
+              resolve(Number.isFinite(nextOffset) && nextOffset > start ? nextOffset : end)
+            } else {
+              reject(new Error(`Stream chunk failed: ${xhr.status}`))
+            }
+          }
+          xhr.onerror = () => reject(new Error('Network error during Stream upload'))
+          xhr.ontimeout = () => reject(new Error('Timeout during Stream upload'))
+          xhr.timeout = 300_000
+          xhr.send(chunk)
+        })
+        onProgress?.(Math.round(Math.min(95, (offset / file.size) * 95)))
+        break
+      } catch (e) {
+        lastErr = e instanceof Error ? e : new Error(String(e))
+        const remoteOffset = await getStreamUploadOffset(initBody.uploadUrl)
+        if (remoteOffset != null && remoteOffset > start) {
+          offset = remoteOffset
+          break
+        }
+        if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))
+      }
+    }
+    if (offset <= start) {
+      throw lastErr ?? new Error('Stream upload failed')
+    }
+  }
+
+  onProgress?.(98)
+  return {
+    stream_uid: initBody.stream_uid,
+    stream_iframe_url: initBody.stream_iframe_url,
+    stream_thumbnail_url: initBody.stream_thumbnail_url,
+  }
+}
+
 // ─── Background poster generation ─────────────────────────────────────────────
 // After a video upload + DB row insert finishes, we enqueue a background job that:
 //   1) generates a poster JPEG from the local File (via lib/media.ts generateVideoPoster)
@@ -316,13 +421,16 @@ type UploadStatus = {
 
 type PhotoInsertRow = {
   storage_path: string
-  storage_backend: 'supabase' | 'r2'
+  storage_backend: 'supabase' | 'r2' | 'stream'
   url: string
   caption: string | null
   author_name: string | null
   media_type: 'image' | 'video'
   poster_path: string | null
   poster_url: string | null
+  stream_uid: string | null
+  stream_iframe_url: string | null
+  stream_thumbnail_url: string | null
   duration_seconds: number | null
 }
 
@@ -590,6 +698,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
             media_type: 'image',
             poster_path: null,
             poster_url: null,
+            stream_uid: null,
+            stream_iframe_url: null,
+            stream_thumbnail_url: null,
             duration_seconds: null,
           }
         }
@@ -599,8 +710,26 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       throw new Error('Upload failed')
     }
 
-    // Large videos use multipart chunked upload (85 MB chunks, each under Workers 100 MB limit).
-    // Small videos are sent as a single Worker request.
+    try {
+      const stream = await uploadVideoToStream(item.file, album.id, filename)
+      return {
+        storage_path: `${album.id}/${stream.stream_uid}.stream`,
+        storage_backend: 'stream',
+        url: stream.stream_iframe_url,
+        caption: item.caption.trim() || null,
+        author_name: item.author.trim() || null,
+        media_type: 'video',
+        poster_path: null,
+        poster_url: stream.stream_thumbnail_url,
+        stream_uid: stream.stream_uid,
+        stream_iframe_url: stream.stream_iframe_url,
+        stream_thumbnail_url: stream.stream_thumbnail_url,
+        duration_seconds: null,
+      }
+    } catch (err) {
+      console.warn('[stream] upload failed; falling back to R2:', err instanceof Error ? err.message : String(err))
+    }
+
     const res = item.file.size > MULTIPART_THRESHOLD
       ? await uploadVideoMultipart(item.file, album.id, filename)
       : await uploadToR2(item.file, album.id, filename, 'video')
@@ -616,6 +745,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       media_type: 'video',
       poster_path: posterPath,
       poster_url: posterUrl,
+      stream_uid: null,
+      stream_iframe_url: null,
+      stream_thumbnail_url: null,
       duration_seconds: durationSeconds,
     }
   }
@@ -705,6 +837,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       queue.forEach((item, i) => {
         const row = rows[i]
         if (!row || row.media_type !== 'video') return
+        if (row.storage_backend === 'stream') return
         if (item.file.size > POSTER_MAX_BYTES) return
         posterQueue.push({ file: item.file, albumId: album.id, storagePath: row.storage_path })
       })

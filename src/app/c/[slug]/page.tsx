@@ -35,6 +35,7 @@ type MediaPreview = {
   album_id: string
   url: string
   poster_url: string | null
+  stream_thumbnail_url: string | null
   media_type: 'image' | 'video'
   created_at: string
 }
@@ -79,7 +80,7 @@ export default async function CollectionPage({ params }: Props) {
   const { data: mediaRows } = albumIds.length
     ? await admin
         .from('photos')
-        .select('id, album_id, url, poster_url, media_type, created_at')
+        .select('id, album_id, url, poster_url, stream_thumbnail_url, media_type, created_at')
         .in('album_id', albumIds)
         .order('created_at', { ascending: true })
         .returns<MediaPreview[]>()
@@ -94,7 +95,7 @@ export default async function CollectionPage({ params }: Props) {
       const cover = pinned ?? albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
       return {
         ...album,
-        cover_url: cover ? (cover.media_type === 'video' ? cover.poster_url || cover.url : cover.url) : null,
+        cover_url: cover ? (cover.media_type === 'video' ? cover.stream_thumbnail_url || cover.poster_url || null : cover.url) : null,
         media_count: albumMedia.length,
         video_count: albumMedia.filter((row) => row.media_type === 'video').length,
       }

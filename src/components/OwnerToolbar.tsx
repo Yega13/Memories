@@ -461,6 +461,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i]
       try {
+        if (photo.storage_backend === 'stream') {
+          throw new Error('Streamed video download is not available yet')
+        }
         const res = await fetch(photo.url)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const blob = await res.blob()

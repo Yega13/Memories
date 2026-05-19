@@ -31,7 +31,7 @@ export type Album = {
 }
 
 export type MediaType = 'image' | 'video'
-export type StorageBackend = 'supabase' | 'r2'
+export type StorageBackend = 'supabase' | 'r2' | 'stream'
 
 export type Photo = {
   id: string
@@ -45,6 +45,9 @@ export type Photo = {
   media_type: MediaType
   poster_path: string | null
   poster_url: string | null
+  stream_uid: string | null
+  stream_iframe_url: string | null
+  stream_thumbnail_url: string | null
   duration_seconds: number | null
   display_radius: number | null
   display_filter: MediaDisplayFilter | null

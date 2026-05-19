@@ -321,6 +321,8 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://zleajzevvhugkwlqlolt.supabase.co" />
         <link rel="preconnect" href="https://videos.hushare.space" />
+        <link rel="preconnect" href="https://iframe.videodelivery.net" />
+        <link rel="preconnect" href="https://videodelivery.net" />
         <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
       </head>
       <body className="min-h-full flex flex-col">
@@ -343,4 +345,3 @@ export default function RootLayout({
     </html>
   );
 }
-

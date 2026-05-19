@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 import { deleteFaces } from '@/lib/rekognition'
+import { deleteStreamVideo } from '@/lib/cloudflare-stream'
 
 export const runtime = 'nodejs'
 
@@ -16,8 +17,9 @@ type PhotoRow = {
   id: string
   album_id: string
   storage_path: string
-  storage_backend: 'supabase' | 'r2'
+  storage_backend: 'supabase' | 'r2' | 'stream'
   poster_path: string | null
+  stream_uid: string | null
   face_ids: string[] | null
 }
 
@@ -54,7 +56,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: photos, error: lookupError } = await admin
     .from('photos')
-    .select('id, album_id, storage_path, storage_backend, poster_path, face_ids')
+    .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
     .in('id', photoIds)
     .eq('album_id', access.album.id)
     .returns<PhotoRow[]>()
@@ -69,11 +71,17 @@ export async function POST(req: Request) {
 
   const r2Paths: string[] = []
   const supabasePaths: string[] = []
+  const streamUids: string[] = []
   const faceIds: string[] = []
   for (const p of photos) {
-    const target = p.storage_backend === 'r2' ? r2Paths : supabasePaths
-    target.push(p.storage_path)
-    if (p.poster_path) target.push(p.poster_path)
+    if (p.storage_backend === 'stream') {
+      if (p.stream_uid) streamUids.push(p.stream_uid)
+      if (p.poster_path) r2Paths.push(p.poster_path)
+    } else {
+      const target = p.storage_backend === 'r2' ? r2Paths : supabasePaths
+      target.push(p.storage_path)
+      if (p.poster_path) target.push(p.poster_path)
+    }
     if (p.face_ids && p.face_ids.length > 0) faceIds.push(...p.face_ids)
   }
 
@@ -88,6 +96,13 @@ export async function POST(req: Request) {
   if (supabasePaths.length > 0) {
     const { error: storageError } = await admin.storage.from('Photos').remove(supabasePaths)
     if (storageError) console.error('[photo/bulk-delete] storage remove failed:', storageError.message)
+  }
+  for (const uid of streamUids) {
+    try {
+      await deleteStreamVideo(uid)
+    } catch (e) {
+      console.error('[photo/bulk-delete] Stream remove failed:', e instanceof Error ? e.message : String(e))
+    }
   }
 
   const ids = photos.map((p) => p.id)

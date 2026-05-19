@@ -3,6 +3,7 @@ import type { createAdminClient } from '@/lib/supabase/admin'
 import type { R2Env } from '@/lib/r2'
 import { storagePathFromPublicPhotoUrl } from '@/lib/storage-path'
 import { deleteCollection } from '@/lib/rekognition'
+import { deleteStreamVideo } from '@/lib/cloudflare-stream'
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -13,8 +14,9 @@ type AlbumDeleteTarget = {
 
 type PhotoToDelete = {
   storage_path: string
-  storage_backend: 'supabase' | 'r2'
+  storage_backend: 'supabase' | 'r2' | 'stream'
   poster_path: string | null
+  stream_uid: string | null
 }
 
 export async function deleteAlbumAssetsAndRows(
@@ -23,7 +25,7 @@ export async function deleteAlbumAssetsAndRows(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: photos, error: photosError } = await admin
     .from('photos')
-    .select('storage_path, storage_backend, poster_path')
+    .select('storage_path, storage_backend, poster_path, stream_uid')
     .eq('album_id', album.id)
     .returns<PhotoToDelete[]>()
 
@@ -34,10 +36,16 @@ export async function deleteAlbumAssetsAndRows(
 
   const supabasePaths = new Set<string>()
   const r2Paths = new Set<string>()
+  const streamUids = new Set<string>()
   for (const photo of photos ?? []) {
-    const target = photo.storage_backend === 'r2' ? r2Paths : supabasePaths
-    target.add(photo.storage_path)
-    if (photo.poster_path) target.add(photo.poster_path)
+    if (photo.storage_backend === 'stream') {
+      if (photo.stream_uid) streamUids.add(photo.stream_uid)
+      if (photo.poster_path) r2Paths.add(photo.poster_path)
+    } else {
+      const target = photo.storage_backend === 'r2' ? r2Paths : supabasePaths
+      target.add(photo.storage_path)
+      if (photo.poster_path) target.add(photo.poster_path)
+    }
   }
 
   const backgroundPath = storagePathFromPublicPhotoUrl(album.background_theme)
@@ -60,6 +68,14 @@ export async function deleteAlbumAssetsAndRows(
   if (supabasePaths.size > 0) {
     const { error: storageError } = await admin.storage.from('Photos').remove([...supabasePaths])
     if (storageError) console.error('[album/delete] storage remove failed:', storageError.message)
+  }
+
+  for (const uid of streamUids) {
+    try {
+      await deleteStreamVideo(uid)
+    } catch (e) {
+      console.error('[album/delete] Stream remove failed:', e instanceof Error ? e.message : String(e))
+    }
   }
 
   await admin.from('collection_albums').delete().eq('album_id', album.id)

@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 import { deleteFaces } from '@/lib/rekognition'
+import { deleteStreamVideo } from '@/lib/cloudflare-stream'
 
 export const runtime = 'nodejs'
 
@@ -37,14 +38,15 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: photo, error: photoError } = await admin
     .from('photos')
-    .select('id, album_id, storage_path, storage_backend, poster_path, face_ids')
+    .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
     .eq('id', photoId)
     .maybeSingle<{
       id: string
       album_id: string
       storage_path: string
-      storage_backend: 'supabase' | 'r2'
+      storage_backend: 'supabase' | 'r2' | 'stream'
       poster_path: string | null
+      stream_uid: string | null
       face_ids: string[] | null
     }>()
 
@@ -58,7 +60,15 @@ export async function POST(req: Request) {
   const paths = [photo.storage_path]
   if (photo.poster_path) paths.push(photo.poster_path)
 
-  if (photo.storage_backend === 'r2') {
+  if (photo.storage_backend === 'stream') {
+    if (photo.stream_uid) {
+      try {
+        await deleteStreamVideo(photo.stream_uid)
+      } catch (e) {
+        console.error('[photo/delete] Stream remove failed:', e instanceof Error ? e.message : String(e))
+      }
+    }
+  } else if (photo.storage_backend === 'r2') {
     const ctx = getCloudflareContext()
     const bucket = (ctx?.env as R2Env | undefined)?.R2_VIDEOS
     if (bucket) {

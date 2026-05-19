@@ -86,6 +86,7 @@ type AccountMediaRow = {
   media_type: 'image' | 'video'
   url: string
   poster_url: string | null
+  stream_thumbnail_url: string | null
   created_at: string
 }
 
@@ -195,7 +196,7 @@ export default async function AccountPage({ searchParams }: Props) {
   const { data: accountMedia } = accountAlbumIds.length
     ? await admin
         .from('photos')
-        .select('id, album_id, media_type, url, poster_url, created_at')
+        .select('id, album_id, media_type, url, poster_url, stream_thumbnail_url, created_at')
         .in('album_id', accountAlbumIds)
         .order('created_at', { ascending: true })
         .returns<AccountMediaRow[]>()
@@ -207,7 +208,7 @@ export default async function AccountPage({ searchParams }: Props) {
     const cover = pinned ?? albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
     return {
       ...album,
-      cover_url: cover ? (cover.media_type === 'video' ? cover.poster_url || cover.url : cover.url) : null,
+      cover_url: cover ? (cover.media_type === 'video' ? cover.stream_thumbnail_url || cover.poster_url || null : cover.url) : null,
       media_count: albumMedia.length,
     }
   })
