@@ -117,6 +117,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [dragGhostPointer, setDragGhostPointer] = useState<Point | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
+  // Separate from `broken`: when a VIDEO's poster image fails to load, we want the grid tile to
+  // show the placeholder + Play icon, but the video itself should still open normally in the
+  // lightbox. Using a separate state avoids marking the whole photo unavailable.
+  const [posterBroken, setPosterBroken] = useState<Set<string>>(new Set())
   const [tileRadiusMaxById, setTileRadiusMaxById] = useState<Record<string, number>>({})
   const [lightboxMediaNode, setLightboxMediaNode] = useState<HTMLElement | null>(null)
   const [lightboxRadiusMax, setLightboxRadiusMax] = useState<number | null>(null)
@@ -1158,7 +1162,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       >
         {photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
-          const thumbSrc = isVideo ? photo.poster_url || '' : photo.url
+          // For videos, drop the poster src entirely if the poster failed to load so the tile
+          // shows the placeholder + Play icon instead of a broken-image icon under the overlay.
+          const thumbSrc = isVideo
+            ? (posterBroken.has(photo.id) ? '' : (photo.poster_url || ''))
+            : photo.url
           const isBroken = broken.has(photo.id)
           const mediaRadius = previewRadiusFor(photo)
           const filter = cssMediaDisplayFilter(previewFilterFor(photo))
@@ -1213,7 +1221,18 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       '--hush-media-filter': filter,
                     } as React.CSSProperties}
                     onError={() => {
-                      if (!isVideo) markBroken(photo.id)
+                      if (isVideo) {
+                        // Poster failed but the video itself may still play — flag the poster
+                        // only, not the whole photo, so the lightbox can still open the video.
+                        setPosterBroken((prev) => {
+                          if (prev.has(photo.id)) return prev
+                          const next = new Set(prev)
+                          next.add(photo.id)
+                          return next
+                        })
+                      } else {
+                        markBroken(photo.id)
+                      }
                     }}
                     onContextMenu={(e) => toggleGridCardBack(photo, e)}
                   />
@@ -1373,7 +1392,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               </div>
             )}
 
-            {broken.has(current.id) ? (
+            {!current.url || broken.has(current.id) ? (
+              // Same fallback for missing URL (legacy rows where url is null/empty) and for
+              // media that failed to load. <video src=""> doesn't reliably fire an error event,
+              // so we have to guard explicitly here instead of relying only on onError.
               <div className="flex min-h-[240px] w-[min(92vw,720px)] flex-col items-center justify-center px-6 text-center" style={{ background: 'rgba(253,250,245,0.94)', borderRadius: previewRadiusFor(current) }} onClick={(e) => e.stopPropagation()}>
                 <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
                 <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
@@ -1397,6 +1419,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   onEnded={() => {
                     if (slideshowActive && !slideshowPaused && viewerPhotos.length > 1) next()
                   }}
+                  // Without this, a broken video URL or unsupported codec leaves the lightbox
+                  // showing a black box with controls and no error — looks like "not opening".
+                  // Marking the photo broken triggers the same "File unavailable" fallback the
+                  // image branch already had.
+                  onError={() => markBroken(current.id)}
                   onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
                   onMouseDown={handleMediaMouseDown}
                   onMouseMove={handleMediaMouseMove}
