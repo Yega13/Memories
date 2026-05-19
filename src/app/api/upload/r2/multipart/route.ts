@@ -7,6 +7,9 @@ import type { R2Env, R2UploadPart } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
+// Long videos on slow mobile data: a single chunk PUT can take a couple of minutes. Give the
+// route headroom past the default Next.js maxDuration so the chunk upload finishes cleanly.
+export const maxDuration = 120
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
@@ -70,23 +73,31 @@ export async function POST(req: Request) {
 
   // ── chunk ─────────────────────────────────────────────────────────────────
   if (action === 'chunk') {
-    let form: FormData
-    try { form = await req.formData() } catch { return NextResponse.json({ error: 'Invalid form data' }, { status: 400, headers: NO_STORE }) }
-
-    const uploadId = String(form.get('uploadId') ?? '').trim()
-    const key = String(form.get('key') ?? '').trim()
-    const partNumber = Number(form.get('partNumber'))
-    const chunk = form.get('chunk')
+    // Switched from FormData (which buffers the whole 50 MB chunk into memory before we even
+    // see it) to raw body + query-param metadata. R2's uploadPart accepts the request stream
+    // directly, so we never hold the full chunk in Worker memory.
+    const url = new URL(req.url)
+    const uploadId = (url.searchParams.get('uploadId') ?? '').trim()
+    const key = (url.searchParams.get('key') ?? '').trim()
+    const partNumber = Number(url.searchParams.get('partNumber'))
+    const contentLengthHeader = req.headers.get('content-length')
+    const declaredSize = contentLengthHeader ? Number(contentLengthHeader) : NaN
 
     if (!UPLOAD_ID_RE.test(uploadId)) return NextResponse.json({ error: 'Invalid uploadId' }, { status: 400, headers: NO_STORE })
     if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
     if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return NextResponse.json({ error: 'Invalid partNumber' }, { status: 400, headers: NO_STORE })
-    if (!(chunk instanceof Blob)) return NextResponse.json({ error: 'Missing chunk' }, { status: 400, headers: NO_STORE })
-    if (chunk.size > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
+    if (!req.body) return NextResponse.json({ error: 'Missing chunk body' }, { status: 400, headers: NO_STORE })
+    if (Number.isFinite(declaredSize) && declaredSize > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
 
-    const upload = bucket.resumeMultipartUpload(key, uploadId)
-    const part = await upload.uploadPart(partNumber, chunk)
-    return NextResponse.json({ partNumber: part.partNumber, etag: part.etag }, { headers: NO_STORE })
+    try {
+      const upload = bucket.resumeMultipartUpload(key, uploadId)
+      const part = await upload.uploadPart(partNumber, req.body)
+      return NextResponse.json({ partNumber: part.partNumber, etag: part.etag }, { headers: NO_STORE })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[r2/multipart] chunk upload failed:', msg, 'part', partNumber, 'key', key)
+      return NextResponse.json({ error: `Chunk ${partNumber} failed: ${msg}` }, { status: 500, headers: NO_STORE })
+    }
   }
 
   // ── complete ──────────────────────────────────────────────────────────────

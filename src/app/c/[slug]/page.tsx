@@ -90,11 +90,8 @@ export default async function CollectionPage({ params }: Props) {
       const album = (albums ?? []).find((candidate) => candidate.id === id)
       if (!album) return null
       const albumMedia = (mediaRows ?? []).filter((row) => row.album_id === id)
-      // Respect the owner's explicit choice: if a cover was set, use it; if they cleared it
-      // (cover_photo_id = null) show no auto-fallback. Only pick a first-photo cover when the
-      // album has never had a cover assigned at all (cover_photo_id strictly undefined).
       const pinned = album.cover_photo_id ? albumMedia.find((row) => row.id === album.cover_photo_id) : undefined
-      const cover = pinned ?? (album.cover_photo_id === null ? undefined : (albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]))
+      const cover = pinned ?? albumMedia.find((row) => row.media_type === 'image') ?? albumMedia[0]
       return {
         ...album,
         cover_url: cover ? (cover.media_type === 'video' ? cover.poster_url || cover.url : cover.url) : null,

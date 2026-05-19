@@ -59,10 +59,9 @@ async function uploadToR2(
 }
 
 // Large video upload via R2 multipart — splits the file into chunks each sent through the Worker
-// (under Cloudflare's 100 MB body limit and well below the 30 s Worker wall-clock). 50 MB feels
-// like the right tradeoff: fewer round-trips than 25 MB chunks, but slow uploads at 5 Mbps still
-// finish each chunk in <90 s and have plenty of room before TCP retransmits would time us out.
-const CHUNK_SIZE = 50 * 1024 * 1024
+// (under Cloudflare's 100 MB body limit). 25 MB feels right: smaller per-chunk failures cost
+// less to retry, and on mobile data 25 MB finishes in 40 s at 5 Mbps — well within any timeout.
+const CHUNK_SIZE = 25 * 1024 * 1024
 
 async function uploadVideoMultipart(
   file: File,
@@ -91,13 +90,17 @@ async function uploadVideoMultipart(
 
   async function uploadChunkOnce(partNumber: number, chunk: Blob, end: number, start: number) {
     return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
-      const form = new FormData()
-      form.append('uploadId', uploadId!)
-      form.append('key', key!)
-      form.append('partNumber', String(partNumber))
-      form.append('chunk', chunk)
+      // Raw body — no FormData. The server reads metadata from query params and streams the
+      // chunk straight through to R2 instead of buffering 25 MB of form-encoded data.
+      const params = new URLSearchParams({
+        action: 'chunk',
+        uploadId: uploadId!,
+        key: key!,
+        partNumber: String(partNumber),
+      })
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/upload/r2/multipart?action=chunk')
+      xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return
         const chunkUploaded = event.loaded / event.total * (end - start)
@@ -113,7 +116,10 @@ async function uploadVideoMultipart(
         }
       }
       xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
-      xhr.send(form)
+      xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
+      // 3-minute per-chunk timeout — covers slow mobile data on a 25 MB chunk.
+      xhr.timeout = 180_000
+      xhr.send(chunk)
     })
   }
 
@@ -125,13 +131,14 @@ async function uploadVideoMultipart(
 
     let part: { partNumber: number; etag: string } | null = null
     let lastErr: Error | null = null
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    // 5 attempts with exponential-ish backoff. Mobile data drops can take seconds to recover.
+    for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         part = await uploadChunkOnce(partNumber, chunk, end, start)
         break
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error(String(e))
-        if (attempt < 3) await wait(1000 * attempt)
+        if (attempt < 5) await wait(1500 * attempt)
       }
     }
     if (!part) {
@@ -206,7 +213,7 @@ type PhotoInsertRow = {
 // Files above this threshold use multipart chunked upload. Below it, the file is sent as a
 // single Worker request. Match the threshold to the chunk size so a file just over the threshold
 // gets split into ~2 chunks, not 1.
-const MULTIPART_THRESHOLD = 50 * 1024 * 1024
+const MULTIPART_THRESHOLD = 25 * 1024 * 1024
 
 const HEIC_EXT_RE = /\.(heic|heif)$/i
 const HEIC_MIME_TYPES = new Set([
@@ -238,20 +245,45 @@ function jpegNameFor(file: File): string {
   return `${withoutExt || 'photo'}.jpg`
 }
 
-const HEIC_CONVERSION_TIMEOUT_MS = 45_000
+const HEIC_CONVERSION_TIMEOUT_MS = 60_000
+
+// Lazily-created singleton worker. We reuse one worker across all conversions to avoid the cost
+// of spinning up libheif WASM for each file.
+let heicWorker: Worker | null = null
+let heicJobId = 0
+const heicJobs = new Map<number, { resolve: (jpeg: Blob) => void; reject: (err: Error) => void }>()
+
+function getHeicWorker(): Worker {
+  if (heicWorker) return heicWorker
+  // The worker bundle is built from src/lib/heic-worker.ts. Next.js + Webpack can resolve
+  // `new Worker(new URL('./...', import.meta.url))` automatically.
+  heicWorker = new Worker(new URL('@/lib/heic-worker.ts', import.meta.url), { type: 'module' })
+  heicWorker.addEventListener('message', (e: MessageEvent<{ id: number; jpeg?: Blob; error?: string }>) => {
+    const { id, jpeg, error } = e.data
+    const job = heicJobs.get(id)
+    if (!job) return
+    heicJobs.delete(id)
+    if (jpeg) job.resolve(jpeg)
+    else job.reject(new Error(error ?? 'HEIC conversion failed'))
+  })
+  return heicWorker
+}
 
 async function convertHeicToJpeg(file: File): Promise<File> {
-  const { default: heic2any } = await import('heic2any')
-  // heic2any is WASM that runs on the main thread. On some HEIC files it hangs indefinitely
-  // (broken metadata, unsupported codec, etc.). Race against a timeout so one bad file can't
-  // freeze the upload queue and force a page refresh.
-  const converted = await Promise.race([
-    heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 }),
-    new Promise<never>((_, reject) => window.setTimeout(
-      () => reject(new Error('HEIC conversion timed out')), HEIC_CONVERSION_TIMEOUT_MS,
-    )),
-  ])
-  const blob = Array.isArray(converted) ? converted[0] : converted
+  // Convert in a Web Worker so libheif WASM doesn't block the main thread. Without this the
+  // page freezes for the full duration of the conversion and any timeout fires only after the
+  // worker has actually returned (defeating the purpose).
+  const worker = getHeicWorker()
+  const id = ++heicJobId
+  const blob: Blob = await new Promise<Blob>((resolve, reject) => {
+    heicJobs.set(id, { resolve, reject })
+    window.setTimeout(() => {
+      if (!heicJobs.has(id)) return
+      heicJobs.delete(id)
+      reject(new Error('HEIC conversion timed out'))
+    }, HEIC_CONVERSION_TIMEOUT_MS)
+    worker.postMessage({ id, blob: file })
+  })
   return new File([blob], jpegNameFor(file), {
     type: 'image/jpeg',
     lastModified: file.lastModified,

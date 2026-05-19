@@ -702,9 +702,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function handleTileTouchMove(e: React.TouchEvent<HTMLDivElement>) {
     if (!longPressOriginRef.current || reorderTimerRef.current == null) return
-    // Belt-and-suspenders cancel: if the page is scrolling, that's a definitive scroll gesture
-    // regardless of how small the finger delta on the element looks.
-    if (Math.abs(window.scrollY - longPressScrollYRef.current) > 3) {
+    // Page-scroll check with a 25 px tolerance — mobile browsers shift scrollY by ~10 px when
+    // the address bar shows/hides, which is unrelated to the user dragging. Real scroll gestures
+    // move the page much further than that within the first frame.
+    if (Math.abs(window.scrollY - longPressScrollYRef.current) > 25) {
       clearReorderTimer()
       longPressOriginRef.current = null
       return
@@ -713,9 +714,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (!t) return
     const dx = Math.abs(t.clientX - longPressOriginRef.current.x)
     const dy = Math.abs(t.clientY - longPressOriginRef.current.y)
-    // Tightened from 15 to 8 — 15 was forgiving enough that slow scrolls fell under the
-    // threshold for the full 500 ms and the timer fired mid-scroll.
-    if (dx > 8 || dy > 8) {
+    // 12 px lets a finger settle without canceling, while still catching any real swipe.
+    if (dx > 12 || dy > 12) {
       clearReorderTimer()
       longPressOriginRef.current = null
     }
