@@ -36,19 +36,47 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const { data: photo, error: photoError } = await admin
-    .from('photos')
-    .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
-    .eq('id', photoId)
-    .maybeSingle<{
-      id: string
-      album_id: string
-      storage_path: string
-      storage_backend: 'supabase' | 'r2' | 'stream'
-      poster_path: string | null
-      stream_uid: string | null
-      face_ids: string[] | null
-    }>()
+  // Select mirror_path defensively — column may not exist yet on pre-migration DBs. If the
+  // column is missing, Supabase rejects the query; the catch below falls back to a query that
+  // omits mirror_path so deletion still works.
+  let photo: {
+    id: string
+    album_id: string
+    storage_path: string
+    storage_backend: 'supabase' | 'r2' | 'stream'
+    poster_path: string | null
+    stream_uid: string | null
+    mirror_path: string | null
+    face_ids: string[] | null
+  } | null = null
+  let photoError: { message: string } | null = null
+  {
+    const full = await admin
+      .from('photos')
+      .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, mirror_path, face_ids')
+      .eq('id', photoId)
+      .maybeSingle<typeof photo>()
+    if (full.error && /mirror_path|column .* does not exist/i.test(full.error.message ?? '')) {
+      const fallback = await admin
+        .from('photos')
+        .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
+        .eq('id', photoId)
+        .maybeSingle<{
+          id: string
+          album_id: string
+          storage_path: string
+          storage_backend: 'supabase' | 'r2' | 'stream'
+          poster_path: string | null
+          stream_uid: string | null
+          face_ids: string[] | null
+        }>()
+      photo = fallback.data ? { ...fallback.data, mirror_path: null } : null
+      photoError = fallback.error
+    } else {
+      photo = full.data
+      photoError = full.error
+    }
+  }
 
   if (photoError || !photo) {
     return NextResponse.json({ error: 'Photo not found' }, { status: 404, headers: NO_STORE })
@@ -66,6 +94,20 @@ export async function POST(req: Request) {
         await deleteStreamVideo(photo.stream_uid)
       } catch (e) {
         console.error('[photo/delete] Stream remove failed:', e instanceof Error ? e.message : String(e))
+      }
+    }
+    // Stream-backed videos may also have an R2 mirror of the original (for downloads). Clean
+    // that up too if present; the poster also lives in R2 for Stream items.
+    const r2Targets: string[] = []
+    if (photo.poster_path) r2Targets.push(photo.poster_path)
+    if (photo.mirror_path) r2Targets.push(photo.mirror_path)
+    if (r2Targets.length > 0) {
+      const ctx = getCloudflareContext()
+      const bucket = (ctx?.env as R2Env | undefined)?.R2_VIDEOS
+      if (bucket) {
+        try { await bucket.delete(r2Targets) } catch (e) {
+          console.error('[photo/delete] R2 mirror/poster remove failed:', e instanceof Error ? e.message : String(e))
+        }
       }
     }
   } else if (photo.storage_backend === 'r2') {

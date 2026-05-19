@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, cssMediaDisplayFilter, type MediaDisplayFilter, type SlideshowAnimation } from '@/lib/media-display'
 import { formatDuration } from '@/lib/media'
@@ -148,6 +148,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [, setBulkDeleteConfirming] = useState(false)
   const [lightboxFlipped, setLightboxFlipped] = useState(false)
   const [settingCover, setSettingCover] = useState(false)
+
+  // Stable key over the set of photo IDs. Lets effects depend on "did the tile set change?"
+  // instead of "did the photos array reference change?" — the latter happens on every realtime
+  // UPDATE, which used to force a full observer rebuild + re-firing all preloads.
+  const photoIdsKey = useMemo(() => photos.map((p) => p.id).join('|'), [photos])
 
   const viewerPhotos = slideshowPhotoIds
     ? slideshowPhotoIds
@@ -584,11 +589,20 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function downloadPhoto(photo: Photo) {
+    // For Stream-backed videos prefer the R2 mirror URL (the original mp4) over the iframe URL,
+    // which isn't directly downloadable. If the mirror hasn't been written yet (background job
+    // still pending, or migration not applied) we show the "not downloadable yet" toast so the
+    // user knows the recording will become downloadable later.
+    let sourceUrl = photo.url
     if (photo.storage_backend === 'stream') {
-      showAppToast('Streamed videos cannot be downloaded yet.', 'error')
-      return
+      if (photo.mirror_url) {
+        sourceUrl = photo.mirror_url
+      } else {
+        showAppToast('This video is still being prepared for download. Try again in a minute.', 'error')
+        return
+      }
     }
-    const urlExt = photo.url.split('?')[0].split('.').pop()?.toLowerCase()
+    const urlExt = sourceUrl.split('?')[0].split('.').pop()?.toLowerCase()
     const ext = urlExt && urlExt.length <= 5 ? urlExt : (photo.media_type === 'video' ? 'mp4' : 'jpg')
     let baseName = photo.caption?.trim()
     if (!baseName) {
@@ -601,7 +615,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     }
     const filename = `${baseName}.${ext}`
     const a = document.createElement('a')
-    a.href = `/api/download/photo?url=${encodeURIComponent(photo.url)}&name=${encodeURIComponent(filename)}`
+    a.href = `/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=${encodeURIComponent(filename)}`
     a.download = filename
     a.click()
   }
@@ -1118,7 +1132,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       preloadObserver.disconnect()
       window.removeEventListener('resize', measureTiles)
     }
-  }, [photos, onRadiusMaxChange])
+    // Depend on the set of photo IDs, NOT the full photos array reference. A photo UPDATE
+    // (e.g. caption change, poster_url attach, realtime row update) produces a new photos
+    // array but the same ID set — without this we'd tear down + rebuild both observers and
+    // re-fire preload fetches for every tile every time, which is the main source of perceived
+    // lag when an album has many items.
+  }, [photoIdsKey, onRadiusMaxChange])
 
   useEffect(() => {
     setLightboxMediaNode(null)

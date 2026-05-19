@@ -17,17 +17,35 @@ type PhotoToDelete = {
   storage_backend: 'supabase' | 'r2' | 'stream'
   poster_path: string | null
   stream_uid: string | null
+  mirror_path: string | null
 }
 
 export async function deleteAlbumAssetsAndRows(
   admin: AdminClient,
   album: AlbumDeleteTarget,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: photos, error: photosError } = await admin
-    .from('photos')
-    .select('storage_path, storage_backend, poster_path, stream_uid')
-    .eq('album_id', album.id)
-    .returns<PhotoToDelete[]>()
+  let photos: PhotoToDelete[] | null = null
+  let photosError: { message: string } | null = null
+  {
+    const full = await admin
+      .from('photos')
+      .select('storage_path, storage_backend, poster_path, stream_uid, mirror_path')
+      .eq('album_id', album.id)
+      .returns<PhotoToDelete[]>()
+
+    if (full.error && /mirror_path|column .* does not exist/i.test(full.error.message ?? '')) {
+      const fallback = await admin
+        .from('photos')
+        .select('storage_path, storage_backend, poster_path, stream_uid')
+        .eq('album_id', album.id)
+        .returns<Omit<PhotoToDelete, 'mirror_path'>[]>()
+      photos = fallback.data?.map((photo) => ({ ...photo, mirror_path: null })) ?? null
+      photosError = fallback.error
+    } else {
+      photos = full.data
+      photosError = full.error
+    }
+  }
 
   if (photosError) {
     console.error('[album/delete] photo lookup failed:', photosError.message)
@@ -41,6 +59,7 @@ export async function deleteAlbumAssetsAndRows(
     if (photo.storage_backend === 'stream') {
       if (photo.stream_uid) streamUids.add(photo.stream_uid)
       if (photo.poster_path) r2Paths.add(photo.poster_path)
+      if (photo.mirror_path) r2Paths.add(photo.mirror_path)
     } else {
       const target = photo.storage_backend === 'r2' ? r2Paths : supabasePaths
       target.add(photo.storage_path)

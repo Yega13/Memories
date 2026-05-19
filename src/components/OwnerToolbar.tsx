@@ -461,14 +461,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     for (let i = 0; i < photos.length; i++) {
       const photo = photos[i]
       try {
-        if (photo.storage_backend === 'stream') {
-          throw new Error('Streamed video download is not available yet')
+        const sourceUrl = photo.storage_backend === 'stream' ? photo.mirror_url : photo.url
+        if (!sourceUrl) {
+          throw new Error('Video download is still being prepared')
         }
-        const res = await fetch(photo.url)
+        const res = await fetch(sourceUrl)
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const blob = await res.blob()
-        const pathExt = photo.storage_path.split('.').pop()?.toLowerCase()
-        const urlExt = photo.url.split('.').pop()?.split('?')[0]?.toLowerCase()
+        const storagePath = photo.storage_backend === 'stream' ? photo.mirror_path ?? photo.storage_path : photo.storage_path
+        const pathExt = storagePath.split('.').pop()?.toLowerCase()
+        const urlExt = sourceUrl.split('.').pop()?.split('?')[0]?.toLowerCase()
         const ext = pathExt || urlExt || (photo.media_type === 'video' ? 'mp4' : 'jpg')
         const prefix = photo.media_type === 'video' ? 'video' : 'photo'
         const name = photo.caption

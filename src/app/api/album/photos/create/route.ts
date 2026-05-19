@@ -54,20 +54,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
 
+  // Per-row tolerant insert: previously one bad row rejected the entire batch of up to 100,
+  // leaving R2/Supabase orphans and forcing the client to retry everything. Now we keep only
+  // valid rows, insert them, and report how many were rejected. We only fail when zero valid
+  // rows remain.
   const shaped = rows.map((row) => shapePhotoRow(albumId, row))
-  if (shaped.some((row) => !row)) {
-    return NextResponse.json({ error: 'Invalid photo details' }, { status: 400, headers: NO_STORE })
+  const valid = shaped.filter((row): row is NonNullable<typeof row> => row !== null)
+  const rejectedCount = shaped.length - valid.length
+
+  if (valid.length === 0) {
+    return NextResponse.json(
+      { error: 'No valid photos in batch', inserted_count: 0, rejected_count: rejectedCount },
+      { status: 400, headers: NO_STORE },
+    )
   }
 
-  const { error } = await admin.from('photos').insert(shaped)
+  const { error } = await admin.from('photos').insert(valid)
   if (error) {
     console.error('[photos/create] insert failed:', error.message)
     return NextResponse.json({ error: 'Could not save uploaded files' }, { status: 500, headers: NO_STORE })
   }
 
-  void maybeNotifyOwner(admin, album, shaped.length)
+  void maybeNotifyOwner(admin, album, valid.length)
 
-  return NextResponse.json({ ok: true }, { headers: NO_STORE })
+  return NextResponse.json(
+    { ok: true, inserted_count: valid.length, rejected_count: rejectedCount },
+    { headers: NO_STORE },
+  )
 }
 
 function shapePhotoRow(albumId: string, row: PhotoRow) {

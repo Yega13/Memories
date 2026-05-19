@@ -398,6 +398,62 @@ async function processPosterQueue(): Promise<void> {
   }
 }
 
+// ─── Background R2 mirror for Stream videos ───────────────────────────────────
+// When a video uploads via Cloudflare Stream, playback is fast but the original mp4 isn't
+// directly downloadable. We mirror the same File to R2 in the background so the download
+// feature (and any future archive workflow) keeps working. All failures are silent — Stream
+// playback already works, the mirror is best-effort.
+
+type MirrorJob = { file: File; albumId: string; storagePath: string; baseId: string }
+const mirrorQueue: MirrorJob[] = []
+let mirrorRunning = false
+
+async function runMirrorJob(job: MirrorJob): Promise<void> {
+  const mirrorFilename = `${job.baseId}.mp4`
+  let result: R2UploadResult
+  try {
+    // Reuse the existing multipart path for big files so we don't have to babysit large bodies.
+    // Mirror uploads are background work, so speed isn't critical — correctness/robustness is.
+    result = job.file.size > MULTIPART_THRESHOLD
+      ? await uploadVideoMultipart(job.file, job.albumId, mirrorFilename)
+      : await uploadToR2(job.file, job.albumId, mirrorFilename, 'video')
+  } catch {
+    return // silent — Stream playback still works
+  }
+  try {
+    await fetch('/api/album/photo/mirror', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        album_id: job.albumId,
+        storage_path: job.storagePath,
+        mirror_path: result.storage_path,
+        mirror_url: result.url,
+      }),
+    })
+  } catch {
+    // swallow — silent best-effort
+  }
+}
+
+async function processMirrorQueue(): Promise<void> {
+  if (mirrorRunning) return
+  mirrorRunning = true
+  try {
+    while (mirrorQueue.length > 0) {
+      const job = mirrorQueue.shift()
+      if (!job) break
+      try {
+        await runMirrorJob(job)
+      } catch (err) {
+        console.warn('[mirror] job failed (silent):', job.storagePath, err)
+      }
+    }
+  } finally {
+    mirrorRunning = false
+  }
+}
+
 type Props = {
   album: Album
   onPhotoAdded: () => void
@@ -763,7 +819,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const rows: (PhotoInsertRow | null)[] = new Array(queue.length).fill(null)
     let completed = 0
     let cursor = 0
-    const concurrency = 1
+    // Device-aware concurrency. Sequential (=1) made 200-photo bulk uploads take 30+ minutes.
+    // Mobile carriers don't love too many parallel uploads, so coarse pointers get 3; desktop 5.
+    const coarsePointer = typeof window !== 'undefined'
+      && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    const concurrency = Math.min(coarsePointer ? 3 : 5, queue.length)
 
     setUploadStatus({
       fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`,
@@ -772,6 +832,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       phase: 'Uploading',
       percent: 4,
     })
+
+    // Track which preview URLs have already been revoked so we never double-revoke when the
+    // end-of-batch cleanup runs. URL.revokeObjectURL is a no-op on an already-revoked URL but
+    // the explicit set keeps the intent clear.
+    const revokedPreviews = new Set<number>()
 
     const failureMessages: string[] = []
     async function worker() {
@@ -782,6 +847,13 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         try {
           const row = await uploadItem(item)
           rows[myIndex] = row
+          // Free the preview blob URL immediately on success — for 200-file sessions this drops
+          // peak browser memory significantly. Failed items keep their previews alive so the
+          // user can see what they're retrying.
+          if (!revokedPreviews.has(myIndex)) {
+            URL.revokeObjectURL(item.preview)
+            revokedPreviews.add(myIndex)
+          }
         } catch (e) {
           // Leave rows[myIndex] as null — item stays in pending for retry. Capture the message
           // so the toast surfaces the real reason (e.g. "Chunk 3 failed: ...") instead of just
@@ -816,10 +888,12 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const successRows = rows.filter((r): r is PhotoInsertRow => r !== null)
     const failedItems = queue.filter((_, i) => rows[i] === null)
 
+    let serverRejectedCount = 0
     if (successRows.length > 0) {
       try {
         for (let i = 0; i < successRows.length; i += 100) {
-          await saveUploadedRows(successRows.slice(i, i + 100))
+          const result = await saveUploadedRows(successRows.slice(i, i + 100))
+          serverRejectedCount += result.rejected
         }
       } catch (e) {
         const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded files'}`
@@ -842,10 +916,34 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         posterQueue.push({ file: item.file, albumId: album.id, storagePath: row.storage_path })
       })
       void processPosterQueue()
+
+      // Enqueue background R2 mirror jobs for Stream-backed videos. Mirror = a copy of the
+      // original mp4 in R2 so the download/archive button works (Stream itself doesn't expose
+      // the original). All failures are silent — Stream playback still works either way.
+      queue.forEach((item, i) => {
+        const row = rows[i]
+        if (!row || row.media_type !== 'video' || row.storage_backend !== 'stream') return
+        if (!row.stream_uid) return
+        mirrorQueue.push({
+          file: item.file,
+          albumId: album.id,
+          storagePath: row.storage_path,
+          baseId: row.stream_uid,
+        })
+      })
+      void processMirrorQueue()
     }
 
-    // Revoke URLs for items that succeeded; keep failed ones alive in pending
-    queue.forEach((item, i) => { if (rows[i] !== null) URL.revokeObjectURL(item.preview) })
+    // Successful items' preview URLs were already revoked inside the worker. We only need to
+    // sweep up any unrevoked entries here as a safety net (e.g. an item that succeeded but
+    // somehow slipped past the worker's revoke). Failed items keep their preview alive on
+    // purpose so they can be retried.
+    queue.forEach((item, i) => {
+      if (rows[i] === null) return
+      if (revokedPreviews.has(i)) return
+      URL.revokeObjectURL(item.preview)
+      revokedPreviews.add(i)
+    })
 
     if (failedItems.length > 0) {
       setPending(failedItems)
@@ -857,23 +955,42 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       setUploadError(msg)
       showAppToast(msg, 'error')
     } else {
-      queue.forEach((item) => URL.revokeObjectURL(item.preview))
       setPending([])
-      showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
+      if (serverRejectedCount > 0) {
+        // Uploads to storage succeeded but the server discarded some rows during validation
+        // (e.g. shape mismatch). Don't requeue — those rows are storage orphans and the user
+        // would just keep getting the same rejection.
+        showAppToast(
+          `${queue.length - serverRejectedCount} uploaded, ${serverRejectedCount} skipped by server.`,
+          'error',
+        )
+      } else {
+        showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
+      }
     }
 
     setUploading(false)
     setUploadStatus(null)
   }
 
-  async function saveUploadedRows(rows: PhotoInsertRow[]) {
+  async function saveUploadedRows(rows: PhotoInsertRow[]): Promise<{ inserted: number; rejected: number }> {
     const res = await fetch('/api/album/photos/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ album_id: album.id, photos: rows }),
     })
-    const body = await res.json().catch(() => ({})) as { error?: string }
+    const body = (await res.json().catch(() => ({}))) as {
+      error?: string
+      inserted_count?: number
+      rejected_count?: number
+    }
     if (!res.ok) throw new Error(body.error ?? 'Could not save uploaded files')
+    // Defensive defaults: server is expected to return inserted_count/rejected_count, but if a
+    // stale deploy returns the old shape ({ ok: true }), treat all rows as inserted.
+    return {
+      inserted: typeof body.inserted_count === 'number' ? body.inserted_count : rows.length,
+      rejected: typeof body.rejected_count === 'number' ? body.rejected_count : 0,
+    }
   }
 
   return (

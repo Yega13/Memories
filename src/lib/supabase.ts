@@ -48,6 +48,12 @@ export type Photo = {
   stream_uid: string | null
   stream_iframe_url: string | null
   stream_thumbnail_url: string | null
+  // R2 mirror of a Stream-backed video. Populated by a background job after Stream upload
+  // succeeds, so the original file can be downloaded/archived even though playback goes via
+  // Cloudflare Stream. Will be null until the migration adds the columns AND the mirror job
+  // finishes; everything degrades gracefully when null.
+  mirror_path: string | null
+  mirror_url: string | null
   duration_seconds: number | null
   display_radius: number | null
   display_filter: MediaDisplayFilter | null

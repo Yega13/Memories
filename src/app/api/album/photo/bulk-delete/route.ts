@@ -20,6 +20,7 @@ type PhotoRow = {
   storage_backend: 'supabase' | 'r2' | 'stream'
   poster_path: string | null
   stream_uid: string | null
+  mirror_path: string | null
   face_ids: string[] | null
 }
 
@@ -54,12 +55,30 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const { data: photos, error: lookupError } = await admin
-    .from('photos')
-    .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
-    .in('id', photoIds)
-    .eq('album_id', access.album.id)
-    .returns<PhotoRow[]>()
+  let photos: PhotoRow[] | null = null
+  let lookupError: { message: string } | null = null
+  {
+    const full = await admin
+      .from('photos')
+      .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, mirror_path, face_ids')
+      .in('id', photoIds)
+      .eq('album_id', access.album.id)
+      .returns<PhotoRow[]>()
+
+    if (full.error && /mirror_path|column .* does not exist/i.test(full.error.message ?? '')) {
+      const fallback = await admin
+        .from('photos')
+        .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
+        .in('id', photoIds)
+        .eq('album_id', access.album.id)
+        .returns<Omit<PhotoRow, 'mirror_path'>[]>()
+      photos = fallback.data?.map((photo) => ({ ...photo, mirror_path: null })) ?? null
+      lookupError = fallback.error
+    } else {
+      photos = full.data
+      lookupError = full.error
+    }
+  }
 
   if (lookupError) {
     console.error('[photo/bulk-delete] lookup failed:', lookupError.message)
@@ -77,6 +96,7 @@ export async function POST(req: Request) {
     if (p.storage_backend === 'stream') {
       if (p.stream_uid) streamUids.push(p.stream_uid)
       if (p.poster_path) r2Paths.push(p.poster_path)
+      if (p.mirror_path) r2Paths.push(p.mirror_path)
     } else {
       const target = p.storage_backend === 'r2' ? r2Paths : supabasePaths
       target.push(p.storage_path)

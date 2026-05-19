@@ -26,16 +26,20 @@ type AlbumUpdateOptions = {
   resetFilterOverrides?: boolean
 }
 
+function isImageBackground(bg: string): boolean {
+  return bg.startsWith(IMAGE_BG_PREFIX) || bg.startsWith(STOCK_BG_PREFIX)
+}
+
 function albumBackgroundStyle(bg: string): React.CSSProperties {
-  if (bg.startsWith(IMAGE_BG_PREFIX) || bg.startsWith(STOCK_BG_PREFIX)) {
-    const imageUrl = resolveAlbumBackgroundImage(bg)
-    return {
-      backgroundColor: '#1A2B1A',
-      backgroundImage: `linear-gradient(rgba(253,250,245,0.48), rgba(253,250,245,0.58)), url("${imageUrl}")`,
-      backgroundAttachment: 'fixed',
-      backgroundPosition: 'center',
-      backgroundSize: 'cover',
-    }
+  // For image/stock backgrounds we set ONLY a cream fallback colour on <main>. The actual image
+  // is painted by a separate fixed-positioned layer below the content (see AlbumPage render
+  // below). This kills two birds:
+  //   1. No more dark-green flash while the bg image is loading or while mobile browsers
+  //      re-rasterise during fast scroll.
+  //   2. We avoid `background-attachment: fixed`, which Android Chrome and mobile Safari either
+  //      drop or stutter on, producing the "screen goes green for 2-10 s" symptom.
+  if (isImageBackground(bg)) {
+    return { backgroundColor: DEFAULT_BG }
   }
   return { background: bg }
 }
@@ -283,8 +287,23 @@ export default function AlbumPage() {
     )
   }
 
+  const rawBg = album.background_theme ?? DEFAULT_BG
+  const bgImageUrl = isImageBackground(rawBg) ? resolveAlbumBackgroundImage(rawBg) : null
+
   return (
-    <main className="hush-album-page min-h-screen" style={albumBackgroundStyle(album.background_theme ?? DEFAULT_BG)}>
+    <main className="hush-album-page min-h-screen relative isolate" style={albumBackgroundStyle(rawBg)}>
+      {bgImageUrl && (
+        <div
+          aria-hidden
+          className="fixed inset-0 pointer-events-none"
+          style={{
+            zIndex: -1,
+            backgroundImage: `linear-gradient(rgba(253,250,245,0.48), rgba(253,250,245,0.58)), url("${bgImageUrl}")`,
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+          }}
+        />
+      )}
       <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} ownerToken={ownerToken} onAlbumUpdated={handleAlbumUpdated} />
 
       {isOwner && (
