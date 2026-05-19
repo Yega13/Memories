@@ -245,49 +245,34 @@ function jpegNameFor(file: File): string {
   return `${withoutExt || 'photo'}.jpg`
 }
 
-const HEIC_CONVERSION_TIMEOUT_MS = 60_000
-
-// Lazily-created singleton worker. We reuse one worker across all conversions to avoid the cost
-// of spinning up libheif WASM for each file.
-let heicWorker: Worker | null = null
-let heicJobId = 0
-const heicJobs = new Map<number, { resolve: (jpeg: Blob) => void; reject: (err: Error) => void }>()
-
-function getHeicWorker(): Worker {
-  if (heicWorker) return heicWorker
-  // The worker bundle is built from src/lib/heic-worker.ts. Next.js + Webpack can resolve
-  // `new Worker(new URL('./...', import.meta.url))` automatically.
-  heicWorker = new Worker(new URL('@/lib/heic-worker.ts', import.meta.url), { type: 'module' })
-  heicWorker.addEventListener('message', (e: MessageEvent<{ id: number; jpeg?: Blob; error?: string }>) => {
-    const { id, jpeg, error } = e.data
-    const job = heicJobs.get(id)
-    if (!job) return
-    heicJobs.delete(id)
-    if (jpeg) job.resolve(jpeg)
-    else job.reject(new Error(error ?? 'HEIC conversion failed'))
-  })
-  return heicWorker
-}
+const HEIC_CONVERSION_TIMEOUT_MS = 90_000
 
 async function convertHeicToJpeg(file: File): Promise<File> {
-  // Convert in a Web Worker so libheif WASM doesn't block the main thread. Without this the
-  // page freezes for the full duration of the conversion and any timeout fires only after the
-  // worker has actually returned (defeating the purpose).
-  const worker = getHeicWorker()
-  const id = ++heicJobId
-  const blob: Blob = await new Promise<Blob>((resolve, reject) => {
-    heicJobs.set(id, { resolve, reject })
-    window.setTimeout(() => {
-      if (!heicJobs.has(id)) return
-      heicJobs.delete(id)
-      reject(new Error('HEIC conversion timed out'))
-    }, HEIC_CONVERSION_TIMEOUT_MS)
-    worker.postMessage({ id, blob: file })
-  })
-  return new File([blob], jpegNameFor(file), {
-    type: 'image/jpeg',
-    lastModified: file.lastModified,
-  })
+  // heic2any has to run on the main thread (it uses canvas APIs that aren't available in Web
+  // Workers, and the OffscreenCanvas-based alternative is a much bigger rewrite). The UI WILL
+  // block briefly during the WASM decode; we minimize the damage by:
+  //   - yielding to the browser before each call so the "Preparing…" UI repaints
+  //   - racing against a generous timeout so a corrupt file doesn't lock the queue forever
+  //   - chunking: process one file at a time in the caller, with a yield between each.
+  const { default: heic2any } = await import('heic2any')
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  try {
+    const converted = await Promise.race([
+      heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 }),
+      new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error('HEIC conversion timed out')), HEIC_CONVERSION_TIMEOUT_MS,
+        )
+      }),
+    ])
+    const blob = Array.isArray(converted) ? converted[0] : converted
+    return new File([blob], jpegNameFor(file), {
+      type: 'image/jpeg',
+      lastModified: file.lastModified,
+    })
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId)
+  }
 }
 
 export default function UploadZone({ album, onPhotoAdded }: Props) {
@@ -488,6 +473,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       percent: 4,
     })
 
+    const failureMessages: string[] = []
     async function worker() {
       while (cursor < queue.length) {
         const myIndex = cursor
@@ -497,8 +483,12 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           const row = await uploadItem(item)
           rows[myIndex] = row
         } catch (e) {
-          // Leave rows[myIndex] as null — item stays in pending for retry
-          console.warn('[upload] item failed:', item.file.name, e instanceof Error ? e.message : e)
+          // Leave rows[myIndex] as null — item stays in pending for retry. Capture the message
+          // so the toast surfaces the real reason (e.g. "Chunk 3 failed: ...") instead of just
+          // "tap Upload to retry".
+          const msg = e instanceof Error ? e.message : String(e)
+          failureMessages.push(`${item.file.name}: ${msg}`)
+          console.warn('[upload] item failed:', item.file.name, msg)
         }
         completed += 1
         setUploadStatus({
@@ -546,9 +536,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
     if (failedItems.length > 0) {
       setPending(failedItems)
+      // Show the first actual error inline so users have a clue why it failed, not just "retry".
+      const detail = failureMessages[0] ? ` — ${failureMessages[0]}` : ''
       const msg = successRows.length > 0
-        ? `${successRows.length} uploaded, ${failedItems.length} failed — tap Upload to retry`
-        : `${failedItems.length} file${failedItems.length !== 1 ? 's' : ''} failed — tap Upload to retry`
+        ? `${successRows.length} uploaded, ${failedItems.length} failed${detail}`
+        : `${failedItems.length} file${failedItems.length !== 1 ? 's' : ''} failed${detail}`
       setUploadError(msg)
       showAppToast(msg, 'error')
     } else {

@@ -90,8 +90,13 @@ export async function POST(req: Request) {
     if (Number.isFinite(declaredSize) && declaredSize > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
 
     try {
+      // Buffer the chunk into an ArrayBuffer. We tried passing the request body stream directly
+      // to R2, but that's unreliable: not all Worker runtimes proxy a ReadableStream cleanly to
+      // R2.uploadPart, and intermittent failures around ~40 s into uploads pointed at this. At
+      // 25 MB max per chunk, buffering is well under the 128 MB Worker memory ceiling.
+      const buf = await req.arrayBuffer()
       const upload = bucket.resumeMultipartUpload(key, uploadId)
-      const part = await upload.uploadPart(partNumber, req.body)
+      const part = await upload.uploadPart(partNumber, buf)
       return NextResponse.json({ partNumber: part.partNumber, etag: part.etag }, { headers: NO_STORE })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
