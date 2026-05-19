@@ -1239,9 +1239,21 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-3 text-center" style={{ background: '#E8E0D2' }}>
                     {isVideo ? <Play className="w-8 h-8" style={{ color: '#7C5C3E' }} /> : null}
-                    <span className="text-xs font-semibold" style={{ color: '#7C5C3E' }}>
-                      {isBroken ? 'File unavailable' : 'Preview unavailable'}
-                    </span>
+                    {/*
+                      Text rules:
+                      - Video + actually broken media URL → "Video unavailable"
+                      - Video + only missing/broken poster (media URL still works) → no text, just Play
+                      - Image → same as before: "File unavailable" if broken, "Preview unavailable" otherwise
+                    */}
+                    {isVideo ? (
+                      isBroken ? (
+                        <span className="text-xs font-semibold" style={{ color: '#7C5C3E' }}>Video unavailable</span>
+                      ) : null
+                    ) : (
+                      <span className="text-xs font-semibold" style={{ color: '#7C5C3E' }}>
+                        {isBroken ? 'File unavailable' : 'Preview unavailable'}
+                      </span>
+                    )}
                   </div>
                 )}
 

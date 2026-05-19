@@ -41,9 +41,13 @@ export async function POST(req: Request) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const nextSlug = slug()
     const nextOwnerToken = ownerToken()
+    // video_autoplay defaults to TRUE on new albums. The DB column default is false, so we have
+    // to set it explicitly here — otherwise new albums open videos with autoplay off, which
+    // doesn't match the documented "enabled by default" behavior. Existing rows are untouched,
+    // so anyone who deliberately turned autoplay off keeps that choice.
     const row = user
-      ? { slug: nextSlug, owner_token: nextOwnerToken, title, user_id: user.id }
-      : { slug: nextSlug, owner_token: nextOwnerToken, title }
+      ? { slug: nextSlug, owner_token: nextOwnerToken, title, user_id: user.id, video_autoplay: true }
+      : { slug: nextSlug, owner_token: nextOwnerToken, title, video_autoplay: true }
 
     const { error } = await admin.from('albums').insert(row)
     if (!error) {
