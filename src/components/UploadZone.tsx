@@ -63,6 +63,12 @@ async function uploadToR2(
 // chunks = each connection holds open for less time, halving exposure to mid-flight drops by
 // carrier proxies or Cloudflare's edge. More chunks per video but the retry path is cheap.
 const CHUNK_SIZE = 5 * 1024 * 1024
+type ChunkTransport = 'form' | 'raw'
+
+function prefersRawChunkUpload(): boolean {
+  return typeof window !== 'undefined'
+    && window.matchMedia('(hover: none), (pointer: coarse)').matches
+}
 
 async function uploadVideoMultipart(
   file: File,
@@ -89,19 +95,27 @@ async function uploadVideoMultipart(
   const parts: { partNumber: number; etag: string }[] = []
   let uploadedBytes = 0
 
-  async function uploadChunkOnce(partNumber: number, chunk: Blob, end: number, start: number) {
+  async function uploadChunkOnce(
+    partNumber: number,
+    chunk: Blob,
+    end: number,
+    start: number,
+    transport: ChunkTransport,
+  ) {
     return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
-      // Use FormData. Raw application/octet-stream POSTs were getting dropped mid-upload through
-      // some mobile carrier proxies / Cloudflare's edge buffering ("Network error on chunk N").
-      // multipart/form-data is a well-trodden content-type that intermediaries handle cleanly,
-      // and the per-chunk overhead is negligible at 10 MB.
-      const form = new FormData()
-      form.append('uploadId', uploadId!)
-      form.append('key', key!)
-      form.append('partNumber', String(partNumber))
-      form.append('chunk', chunk)
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', '/api/upload/r2/multipart?action=chunk')
+      if (transport === 'raw') {
+        const params = new URLSearchParams({
+          action: 'chunk',
+          uploadId: uploadId!,
+          key: key!,
+          partNumber: String(partNumber),
+        })
+        xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+      } else {
+        xhr.open('POST', '/api/upload/r2/multipart?action=chunk')
+      }
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return
         const chunkUploaded = event.loaded / event.total * (end - start)
@@ -113,14 +127,23 @@ async function uploadVideoMultipart(
         if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
           resolve({ partNumber: body.partNumber, etag: body.etag })
         } else {
-          reject(new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`))
+          reject(new Error(body.error || `Chunk ${partNumber} failed via ${transport}: ${xhr.status}`))
         }
       }
-      xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
-      xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
+      xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber} via ${transport}`))
+      xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber} via ${transport}`))
       // Five minutes gives slow mobile data enough time for a 5 MB chunk before retrying.
       xhr.timeout = 300_000
-      xhr.send(form)
+      if (transport === 'raw') {
+        xhr.send(chunk)
+      } else {
+        const form = new FormData()
+        form.append('uploadId', uploadId!)
+        form.append('key', key!)
+        form.append('partNumber', String(partNumber))
+        form.append('chunk', chunk)
+        xhr.send(form)
+      }
     })
   }
 
@@ -132,10 +155,13 @@ async function uploadVideoMultipart(
 
     let part: { partNumber: number; etag: string } | null = null
     let lastErr: Error | null = null
+    const primaryTransport: ChunkTransport = prefersRawChunkUpload() ? 'raw' : 'form'
+    const fallbackTransport: ChunkTransport = primaryTransport === 'raw' ? 'form' : 'raw'
     // Long mobile uploads can hit transient R2/edge 503s, so retry with backoff.
     for (let attempt = 1; attempt <= 8; attempt++) {
+      const transport = attempt % 2 === 1 ? primaryTransport : fallbackTransport
       try {
-        part = await uploadChunkOnce(partNumber, chunk, end, start)
+        part = await uploadChunkOnce(partNumber, chunk, end, start, transport)
         break
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error(String(e))

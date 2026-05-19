@@ -73,23 +73,38 @@ export async function POST(req: Request) {
 
   // ── chunk ─────────────────────────────────────────────────────────────────
   if (action === 'chunk') {
-    // Back to FormData. Raw application/octet-stream POSTs were unreliable on mobile networks
-    // (network errors mid-chunk through carrier proxies + Cloudflare edge buffering). The form-
-    // data boundary acts as a sentinel that intermediaries handle consistently, and the ~12 MB
-    // memory cost per chunk is well under the 128 MB Worker ceiling.
-    let form: FormData
-    try { form = await req.formData() } catch { return NextResponse.json({ error: 'Invalid form data' }, { status: 400, headers: NO_STORE }) }
+    const contentType = req.headers.get('content-type') ?? ''
+    let uploadId = ''
+    let key = ''
+    let partNumber = 0
+    let chunk: Blob | ArrayBuffer
 
-    const uploadId = String(form.get('uploadId') ?? '').trim()
-    const key = String(form.get('key') ?? '').trim()
-    const partNumber = Number(form.get('partNumber'))
-    const chunk = form.get('chunk')
+    if (contentType.includes('multipart/form-data')) {
+      let form: FormData
+      try { form = await req.formData() } catch { return NextResponse.json({ error: 'Invalid form data' }, { status: 400, headers: NO_STORE }) }
+      uploadId = String(form.get('uploadId') ?? '').trim()
+      key = String(form.get('key') ?? '').trim()
+      partNumber = Number(form.get('partNumber'))
+      const formChunk = form.get('chunk')
+      if (!(formChunk instanceof Blob)) return NextResponse.json({ error: 'Missing chunk' }, { status: 400, headers: NO_STORE })
+      chunk = formChunk
+    } else {
+      const url = new URL(req.url)
+      uploadId = String(url.searchParams.get('uploadId') ?? '').trim()
+      key = String(url.searchParams.get('key') ?? '').trim()
+      partNumber = Number(url.searchParams.get('partNumber'))
+      const contentLengthHeader = req.headers.get('content-length')
+      const declaredSize = contentLengthHeader ? Number(contentLengthHeader) : NaN
+      if (Number.isFinite(declaredSize) && declaredSize > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
+      try { chunk = await req.arrayBuffer() } catch { return NextResponse.json({ error: 'Invalid chunk body' }, { status: 400, headers: NO_STORE }) }
+    }
 
     if (!UPLOAD_ID_RE.test(uploadId)) return NextResponse.json({ error: 'Invalid uploadId' }, { status: 400, headers: NO_STORE })
     if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
     if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return NextResponse.json({ error: 'Invalid partNumber' }, { status: 400, headers: NO_STORE })
-    if (!(chunk instanceof Blob)) return NextResponse.json({ error: 'Missing chunk' }, { status: 400, headers: NO_STORE })
-    if (chunk.size > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
+    const chunkSize = chunk instanceof Blob ? chunk.size : chunk.byteLength
+    if (chunkSize <= 0) return NextResponse.json({ error: 'Missing chunk' }, { status: 400, headers: NO_STORE })
+    if (chunkSize > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
 
     try {
       const upload = bucket.resumeMultipartUpload(key, uploadId)
