@@ -41,14 +41,14 @@ function installDomShim() {
   }
 }
 
-let convertFn:
-  | ((opts: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>)
-  | null = null
+type Heic2AnyConverter = (opts: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>
+
+let convertFn: Heic2AnyConverter | null = null
 
 async function loadHeic2Any() {
   if (convertFn) return convertFn
   installDomShim()
-  const mod = (await import('heic2any')) as { default: typeof convertFn }
+  const mod = await import('heic2any') as { default: Heic2AnyConverter }
   convertFn = mod.default
   if (!convertFn) throw new Error('heic2any module did not expose default export')
   return convertFn

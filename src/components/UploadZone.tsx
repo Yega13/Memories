@@ -91,17 +91,17 @@ async function uploadVideoMultipart(
 
   async function uploadChunkOnce(partNumber: number, chunk: Blob, end: number, start: number) {
     return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
-      // Raw body — no FormData. The server reads metadata from query params and streams the
-      // chunk straight through to R2 instead of buffering 25 MB of form-encoded data.
-      const params = new URLSearchParams({
-        action: 'chunk',
-        uploadId: uploadId!,
-        key: key!,
-        partNumber: String(partNumber),
-      })
+      // Use FormData. Raw application/octet-stream POSTs were getting dropped mid-upload through
+      // some mobile carrier proxies / Cloudflare's edge buffering ("Network error on chunk N").
+      // multipart/form-data is a well-trodden content-type that intermediaries handle cleanly,
+      // and the per-chunk overhead is negligible at 10 MB.
+      const form = new FormData()
+      form.append('uploadId', uploadId!)
+      form.append('key', key!)
+      form.append('partNumber', String(partNumber))
+      form.append('chunk', chunk)
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+      xhr.open('POST', '/api/upload/r2/multipart?action=chunk')
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return
         const chunkUploaded = event.loaded / event.total * (end - start)
@@ -118,9 +118,9 @@ async function uploadVideoMultipart(
       }
       xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
       xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
-      // 3-minute per-chunk timeout — covers slow mobile data on a 25 MB chunk.
+      // 3-minute per-chunk timeout — covers slow mobile data on a 10 MB chunk.
       xhr.timeout = 180_000
-      xhr.send(chunk)
+      xhr.send(form)
     })
   }
 
@@ -259,7 +259,11 @@ function getHeicWorker(): Worker | null {
   if (heicWorkerBroken) return null
   if (heicWorker) return heicWorker
   try {
-    heicWorker = new Worker(new URL('@/lib/heic-worker.ts', import.meta.url), { type: 'module' })
+    // MUST be a literal RELATIVE path here. Webpack's `new Worker(new URL(...))` asset bundler
+    // does not resolve TypeScript path aliases (`@/...`) — using one silently produces a broken
+    // URL, the worker fails to load, and we fall back to main-thread conversion (which freezes
+    // the UI). Relative path keeps the bundler happy.
+    heicWorker = new Worker(new URL('../lib/heic-worker.ts', import.meta.url), { type: 'module' })
     heicWorker.addEventListener('message', (e: MessageEvent<{ id: number; jpeg?: Blob; error?: string }>) => {
       const { id, jpeg, error } = e.data
       const job = heicJobs.get(id)

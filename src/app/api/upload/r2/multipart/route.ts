@@ -73,30 +73,27 @@ export async function POST(req: Request) {
 
   // ── chunk ─────────────────────────────────────────────────────────────────
   if (action === 'chunk') {
-    // Switched from FormData (which buffers the whole 50 MB chunk into memory before we even
-    // see it) to raw body + query-param metadata. R2's uploadPart accepts the request stream
-    // directly, so we never hold the full chunk in Worker memory.
-    const url = new URL(req.url)
-    const uploadId = (url.searchParams.get('uploadId') ?? '').trim()
-    const key = (url.searchParams.get('key') ?? '').trim()
-    const partNumber = Number(url.searchParams.get('partNumber'))
-    const contentLengthHeader = req.headers.get('content-length')
-    const declaredSize = contentLengthHeader ? Number(contentLengthHeader) : NaN
+    // Back to FormData. Raw application/octet-stream POSTs were unreliable on mobile networks
+    // (network errors mid-chunk through carrier proxies + Cloudflare edge buffering). The form-
+    // data boundary acts as a sentinel that intermediaries handle consistently, and the ~12 MB
+    // memory cost per chunk is well under the 128 MB Worker ceiling.
+    let form: FormData
+    try { form = await req.formData() } catch { return NextResponse.json({ error: 'Invalid form data' }, { status: 400, headers: NO_STORE }) }
+
+    const uploadId = String(form.get('uploadId') ?? '').trim()
+    const key = String(form.get('key') ?? '').trim()
+    const partNumber = Number(form.get('partNumber'))
+    const chunk = form.get('chunk')
 
     if (!UPLOAD_ID_RE.test(uploadId)) return NextResponse.json({ error: 'Invalid uploadId' }, { status: 400, headers: NO_STORE })
     if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
     if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return NextResponse.json({ error: 'Invalid partNumber' }, { status: 400, headers: NO_STORE })
-    if (!req.body) return NextResponse.json({ error: 'Missing chunk body' }, { status: 400, headers: NO_STORE })
-    if (Number.isFinite(declaredSize) && declaredSize > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
+    if (!(chunk instanceof Blob)) return NextResponse.json({ error: 'Missing chunk' }, { status: 400, headers: NO_STORE })
+    if (chunk.size > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
 
     try {
-      // Buffer the chunk into an ArrayBuffer. We tried passing the request body stream directly
-      // to R2, but that's unreliable: not all Worker runtimes proxy a ReadableStream cleanly to
-      // R2.uploadPart, and intermittent failures around ~40 s into uploads pointed at this. At
-      // 25 MB max per chunk, buffering is well under the 128 MB Worker memory ceiling.
-      const buf = await req.arrayBuffer()
       const upload = bucket.resumeMultipartUpload(key, uploadId)
-      const part = await upload.uploadPart(partNumber, buf)
+      const part = await upload.uploadPart(partNumber, chunk)
       return NextResponse.json({ partNumber: part.partNumber, etag: part.etag }, { headers: NO_STORE })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
