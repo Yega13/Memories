@@ -255,7 +255,7 @@ async function convertHeicToJpeg(file: File): Promise<File> {
   //   - racing against a generous timeout so a corrupt file doesn't lock the queue forever
   //   - chunking: process one file at a time in the caller, with a yield between each.
   const { default: heic2any } = await import('heic2any')
-  let timeoutId: ReturnType<typeof setTimeout> | null = null
+  let timeoutId: number | null = null
   try {
     const converted = await Promise.race([
       heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 }),
