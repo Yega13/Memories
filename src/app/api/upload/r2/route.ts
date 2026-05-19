@@ -7,6 +7,7 @@ import type { R2Env } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 

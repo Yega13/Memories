@@ -6,7 +6,6 @@ import { supabase, type Album } from '@/lib/supabase'
 import {
   detectKind,
   extensionFor,
-  generateVideoPoster,
   DEFAULT_UPLOAD_CAPS,
   type MediaKind,
 } from '@/lib/media'
@@ -119,7 +118,7 @@ async function uploadVideoMultipart(
       xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
       xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
       // 3-minute per-chunk timeout — covers slow mobile data on a 10 MB chunk.
-      xhr.timeout = 180_000
+      xhr.timeout = 300_000
       xhr.send(form)
     })
   }
@@ -133,13 +132,13 @@ async function uploadVideoMultipart(
     let part: { partNumber: number; etag: string } | null = null
     let lastErr: Error | null = null
     // 5 attempts with exponential-ish backoff. Mobile data drops can take seconds to recover.
-    for (let attempt = 1; attempt <= 5; attempt++) {
+    for (let attempt = 1; attempt <= 8; attempt++) {
       try {
         part = await uploadChunkOnce(partNumber, chunk, end, start)
         break
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error(String(e))
-        if (attempt < 5) await wait(1500 * attempt)
+        if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))
       }
     }
     if (!part) {
@@ -485,25 +484,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const res = item.file.size > MULTIPART_THRESHOLD
       ? await uploadVideoMultipart(item.file, album.id, filename)
       : await uploadToR2(item.file, album.id, filename, 'video')
-    let posterPath: string | null = null
-    let posterUrl: string | null = null
-    let durationSeconds: number | null = null
-    // 12s timeout prevents mobile browsers from hanging on poster generation
-    const poster = await Promise.race([
-      generateVideoPoster(item.file),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 12000)),
-    ])
-    if (poster) {
-      const posterFilename = `${baseId}.poster.jpg`
-      const posterFile = new File([poster.blob], posterFilename, { type: 'image/jpeg' })
-      try {
-        const posterRes = await uploadToR2(posterFile, album.id, posterFilename, 'poster')
-        posterPath = posterRes.storage_path
-        posterUrl = posterRes.url
-      } catch {
-      }
-      durationSeconds = poster.durationSeconds || null
-    }
+    const posterPath: string | null = null
+    const posterUrl: string | null = null
+    const durationSeconds: number | null = null
     return {
       storage_path: res.storage_path,
       storage_backend: 'r2',
@@ -678,8 +661,11 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           className="hidden"
           disabled={uploading || preparing}
           onChange={(e) => {
-            void addFiles(e.target.files)
-            e.currentTarget.value = ''
+            const input = e.currentTarget
+            const files = input.files
+            void addFiles(files).finally(() => {
+              input.value = ''
+            })
           }}
         />
       </div>

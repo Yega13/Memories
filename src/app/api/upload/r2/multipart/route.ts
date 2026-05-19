@@ -9,7 +9,7 @@ import { forbidCrossSiteRequest } from '@/lib/request-security'
 export const runtime = 'nodejs'
 // Long videos on slow mobile data: a single chunk PUT can take a couple of minutes. Give the
 // route headroom past the default Next.js maxDuration so the chunk upload finishes cleanly.
-export const maxDuration = 120
+export const maxDuration = 300
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
