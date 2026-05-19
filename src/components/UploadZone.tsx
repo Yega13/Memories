@@ -117,7 +117,7 @@ async function uploadVideoMultipart(
       }
       xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
       xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
-      // 3-minute per-chunk timeout — covers slow mobile data on a 10 MB chunk.
+      // Five minutes gives slow mobile data enough time for a 5 MB chunk before retrying.
       xhr.timeout = 300_000
       xhr.send(form)
     })
@@ -131,7 +131,7 @@ async function uploadVideoMultipart(
 
     let part: { partNumber: number; etag: string } | null = null
     let lastErr: Error | null = null
-    // 5 attempts with exponential-ish backoff. Mobile data drops can take seconds to recover.
+    // Long mobile uploads can hit transient R2/edge 503s, so retry with backoff.
     for (let attempt = 1; attempt <= 8; attempt++) {
       try {
         part = await uploadChunkOnce(partNumber, chunk, end, start)
@@ -222,7 +222,7 @@ const HEIC_MIME_TYPES = new Set([
   'image/heic-sequence',
   'image/heif-sequence',
 ])
-const FILE_ACCEPT = 'image/*,video/*,.heic,.heif,image/heic,image/heif,image/heic-sequence,image/heif-sequence'
+const FILE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,image/avif,video/*'
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -385,6 +385,10 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const filesArr = Array.from(files)
     for (let idx = 0; idx < filesArr.length; idx++) {
       const file = filesArr[idx]
+      if (isHeicFile(file)) {
+        rejected.push(`${file.name}: HEIC is temporarily unavailable. Please upload JPEG or PNG.`)
+        continue
+      }
       const kind = detectKind(file)
       if (!kind) {
         rejected.push(`${file.name}: unsupported file type`)
