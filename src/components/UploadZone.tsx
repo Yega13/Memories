@@ -6,6 +6,7 @@ import { supabase, type Album } from '@/lib/supabase'
 import {
   detectKind,
   extensionFor,
+  generateVideoPoster,
   DEFAULT_UPLOAD_CAPS,
   type MediaKind,
 } from '@/lib/media'
@@ -175,6 +176,95 @@ async function uploadVideoMultipart(
   const { storage_path, url } = completeBody
   if (!storage_path || !url) throw new Error('Invalid upload complete response')
   return { storage_path, url }
+}
+
+// ─── Background poster generation ─────────────────────────────────────────────
+// After a video upload + DB row insert finishes, we enqueue a background job that:
+//   1) generates a poster JPEG from the local File (via lib/media.ts generateVideoPoster)
+//   2) uploads the poster to R2 via the existing /api/upload/r2 route with kind='poster'
+//   3) PATCHes the photo row through /api/album/photo/poster
+// Jobs run strictly one at a time across the whole app (module-level state). Any failure is
+// swallowed silently — uploads must never appear "failed" because of a poster.
+//
+// Size cap is for THUMBNAIL GENERATION only. Videos above this still upload successfully; they
+// just won't get an auto-poster and the tile keeps the friendly Play placeholder. No duration
+// cap, no mobile-skip — per product decision.
+const POSTER_MAX_BYTES = 100 * 1024 * 1024
+// Cap any single poster generation so a broken codec / hung decoder can't lock the queue.
+const POSTER_GEN_TIMEOUT_MS = 30_000
+
+type PosterJob = { file: File; albumId: string; storagePath: string }
+const posterQueue: PosterJob[] = []
+let posterRunning = false
+
+async function runPosterJob(job: PosterJob): Promise<void> {
+  if (job.file.size > POSTER_MAX_BYTES) return
+
+  // Race generateVideoPoster against a timeout so a stuck decoder doesn't block subsequent jobs.
+  let timeoutId: number | null = null
+  let poster: Awaited<ReturnType<typeof generateVideoPoster>> = null
+  try {
+    poster = await Promise.race([
+      generateVideoPoster(job.file),
+      new Promise<null>((resolve) => {
+        timeoutId = window.setTimeout(() => resolve(null), POSTER_GEN_TIMEOUT_MS)
+      }),
+    ])
+  } catch {
+    return
+  } finally {
+    if (timeoutId !== null) window.clearTimeout(timeoutId)
+  }
+  if (!poster) return
+
+  // Derive the poster filename from the video's storage_path so the poster object lives next
+  // to its video in R2 (same baseId, .poster.jpg extension).
+  const lastSlash = job.storagePath.lastIndexOf('/')
+  const videoName = job.storagePath.slice(lastSlash + 1)
+  const baseId = videoName.replace(/\.[^.]+$/, '')
+  if (!baseId) return
+  const posterFilename = `${baseId}.poster.jpg`
+
+  const posterFile = new File([poster.blob], posterFilename, { type: 'image/jpeg' })
+  let posterUploadResult: R2UploadResult
+  try {
+    posterUploadResult = await uploadToR2(posterFile, job.albumId, posterFilename, 'poster')
+  } catch {
+    return
+  }
+
+  try {
+    await fetch('/api/album/photo/poster', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        album_id: job.albumId,
+        storage_path: job.storagePath,
+        poster_path: posterUploadResult.storage_path,
+        poster_url: posterUploadResult.url,
+      }),
+    })
+  } catch {
+    // swallow — the video itself is fine, only the auto-poster failed
+  }
+}
+
+async function processPosterQueue(): Promise<void> {
+  if (posterRunning) return
+  posterRunning = true
+  try {
+    while (posterQueue.length > 0) {
+      const job = posterQueue.shift()
+      if (!job) break
+      try {
+        await runPosterJob(job)
+      } catch (err) {
+        console.warn('[poster] job failed (silent):', job.storagePath, err)
+      }
+    }
+  } finally {
+    posterRunning = false
+  }
 }
 
 type Props = {
@@ -581,6 +671,18 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         return
       }
       onPhotoAdded()
+
+      // Enqueue background poster jobs for successfully uploaded videos. We DO this strictly
+      // after the rows exist in the DB so the PATCH route has something to update. Jobs run
+      // one at a time (module-level queue), and any failure is silent — the video itself is
+      // already saved and visible to users with the friendly Play placeholder.
+      queue.forEach((item, i) => {
+        const row = rows[i]
+        if (!row || row.media_type !== 'video') return
+        if (item.file.size > POSTER_MAX_BYTES) return
+        posterQueue.push({ file: item.file, albumId: album.id, storagePath: row.storage_path })
+      })
+      void processPosterQueue()
     }
 
     // Revoke URLs for items that succeeded; keep failed ones alive in pending
