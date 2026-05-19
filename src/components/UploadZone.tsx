@@ -215,9 +215,9 @@ async function uploadVideoMultipart(
 // Size cap is for THUMBNAIL GENERATION only. Videos above this still upload successfully; they
 // just won't get an auto-poster and the tile keeps the friendly Play placeholder. No duration
 // cap, no mobile-skip — per product decision.
-const POSTER_MAX_BYTES = 100 * 1024 * 1024
+const POSTER_MAX_BYTES = 200 * 1024 * 1024
 // Cap any single poster generation so a broken codec / hung decoder can't lock the queue.
-const POSTER_GEN_TIMEOUT_MS = 30_000
+const POSTER_GEN_TIMEOUT_MS = 60_000
 
 type PosterJob = { file: File; albumId: string; storagePath: string }
 const posterQueue: PosterJob[] = []

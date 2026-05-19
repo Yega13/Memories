@@ -4,12 +4,13 @@ import type { Tier } from '@/lib/subscriptions'
 export type MediaKind = 'image' | 'video'
 
 const MB = 1024 * 1024
+const GB = 1024 * MB
 
 export const FREE_IMAGE_BYTES = 25 * MB
 export const FREE_VIDEO_BYTES = 200 * MB
 
 export const PRO_IMAGE_BYTES = 200 * MB
-export const PRO_VIDEO_BYTES = 500 * MB
+export const PRO_VIDEO_BYTES = 1 * GB
 
 export type UploadCaps = { image: number; video: number }
 
