@@ -46,14 +46,20 @@ export async function POST(req: Request) {
   }
 
   const albumPhotoIds = new Set((albumPhotos ?? []).map((photo) => photo.id))
-  if (photoIds.length !== albumPhotoIds.size || photoIds.some((id) => !albumPhotoIds.has(id))) {
-    return NextResponse.json({ error: 'Order must include every media item in this album' }, { status: 400, headers: NO_STORE })
-  }
+  // Only update IDs that actually exist in this album; silently drop any that were deleted
+  // concurrently (e.g. guest deleted their own photo while owner was dragging). Also drops
+  // IDs that were uploaded by a guest after the owner opened arrange mode — those keep their
+  // existing sort_order (null) and appear after the explicitly ordered items.
+  const validIds = photoIds.filter((id) => albumPhotoIds.has(id))
 
   // Parallelize the per-row updates — sequentially this was ~50 ms × N round-trips, which made
   // reordering large albums feel laggy. Supabase handles a couple dozen concurrent updates fine.
+  if (validIds.length === 0) {
+    return NextResponse.json({ ok: true }, { headers: NO_STORE })
+  }
+
   const results = await Promise.all(
-    photoIds.map((id, index) =>
+    validIds.map((id, index) =>
       admin
         .from('photos')
         .update({ sort_order: index })

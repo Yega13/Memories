@@ -237,6 +237,18 @@ async function maybeNotifyOwner(
   if (Date.now() - lastSent < NOTIFICATION_COOLDOWN_MS) return
 
   try {
+    // Conditional update: only succeeds if no other concurrent request already stamped the row.
+    // .maybeSingle() returns null when 0 rows matched (another request won the race) → bail out.
+    const threshold = new Date(Date.now() - NOTIFICATION_COOLDOWN_MS).toISOString()
+    const { data: won } = await admin
+      .from('albums')
+      .update({ last_notification_at: new Date().toISOString() })
+      .eq('id', album.id)
+      .or(`last_notification_at.is.null,last_notification_at.lt.${threshold}`)
+      .select('id')
+      .maybeSingle<{ id: string }>()
+    if (!won) return
+
     const { data: { user } } = await admin.auth.admin.getUserById(album.user_id)
     const email = user?.email
     if (!email) return
@@ -244,7 +256,6 @@ async function maybeNotifyOwner(
     const publicSlug = album.custom_slug || album.slug
     const albumUrl = `${SITE_URL}/${publicSlug}`
 
-    await admin.from('albums').update({ last_notification_at: new Date().toISOString() }).eq('id', album.id)
     await sendPhotoNotificationEmail(email, album.title, albumUrl, photoCount)
   } catch (err) {
     console.error('[photos/create] notification failed:', err instanceof Error ? err.message : String(err))
