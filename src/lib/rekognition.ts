@@ -8,7 +8,9 @@ function toHex(buf: ArrayBuffer): string {
 }
 
 async function sha256Hex(data: string): Promise<string> {
-  return toHex(await crypto.subtle.digest('SHA-256', enc.encode(data)))
+  // Buffer.from is faster than TextEncoder.encode for large strings under nodejs_compat.
+  const bytes = typeof Buffer !== 'undefined' ? Buffer.from(data, 'utf-8') : enc.encode(data)
+  return toHex(await crypto.subtle.digest('SHA-256', bytes))
 }
 
 async function hmacSha256(key: ArrayBuffer | Uint8Array, data: string): Promise<ArrayBuffer> {
@@ -27,7 +29,13 @@ async function deriveSigningKey(secret: string, date: string, region: string): P
 }
 
 function uint8ToBase64(bytes: Uint8Array): string {
-  // Chunked spread is ~100× faster than single-char concatenation for large images
+  // Node.js Buffer (available via wrangler's nodejs_compat flag) converts to base64 in C++
+  // without building an intermediate binary string, making it 5-10× faster than the btoa path
+  // for large images. This is critical on Cloudflare Workers where CPU time is metered.
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(bytes.buffer as ArrayBuffer, bytes.byteOffset, bytes.byteLength).toString('base64')
+  }
+  // Fallback for environments without Buffer
   const CHUNK = 8192
   let binary = ''
   for (let i = 0; i < bytes.length; i += CHUNK) {

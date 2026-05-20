@@ -3,6 +3,12 @@ main = "worker.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
+# Raise CPU limit to 30 s per invocation. The default 30 ms is far too tight for face indexing
+# (image fetch + base64 encode + AWS Sig V4 signing). All other routes finish well under 30 ms
+# so raising the budget has no user-visible impact on them.
+[limits]
+cpu_ms = 30000
+
 [assets]
 directory = ".open-next/assets"
 binding = "ASSETS"
