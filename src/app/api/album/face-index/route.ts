@@ -11,8 +11,13 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 // originals burn Cloudflare Worker CPU during fetch + base64 + signing. Convert the standard
 // Supabase public URL into a /render/image/ transform URL so we get a downscaled JPEG instead.
 // Width 1280 is well within Rekognition's working range and produces ~200-400 KB files.
-const FACE_INDEX_MAX_WIDTH = 1280
-const FACE_INDEX_QUALITY = 85
+// 600 px / q75 produces ~50-80 KB files — small enough that base64 encode + Sig V4 signing
+// fits within Cloudflare Workers Free plan's 10 ms CPU budget. Rekognition detects faces down
+// to 36×36 px, so even in a group photo of 10 people at 600 px each face is ~60 px.
+// (Upgrade account to Workers Paid + set [limits] cpu_ms = 30000 in wrangler.toml to use
+// larger images with better detection accuracy on crowd shots.)
+const FACE_INDEX_MAX_WIDTH = 600
+const FACE_INDEX_QUALITY = 75
 function faceIndexImageUrl(photoUrl: string): string {
   const marker = '/storage/v1/object/public/'
   const idx = photoUrl.indexOf(marker)
