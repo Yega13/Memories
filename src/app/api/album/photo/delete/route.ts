@@ -36,9 +36,10 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  // Select mirror_path defensively — column may not exist yet on pre-migration DBs. If the
-  // column is missing, Supabase rejects the query; the catch below falls back to a query that
-  // omits mirror_path so deletion still works.
+  // Select mirror_path + thumb_path defensively — columns may not exist yet on pre-migration
+  // DBs. If either is missing, Supabase rejects the query; the catch below falls back to a
+  // query that omits both so deletion still works. Pre-migration rows simply won't have
+  // thumbs/mirrors to clean up.
   let photo: {
     id: string
     album_id: string
@@ -47,16 +48,17 @@ export async function POST(req: Request) {
     poster_path: string | null
     stream_uid: string | null
     mirror_path: string | null
+    thumb_path: string | null
     face_ids: string[] | null
   } | null = null
   let photoError: { message: string } | null = null
   {
     const full = await admin
       .from('photos')
-      .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, mirror_path, face_ids')
+      .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, mirror_path, thumb_path, face_ids')
       .eq('id', photoId)
       .maybeSingle<typeof photo>()
-    if (full.error && /mirror_path|column .* does not exist/i.test(full.error.message ?? '')) {
+    if (full.error && /mirror_path|thumb_path|column .* does not exist/i.test(full.error.message ?? '')) {
       const fallback = await admin
         .from('photos')
         .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
@@ -70,7 +72,7 @@ export async function POST(req: Request) {
           stream_uid: string | null
           face_ids: string[] | null
         }>()
-      photo = fallback.data ? { ...fallback.data, mirror_path: null } : null
+      photo = fallback.data ? { ...fallback.data, mirror_path: null, thumb_path: null } : null
       photoError = fallback.error
     } else {
       photo = full.data
@@ -87,6 +89,9 @@ export async function POST(req: Request) {
 
   const paths = [photo.storage_path]
   if (photo.poster_path) paths.push(photo.poster_path)
+  // Grid thumbnails live in the Supabase 'Photos' bucket alongside the original (under
+  // {albumId}/thumbs/). Only present for image rows uploaded after the thumb pipeline shipped.
+  if (photo.thumb_path) paths.push(photo.thumb_path)
 
   if (photo.storage_backend === 'stream') {
     if (photo.stream_uid) {

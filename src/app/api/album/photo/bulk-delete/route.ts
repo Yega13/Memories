@@ -21,6 +21,7 @@ type PhotoRow = {
   poster_path: string | null
   stream_uid: string | null
   mirror_path: string | null
+  thumb_path: string | null
   face_ids: string[] | null
 }
 
@@ -60,19 +61,19 @@ export async function POST(req: Request) {
   {
     const full = await admin
       .from('photos')
-      .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, mirror_path, face_ids')
+      .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, mirror_path, thumb_path, face_ids')
       .in('id', photoIds)
       .eq('album_id', access.album.id)
       .returns<PhotoRow[]>()
 
-    if (full.error && /mirror_path|column .* does not exist/i.test(full.error.message ?? '')) {
+    if (full.error && /mirror_path|thumb_path|column .* does not exist/i.test(full.error.message ?? '')) {
       const fallback = await admin
         .from('photos')
         .select('id, album_id, storage_path, storage_backend, poster_path, stream_uid, face_ids')
         .in('id', photoIds)
         .eq('album_id', access.album.id)
-        .returns<Omit<PhotoRow, 'mirror_path'>[]>()
-      photos = fallback.data?.map((photo) => ({ ...photo, mirror_path: null })) ?? null
+        .returns<Omit<PhotoRow, 'mirror_path' | 'thumb_path'>[]>()
+      photos = fallback.data?.map((photo) => ({ ...photo, mirror_path: null, thumb_path: null })) ?? null
       lookupError = fallback.error
     } else {
       photos = full.data
@@ -102,6 +103,8 @@ export async function POST(req: Request) {
       target.push(p.storage_path)
       if (p.poster_path) target.push(p.poster_path)
     }
+    // Grid thumbnails always live in the Supabase 'Photos' bucket (only image rows have them).
+    if (p.thumb_path) supabasePaths.push(p.thumb_path)
     if (p.face_ids && p.face_ids.length > 0) faceIds.push(...p.face_ids)
   }
 

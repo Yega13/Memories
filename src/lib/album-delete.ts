@@ -18,6 +18,7 @@ type PhotoToDelete = {
   poster_path: string | null
   stream_uid: string | null
   mirror_path: string | null
+  thumb_path: string | null
 }
 
 export async function deleteAlbumAssetsAndRows(
@@ -29,17 +30,17 @@ export async function deleteAlbumAssetsAndRows(
   {
     const full = await admin
       .from('photos')
-      .select('storage_path, storage_backend, poster_path, stream_uid, mirror_path')
+      .select('storage_path, storage_backend, poster_path, stream_uid, mirror_path, thumb_path')
       .eq('album_id', album.id)
       .returns<PhotoToDelete[]>()
 
-    if (full.error && /mirror_path|column .* does not exist/i.test(full.error.message ?? '')) {
+    if (full.error && /mirror_path|thumb_path|column .* does not exist/i.test(full.error.message ?? '')) {
       const fallback = await admin
         .from('photos')
         .select('storage_path, storage_backend, poster_path, stream_uid')
         .eq('album_id', album.id)
-        .returns<Omit<PhotoToDelete, 'mirror_path'>[]>()
-      photos = fallback.data?.map((photo) => ({ ...photo, mirror_path: null })) ?? null
+        .returns<Omit<PhotoToDelete, 'mirror_path' | 'thumb_path'>[]>()
+      photos = fallback.data?.map((photo) => ({ ...photo, mirror_path: null, thumb_path: null })) ?? null
       photosError = fallback.error
     } else {
       photos = full.data
@@ -65,6 +66,8 @@ export async function deleteAlbumAssetsAndRows(
       target.add(photo.storage_path)
       if (photo.poster_path) target.add(photo.poster_path)
     }
+    // Grid thumbnails always live in the Supabase 'Photos' bucket (only image rows have them).
+    if (photo.thumb_path) supabasePaths.add(photo.thumb_path)
   }
 
   const backgroundPath = storagePathFromPublicPhotoUrl(album.background_theme)

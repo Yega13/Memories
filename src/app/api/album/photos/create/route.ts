@@ -20,6 +20,8 @@ type PhotoRow = {
   stream_uid?: string | null
   stream_iframe_url?: string | null
   stream_thumbnail_url?: string | null
+  thumb_path?: string | null
+  thumb_url?: string | null
   duration_seconds?: number | null
 }
 
@@ -69,9 +71,20 @@ export async function POST(req: Request) {
     )
   }
 
-  const { error } = await admin.from('photos').insert(valid)
-  if (error) {
-    console.error('[photos/create] insert failed:', error.message)
+  let insertError = (await admin.from('photos').insert(valid)).error
+  // If the thumb_path / thumb_url columns don't exist yet (migration not applied), strip them
+  // and retry. The original upload + grid still work — they just won't have thumbnails until
+  // the column lands.
+  if (insertError && /thumb_path|thumb_url|column .* does not exist|schema cache/i.test(insertError.message ?? '')) {
+    const stripped = valid.map((row) => {
+      const { thumb_path: _tp, thumb_url: _tu, ...rest } = row
+      void _tp; void _tu
+      return rest
+    })
+    insertError = (await admin.from('photos').insert(stripped)).error
+  }
+  if (insertError) {
+    console.error('[photos/create] insert failed:', insertError.message)
     return NextResponse.json({ error: 'Could not save uploaded files' }, { status: 500, headers: NO_STORE })
   }
 
@@ -94,6 +107,20 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   if (mediaType === 'image' && storageBackend !== 'supabase') return null
   if (mediaType === 'video' && storageBackend !== 'r2' && storageBackend !== 'stream') return null
 
+  // Validate thumbnail fields if present. Both must be album-scoped + a https url, or both
+  // must be null (no half-state). On failure we drop them silently (insert without thumb)
+  // rather than reject the whole row — the original still uploaded.
+  const rawThumbPath = row.thumb_path != null ? String(row.thumb_path).trim() : ''
+  const rawThumbUrl = row.thumb_url != null ? String(row.thumb_url).trim() : ''
+  let thumbPath: string | null = null
+  let thumbUrl: string | null = null
+  if (rawThumbPath && rawThumbUrl) {
+    if (rawThumbPath.startsWith(`${albumId}/`) && rawThumbUrl.startsWith('https://')) {
+      thumbPath = mediaTextOrNull(rawThumbPath, 256)
+      thumbUrl = mediaTextOrNull(rawThumbUrl, 2048)
+    }
+  }
+
   return {
     album_id: albumId,
     storage_path: storagePath,
@@ -107,6 +134,8 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
     stream_uid: mediaTextOrNull(row.stream_uid, 128),
     stream_iframe_url: mediaTextOrNull(row.stream_iframe_url, 2048),
     stream_thumbnail_url: mediaTextOrNull(row.stream_thumbnail_url, 2048),
+    thumb_path: thumbPath,
+    thumb_url: thumbUrl,
     duration_seconds: numberOrNull(row.duration_seconds),
   }
 }

@@ -54,6 +54,11 @@ export type Photo = {
   // finishes; everything degrades gracefully when null.
   mirror_path: string | null
   mirror_url: string | null
+  // Small image used by the grid tile. Generated client-side after upload and stored in
+  // Supabase Storage. Lightbox + download use the original `url`. Null for legacy rows and
+  // rows where thumbnail generation/upload failed — grid falls back to `url` in that case.
+  thumb_path: string | null
+  thumb_url: string | null
   duration_seconds: number | null
   display_radius: number | null
   display_filter: MediaDisplayFilter | null

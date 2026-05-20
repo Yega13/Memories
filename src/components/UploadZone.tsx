@@ -251,6 +251,10 @@ async function uploadVideoToStream(
     throw new Error(initBody.error || `Stream upload init failed: ${initRes.status}`)
   }
 
+  // Track a definitive-failure flag separately from transient errors. A 4xx from Cloudflare
+  // Stream (auth wrong, upload URL expired, request shape wrong) will keep failing no matter
+  // how many times we retry, so we bail out fast and let the R2 fallback try. Only 5xx and
+  // network-level errors are worth retrying.
   let offset = 0
   while (offset < file.size) {
     const start = offset
@@ -258,7 +262,8 @@ async function uploadVideoToStream(
     const chunk = file.slice(start, end)
 
     let lastErr: Error | null = null
-    for (let attempt = 1; attempt <= 8; attempt++) {
+    let definitiveFailure = false
+    for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         offset = await new Promise<number>((resolve, reject) => {
           const xhr = new XMLHttpRequest()
@@ -276,11 +281,14 @@ async function uploadVideoToStream(
               const nextOffset = Number(xhr.getResponseHeader('Upload-Offset') ?? end)
               resolve(Number.isFinite(nextOffset) && nextOffset > start ? nextOffset : end)
             } else {
-              reject(new Error(`Stream chunk failed: ${xhr.status}`))
+              // Tag the error with status so the outer catch can decide whether to retry.
+              const err = new Error(`Stream chunk PATCH failed: ${xhr.status} ${xhr.statusText || ''} (attempt ${attempt}, offset ${start}/${file.size}, response: ${(xhr.responseText || '').slice(0, 200)})`)
+              ;(err as Error & { status?: number }).status = xhr.status
+              reject(err)
             }
           }
-          xhr.onerror = () => reject(new Error('Network error during Stream upload'))
-          xhr.ontimeout = () => reject(new Error('Timeout during Stream upload'))
+          xhr.onerror = () => reject(new Error(`Network error during Stream upload (attempt ${attempt}, offset ${start}/${file.size})`))
+          xhr.ontimeout = () => reject(new Error(`Timeout during Stream upload (attempt ${attempt}, offset ${start}/${file.size})`))
           xhr.timeout = 300_000
           xhr.send(chunk)
         })
@@ -288,13 +296,24 @@ async function uploadVideoToStream(
         break
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error(String(e))
+        console.warn('[stream] chunk attempt failed:', lastErr.message)
+        const status = (lastErr as Error & { status?: number }).status
+        // 4xx is definitive — retrying won't help. Break to R2 fallback fast.
+        if (typeof status === 'number' && status >= 400 && status < 500) {
+          definitiveFailure = true
+          break
+        }
+        // Otherwise, try to recover via TUS HEAD offset and retry with capped backoff.
         const remoteOffset = await getStreamUploadOffset(initBody.uploadUrl)
         if (remoteOffset != null && remoteOffset > start) {
           offset = remoteOffset
           break
         }
-        if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))
+        if (attempt < 5) await wait(Math.min(1500 * attempt, 6000))
       }
+    }
+    if (definitiveFailure) {
+      throw lastErr ?? new Error('Stream upload definitively failed')
     }
     if (offset <= start) {
       throw lastErr ?? new Error('Stream upload failed')
@@ -454,6 +473,52 @@ async function processMirrorQueue(): Promise<void> {
   }
 }
 
+// ─── Grid thumbnail generation ────────────────────────────────────────────────
+// Generates a small preview (longest side ~900 px) from the original image, encoded as WebP
+// when supported and JPEG otherwise. The grid loads this thumbnail instead of the multi-MB
+// original; the lightbox + download paths keep using the original `url`. If thumbnail
+// generation fails at any step, we just don't include it — the upload still succeeds with
+// the original, and the grid falls back to `photo.url`.
+
+const THUMB_LONGEST_DIM = 900
+const THUMB_QUALITY = 0.8
+
+async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: string } | null> {
+  try {
+    // ImageBitmap decode is faster and runs off-thread on supported browsers.
+    const bitmap = await createImageBitmap(file)
+    try {
+      const { width: w, height: h } = bitmap
+      if (!w || !h) return null
+      const longest = Math.max(w, h)
+      const scale = longest > THUMB_LONGEST_DIM ? THUMB_LONGEST_DIM / longest : 1
+      const tw = Math.max(1, Math.round(w * scale))
+      const th = Math.max(1, Math.round(h * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = tw
+      canvas.height = th
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      ctx.drawImage(bitmap, 0, 0, tw, th)
+      // Prefer WebP when the browser supports encoding it. Smaller files, identical quality.
+      const webpBlob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/webp', THUMB_QUALITY),
+      )
+      if (webpBlob && webpBlob.type === 'image/webp') return { blob: webpBlob, ext: 'webp' }
+      // Fallback: JPEG. Universally supported.
+      const jpegBlob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', THUMB_QUALITY),
+      )
+      if (jpegBlob) return { blob: jpegBlob, ext: 'jpg' }
+      return null
+    } finally {
+      bitmap.close()
+    }
+  } catch {
+    return null
+  }
+}
+
 type Props = {
   album: Album
   onPhotoAdded: () => void
@@ -487,6 +552,8 @@ type PhotoInsertRow = {
   stream_uid: string | null
   stream_iframe_url: string | null
   stream_thumbnail_url: string | null
+  thumb_path: string | null
+  thumb_url: string | null
   duration_seconds: number | null
 }
 
@@ -740,30 +807,58 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
     if (item.kind === 'image') {
       const path = `${album.id}/${filename}`
+      let originalUploaded = false
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         const { error } = await supabase.storage
           .from('Photos')
           .upload(path, item.file, { contentType: item.file.type || undefined })
         if (!error || isExistingObjectError(error.message)) {
-          return {
-            storage_path: path,
-            storage_backend: 'supabase',
-            url: supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl,
-            caption: item.caption.trim() || null,
-            author_name: item.author.trim() || null,
-            media_type: 'image',
-            poster_path: null,
-            poster_url: null,
-            stream_uid: null,
-            stream_iframe_url: null,
-            stream_thumbnail_url: null,
-            duration_seconds: null,
-          }
+          originalUploaded = true
+          break
         }
         if (!isRetriableStorageError(error.message) || attempt === 5) throw new Error(error.message)
         await wait(500 * attempt) // 500, 1000, 1500, 2000ms
       }
-      throw new Error('Upload failed')
+      if (!originalUploaded) throw new Error('Upload failed')
+
+      // Best-effort grid thumbnail. Generated locally so the original keeps its full quality,
+      // then uploaded to a sibling path under the album. Any failure (decode, encode, upload)
+      // is swallowed — the grid falls back to the original url so the user-visible behavior
+      // is unchanged.
+      let thumbPath: string | null = null
+      let thumbUrl: string | null = null
+      try {
+        const thumb = await generateImageThumbnail(item.file)
+        if (thumb) {
+          const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
+          const { error: tErr } = await supabase.storage
+            .from('Photos')
+            .upload(tPath, thumb.blob, { contentType: thumb.blob.type || undefined })
+          if (!tErr || isExistingObjectError(tErr.message)) {
+            thumbPath = tPath
+            thumbUrl = supabase.storage.from('Photos').getPublicUrl(tPath).data.publicUrl
+          }
+        }
+      } catch {
+        // silent — thumbnail is best-effort
+      }
+
+      return {
+        storage_path: path,
+        storage_backend: 'supabase',
+        url: supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl,
+        caption: item.caption.trim() || null,
+        author_name: item.author.trim() || null,
+        media_type: 'image',
+        poster_path: null,
+        poster_url: null,
+        stream_uid: null,
+        stream_iframe_url: null,
+        stream_thumbnail_url: null,
+        thumb_path: thumbPath,
+        thumb_url: thumbUrl,
+        duration_seconds: null,
+      }
     }
 
     try {
@@ -780,10 +875,15 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         stream_uid: stream.stream_uid,
         stream_iframe_url: stream.stream_iframe_url,
         stream_thumbnail_url: stream.stream_thumbnail_url,
+        thumb_path: null,
+        thumb_url: null,
         duration_seconds: null,
       }
     } catch (err) {
-      console.warn('[stream] upload failed; falling back to R2:', err instanceof Error ? err.message : String(err))
+      // Log loud + clear when Stream gives up. Without this we just see a generic "chunk 1"
+      // error from the R2 fallback and have no way to diagnose what Stream actually hit.
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[stream] upload FAILED for "${item.file.name}" (${item.file.size} bytes); falling back to R2. Reason:`, msg)
     }
 
     const res = item.file.size > MULTIPART_THRESHOLD
@@ -804,6 +904,8 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       stream_uid: null,
       stream_iframe_url: null,
       stream_thumbnail_url: null,
+      thumb_path: null,
+      thumb_url: null,
       duration_seconds: durationSeconds,
     }
   }

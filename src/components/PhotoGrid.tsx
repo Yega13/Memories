@@ -1108,9 +1108,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => observer.observe(tile))
     window.addEventListener('resize', measureTiles)
 
-    // Start downloading images 1200px before they enter the viewport.
-    // Uses new Image() so the browser caches the file; when the lazy <img> finally
-    // activates it loads instantly from cache instead of showing white.
+    // Pre-warm tiles that are within ~one viewport of the user. Was 1200 px which on a 400-photo
+    // album triggers near-simultaneous fetches of ALL originals (multi-GB) over mobile data,
+    // saturating the network and getting old decodes evicted from memory. 400 px is enough to
+    // hide the gap on normal scrolls without hammering the network.
     const preloadObserver = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -1123,7 +1124,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           preloadObserver.unobserve(entry.target)
         }
       },
-      { rootMargin: '1200px' },
+      { rootMargin: '400px' },
     )
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => preloadObserver.observe(tile))
 
@@ -1178,29 +1179,36 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (settingsRadius > max) setSettingsRadius(max)
   }, [current, lightboxRadiusMax, settingsPhoto, settingsRadius, tileRadiusMaxById])
 
-  if (photos.length === 0) {
-    return (
-      <div className="text-center py-20" style={{ color: '#A89880' }}>
-        <p className="text-lg">Nothing here yet.</p>
-        <p className="text-sm mt-1">Be the first to upload a photo or video!</p>
-      </div>
-    )
+  // Ref-backed handler bag. Each render assigns the LATEST handlers into the ref, so the
+  // memoized tile JSX (below) can dispatch to them without stale-closure issues. This pattern
+  // gives us identity-stable callbacks for the useMemo without paying the cost of useCallback
+  // dependency lists across ~10 handlers.
+  // NOTE: hooks must come before any early return — that's why this is positioned above the
+  // empty-state branch even though it isn't used until later.
+  const tileHandlersRef = useRef({
+    handleTileClick, startReorderPress, handleReorderMove, finishReorder,
+    handleTilePointerTouchStart, handleTileTouchMove, handleTileTouchEnd,
+    clearReorderTimer, toggleGridCardBack, setPosterBroken, markBroken,
+    reorderDraggingActive: reorderDraggingId != null,
+  })
+  tileHandlersRef.current = {
+    handleTileClick, startReorderPress, handleReorderMove, finishReorder,
+    handleTilePointerTouchStart, handleTileTouchMove, handleTileTouchEnd,
+    clearReorderTimer, toggleGridCardBack, setPosterBroken, markBroken,
+    reorderDraggingActive: reorderDraggingId != null,
   }
 
-  return (
-    <>
-      <div
-        ref={gridRef}
-        className="hush-photo-grid grid gap-3 xl:gap-4"
-        style={{ '--hush-grid-cols': album.mobile_grid_columns ?? 3 } as React.CSSProperties}
-      >
-        {photos.map((photo, index) => {
+  // Memoize the tile JSX array. When the parent re-renders for an UNrelated reason
+  // (lightbox open/close, slideshow timer tick, zoom state change, etc.), this returns the
+  // same array reference and React skips reconciliation of all tiles — making the lightbox
+  // open/close feel instant on 200-400 photo albums.
+  const tiles = useMemo(() => photos.map((photo, index) => {
           const isVideo = photo.media_type === 'video'
           // For videos, drop the poster src entirely if the poster failed to load so the tile
           // shows the placeholder + Play icon instead of a broken-image icon under the overlay.
           const thumbSrc = isVideo
             ? (posterBroken.has(photo.id) ? '' : (photo.stream_thumbnail_url || photo.poster_url || ''))
-            : photo.url
+            : (photo.thumb_url || photo.url)
           const isBroken = broken.has(photo.id)
           const mediaRadius = previewRadiusFor(photo)
           const filter = cssMediaDisplayFilter(previewFilterFor(photo))
@@ -1223,22 +1231,22 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   WebkitTouchCallout: 'none',
                   userSelect: 'none',
                 }}
-                onClick={() => handleTileClick(index)}
-                onPointerDown={(e) => startReorderPress(photo, e)}
-                onPointerMove={handleReorderMove}
-                onPointerUp={finishReorder}
-                onPointerCancel={finishReorder}
+                onClick={() => tileHandlersRef.current.handleTileClick(index)}
+                onPointerDown={(e) => tileHandlersRef.current.startReorderPress(photo, e)}
+                onPointerMove={(e) => tileHandlersRef.current.handleReorderMove(e)}
+                onPointerUp={(e) => tileHandlersRef.current.finishReorder(e)}
+                onPointerCancel={(e) => tileHandlersRef.current.finishReorder(e)}
                 onPointerLeave={(e) => {
-                  if (reorderDraggingId) {
-                    handleReorderMove(e)
+                  if (tileHandlersRef.current.reorderDraggingActive) {
+                    tileHandlersRef.current.handleReorderMove(e)
                     return
                   }
-                  clearReorderTimer()
+                  tileHandlersRef.current.clearReorderTimer()
                 }}
-                onTouchStart={(e) => handleTilePointerTouchStart(photo, e)}
-                onTouchMove={handleTileTouchMove}
-                onTouchEnd={handleTileTouchEnd}
-                onContextMenu={(e) => toggleGridCardBack(photo, e)}
+                onTouchStart={(e) => tileHandlersRef.current.handleTilePointerTouchStart(photo, e)}
+                onTouchMove={(e) => tileHandlersRef.current.handleTileTouchMove(e)}
+                onTouchEnd={() => tileHandlersRef.current.handleTileTouchEnd()}
+                onContextMenu={(e) => tileHandlersRef.current.toggleGridCardBack(photo, e)}
                 onDragStart={(e) => e.preventDefault()}
               >
                 {thumbSrc && !isBroken ? (
@@ -1248,6 +1256,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                     alt={photo.caption || ''}
                     loading="lazy"
                     decoding="async"
+                    // Grid thumbnails are background work — let the browser deprioritise these
+                    // in favour of the currently-visible lightbox image and any active uploads.
+                    fetchPriority="low"
                     draggable={false}
                     className={mediaImageClass(hover)}
                     style={{
@@ -1258,17 +1269,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       if (isVideo) {
                         // Poster failed but the video itself may still play — flag the poster
                         // only, not the whole photo, so the lightbox can still open the video.
-                        setPosterBroken((prev) => {
+                        tileHandlersRef.current.setPosterBroken((prev) => {
                           if (prev.has(photo.id)) return prev
                           const next = new Set(prev)
                           next.add(photo.id)
                           return next
                         })
                       } else {
-                        markBroken(photo.id)
+                        tileHandlersRef.current.markBroken(photo.id)
                       }
                     }}
-                    onContextMenu={(e) => toggleGridCardBack(photo, e)}
+                    onContextMenu={(e) => tileHandlersRef.current.toggleGridCardBack(photo, e)}
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-3 text-center" style={{ background: '#E8E0D2' }}>
@@ -1354,7 +1365,45 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               </div>
             </div>
           )
-        })}
+        // Tile JSX deps — everything its rendering reads, EXCLUDING lightbox/slideshow/zoom
+        // state. That exclusion is the point: open/close lightbox → these deps unchanged →
+        // useMemo returns the same array → React skips re-rendering the tiles.
+        //
+        // previewRadiusFor and previewFilterFor are inline functions inside this component;
+        // they internally read settingsPhoto/settingsRadius/settingsFilter (already in deps).
+        // Intentionally NOT included: lightbox, slideshowActive, slideshowPaused, current,
+        // zoomScale, zoomPan, swipeOffset, lightboxFlipped, deleting, etc. Those are light-
+        // box concerns; tiles don't depend on them.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        }), [
+          photos,
+          album.media_hover, album.mobile_grid_columns,
+          forceGlobalRadius,
+          tileRadiusMaxById,
+          settingsPhoto, settingsRadius, settingsFilter,
+          arrangeMode, reorderDraggingId, reorderTargetId,
+          flippedPhotoId,
+          broken, posterBroken,
+          isOwner, selectMode, selectedIds,
+        ])
+
+  if (photos.length === 0) {
+    return (
+      <div className="text-center py-20" style={{ color: '#A89880' }}>
+        <p className="text-lg">Nothing here yet.</p>
+        <p className="text-sm mt-1">Be the first to upload a photo or video!</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div
+        ref={gridRef}
+        className="hush-photo-grid grid gap-3 xl:gap-4"
+        style={{ '--hush-grid-cols': album.mobile_grid_columns ?? 3 } as React.CSSProperties}
+      >
+        {tiles}
       </div>
 
       {current && (
@@ -1605,7 +1654,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               <div className="hush-slideshow-strip" data-scroll-allowed="true" onClick={(e) => e.stopPropagation()}>
                 {viewerPhotos.map((photo, index) => {
                   const isActive = index === lightbox
-                  const thumbSrc = photo.media_type === 'video' ? photo.stream_thumbnail_url || photo.poster_url || '' : photo.url
+                  const thumbSrc = photo.media_type === 'video' ? photo.stream_thumbnail_url || photo.poster_url || '' : (photo.thumb_url || photo.url)
                   return (
                     <button
                       key={photo.id}
@@ -1665,7 +1714,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
             <div className="grid max-h-[52vh] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-5" data-scroll-allowed="true">
               {photos.map((photo) => {
                 const selected = slideshowSelectedIds.has(photo.id)
-                const thumbSrc = photo.media_type === 'video' ? photo.stream_thumbnail_url || photo.poster_url || '' : photo.url
+                const thumbSrc = photo.media_type === 'video' ? photo.stream_thumbnail_url || photo.poster_url || '' : (photo.thumb_url || photo.url)
                 return (
                   <button
                     key={photo.id}
@@ -1706,7 +1755,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         const ghost = photos.find((p) => p.id === reorderDraggingId)
         if (!ghost) return null
         const size = reorderDragTileSizeRef.current
-        const thumbSrc = ghost.media_type === 'video' ? ghost.stream_thumbnail_url || ghost.poster_url || '' : ghost.url
+        const thumbSrc = ghost.media_type === 'video' ? ghost.stream_thumbnail_url || ghost.poster_url || '' : (ghost.thumb_url || ghost.url)
         return (
           <div
             style={{

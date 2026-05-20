@@ -342,11 +342,48 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
+  // Debounced auto-save for slider controls (radius, slideshow interval). Toggles and selects
+  // can save immediately; sliders need debouncing so a single drag doesn't fire dozens of
+  // updates per second. 500 ms lets the user settle on a value, then persists once.
+  const debouncedSaveRef = useRef<number | null>(null)
+  useEffect(() => () => {
+    if (debouncedSaveRef.current !== null) {
+      window.clearTimeout(debouncedSaveRef.current)
+    }
+  }, [])
+  function scheduleAutoSave(
+    nextRadius: number,
+    nextAutoplay: boolean,
+    nextFilter: MediaDisplayFilter,
+    nextHover: MediaHoverEffect,
+    nextMobileGridColumns: MobileGridColumns,
+    nextSlideshowIntervalMs: number,
+    nextSlideshowAnimation: SlideshowAnimation,
+  ) {
+    if (debouncedSaveRef.current !== null) {
+      window.clearTimeout(debouncedSaveRef.current)
+    }
+    debouncedSaveRef.current = window.setTimeout(() => {
+      debouncedSaveRef.current = null
+      void saveMediaSettings(
+        nextRadius,
+        nextAutoplay,
+        nextFilter,
+        nextHover,
+        nextMobileGridColumns,
+        nextSlideshowIntervalMs,
+        nextSlideshowAnimation,
+      )
+    }, 500)
+  }
+
   function applyMediaRadius(value: number) {
     const nextRadius = Math.max(0, Math.min(radiusMax, Math.round(value)))
     setMediaRadius(nextRadius)
     onAlbumUpdated({ media_radius: nextRadius }, { forceGlobalRadius: true })
     setMediaSaved(false)
+    // Debounced persistence — radius slider fires many onChange events while dragging.
+    scheduleAutoSave(nextRadius, videoAutoplay, mediaFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
   }
 
   function applySlideshowInterval(value: number) {
@@ -354,6 +391,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setSlideshowIntervalMs(nextInterval)
     onAlbumUpdated({ slideshow_interval_ms: nextInterval })
     setMediaSaved(false)
+    scheduleAutoSave(mediaRadius, videoAutoplay, mediaFilter, mediaHover, mobileGridColumns, nextInterval, slideshowAnimation)
   }
 
   async function chooseBackground(choice: string, closeLibrary = false) {
@@ -456,18 +494,45 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setZipProgress({ done: 0, total: photos.length, failed: 0 })
     const zip = new JSZip()
     const folder = zip.folder(album.title) || zip
-    let failed = 0
 
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i]
+    // Build all jobs up-front so a concurrent worker pool can drain them. Storing the resolved
+    // blob (or skip flag) at the photo's index keeps zip entries in album order without locking
+    // the sequential fetch we had before — which is what made the 200-photo download take 5+
+    // minutes.
+    type FileJob = { index: number; name: string; blob: Blob }
+    type Result = FileJob | { index: number; skipped: true }
+
+    // Fetch the photo bytes. Try direct fetch first (fastest — no Worker round-trip). If that
+    // fails — intermittent CORS, mobile carrier proxy, transient 5xx, etc. — fall back through
+    // our same-origin /api/download/photo proxy which the Worker handles with explicit allow-
+    // listing for our storage hosts. This is the answer to "some photos sometimes fetch-error":
+    // the proxy fallback gives every photo a second chance via a completely different code
+    // path before we count it as skipped.
+    async function fetchPhotoBlob(sourceUrl: string): Promise<Blob> {
+      try {
+        const res = await fetch(sourceUrl)
+        if (res.ok) return await res.blob()
+        throw new Error(`HTTP ${res.status}`)
+      } catch (directErr) {
+        try {
+          const proxyRes = await fetch(`/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=photo`)
+          if (!proxyRes.ok) throw new Error(`Proxy HTTP ${proxyRes.status}`)
+          return await proxyRes.blob()
+        } catch (proxyErr) {
+          // Bubble up the combined reason so a future "failed N items" toast can include detail.
+          throw new Error(`direct=${directErr instanceof Error ? directErr.message : String(directErr)}; proxy=${proxyErr instanceof Error ? proxyErr.message : String(proxyErr)}`)
+        }
+      }
+    }
+
+    const jobs: Array<() => Promise<Result>> = photos.map((photo, i) => async () => {
       try {
         const sourceUrl = photo.storage_backend === 'stream' ? photo.mirror_url : photo.url
         if (!sourceUrl) {
-          throw new Error('Video download is still being prepared')
+          // Stream-backed video without an R2 mirror yet — count as skipped, don't fail batch.
+          return { index: i, skipped: true }
         }
-        const res = await fetch(sourceUrl)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const blob = await res.blob()
+        const blob = await fetchPhotoBlob(sourceUrl)
         const storagePath = photo.storage_backend === 'stream' ? photo.mirror_path ?? photo.storage_path : photo.storage_path
         const pathExt = storagePath.split('.').pop()?.toLowerCase()
         const urlExt = sourceUrl.split('.').pop()?.split('?')[0]?.toLowerCase()
@@ -476,18 +541,49 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         const name = photo.caption
           ? `${i + 1}-${photo.caption.replace(/[^a-z0-9]/gi, '_')}.${ext}`
           : `${prefix}-${i + 1}.${ext}`
-        folder.file(name, blob)
-      } catch {
-        failed += 1
+        return { index: i, name, blob }
+      } catch (e) {
+        console.warn('[zip] skipping photo', photo.id, e instanceof Error ? e.message : String(e))
+        return { index: i, skipped: true }
       }
-      setZipProgress({ done: i + 1, total: photos.length, failed })
+    })
+
+    // Concurrency 6 ≈ what most browsers allow per origin; enough to keep the network busy
+    // without thrashing the device. ZIP entries are added in result order, then a final sort-by
+    // -index pass guarantees on-disk order matches album order.
+    const CONCURRENCY = 6
+    let cursor = 0
+    let done = 0
+    let failed = 0
+    const collected: Result[] = []
+
+    async function worker() {
+      while (true) {
+        const my = cursor
+        cursor += 1
+        if (my >= jobs.length) return
+        const result = await jobs[my]()
+        collected.push(result)
+        done += 1
+        if ('skipped' in result) failed += 1
+        setZipProgress({ done, total: photos.length, failed })
+      }
     }
+
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, () => worker()))
 
     if (failed === photos.length) {
       setZipping(false)
+      setZipProgress(null)
       showAppToast('Could not download album files.', 'error')
       return
     }
+
+    // Add to zip in album order (collected is racey because of the worker pool).
+    collected
+      .filter((r): r is FileJob => !('skipped' in r))
+      .sort((a, b) => a.index - b.index)
+      .forEach(({ name, blob }) => folder.file(name, blob))
 
     const content = await zip.generateAsync({ type: 'blob' })
     saveAs(content, `${album.title}.zip`)
@@ -565,6 +661,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   }
 
   return (
+    <>
     <div className="hush-owner-toolbar" style={{ background: '#F5F0E8', borderBottom: '1px solid #DDD5C5' }}>
       <div className="hush-container hush-owner-toolbar-inner py-3 flex flex-wrap items-center gap-3">
         <div className="hush-owner-action-wrap relative" ref={shareRef}>
@@ -624,16 +721,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
           <Move className="w-4 h-4" style={{ color: arrangeMode ? '#FDFAF5' : '#7C5C3E' }} />
           {arrangeMode ? 'Done' : 'Arrange'}
         </button>
-
-        {zipProgress && (
-          <div
-            className="basis-full md:basis-auto text-xs rounded-lg px-3 py-2"
-            style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', color: '#7C5C3E' }}
-          >
-            Downloading {zipProgress.done}/{zipProgress.total}
-            {zipProgress.failed > 0 ? ` - ${zipProgress.failed} skipped` : ''}
-          </div>
-        )}
 
         <div className="hush-owner-action-wrap hush-owner-settings relative ml-auto" ref={settingsRef}>
           <button
@@ -845,6 +932,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           setVideoAutoplay(nextAutoplay)
                           onAlbumUpdated({ video_autoplay: nextAutoplay })
                           setMediaSaved(false)
+                          // Auto-save so the toggle persists across refresh without needing the
+                          // explicit Save button. Passing nextAutoplay explicitly because the
+                          // setVideoAutoplay above hasn't taken effect in this closure yet.
+                          void saveMediaSettings(mediaRadius, nextAutoplay, mediaFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
                         }}
                         className="h-4 w-4"
                       />
@@ -859,6 +950,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           setMediaFilter(nextFilter)
                           onAlbumUpdated({ media_filter: nextFilter })
                           setMediaSaved(false)
+                          void saveMediaSettings(mediaRadius, videoAutoplay, nextFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
                         }}
                         className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                         style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
@@ -878,6 +970,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           setMediaHover(nextHover)
                           onAlbumUpdated({ media_hover: nextHover })
                           setMediaSaved(false)
+                          void saveMediaSettings(mediaRadius, videoAutoplay, mediaFilter, nextHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
                         }}
                         className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                         style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
@@ -901,6 +994,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                                 setMobileGridColumns(option.value)
                                 onAlbumUpdated({ mobile_grid_columns: option.value })
                                 setMediaSaved(false)
+                                void saveMediaSettings(mediaRadius, videoAutoplay, mediaFilter, mediaHover, option.value, slideshowIntervalMs, slideshowAnimation)
                               }}
                               className="hush-press rounded-lg py-2 text-sm font-semibold"
                               style={{
@@ -987,6 +1081,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           setSlideshowAnimation(nextAnimation)
                           onAlbumUpdated({ slideshow_animation: nextAnimation })
                           setMediaSaved(false)
+                          void saveMediaSettings(mediaRadius, videoAutoplay, mediaFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, nextAnimation)
                         }}
                         className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                         style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
@@ -1416,5 +1511,26 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         />
       )}
     </div>
+    {/* Floating ZIP progress banner. Lifted out of the toolbar flex so a growing
+        "Downloading 199/200 - 50 skipped" label can't reshape the toolbar and push the settings
+        button off-screen. Fixed bottom-right is visible on mobile + desktop without overlapping
+        the upload area. */}
+    {zipProgress && (
+      <div
+        className="fixed z-40 text-xs rounded-lg px-3 py-2 shadow-sm"
+        style={{
+          right: 'max(12px, env(safe-area-inset-right, 12px))',
+          bottom: 'max(12px, env(safe-area-inset-bottom, 12px))',
+          background: '#FFFFFF',
+          border: '1px solid #DDD5C5',
+          color: '#7C5C3E',
+          maxWidth: 'calc(100vw - 24px)',
+        }}
+      >
+        Downloading {zipProgress.done}/{zipProgress.total}
+        {zipProgress.failed > 0 ? ` - ${zipProgress.failed} skipped` : ''}
+      </div>
+    )}
+    </>
   )
 }

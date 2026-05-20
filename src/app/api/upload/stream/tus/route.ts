@@ -99,7 +99,14 @@ export async function POST(req: Request) {
   if (!res.ok || !uploadUrl || !uid) {
     const text = await res.text().catch(() => '')
     console.error('[upload/stream/tus] create failed:', res.status, text)
-    return NextResponse.json({ error: 'Could not create Stream upload' }, { status: 502, headers: NO_STORE })
+    // Include a sliver of the upstream body so client console can identify whether this is
+    // an auth/permission problem (401/403) vs a config problem (400) vs a CF outage. The body
+    // is truncated to avoid leaking anything sensitive in user-facing toasts.
+    const detail = text ? ` (${text.slice(0, 180)})` : ''
+    return NextResponse.json(
+      { error: `Could not create Stream upload: HTTP ${res.status}${detail}` },
+      { status: 502, headers: NO_STORE },
+    )
   }
 
   return NextResponse.json({ uploadUrl, ...streamUrls(uid) }, { headers: NO_STORE })

@@ -65,8 +65,20 @@ input[type="range"] {
   vertical-align: middle;
 }
 
+/* Arrange button used to be mobile-only (hidden by default, re-enabled inside the mobile media
+   queries below). Desktop owners couldn't find a way to enter arrange mode, so the button is
+   now visible everywhere. The mobile rules below keep the wider button styling intact. */
 .hush-owner-arrange-action {
-  display: none !important;
+  display: flex;
+}
+
+/* content-visibility: auto lets the browser skip layout/paint/decode for tiles that are far
+   off-screen, which is critical when an album has 200+ tiles. contain-intrinsic-size reserves
+   layout space so the scrollbar / scroll position stays accurate even before tiles render.
+   Once a tile scrolls into view, the browser paints it normally — no behavioural change. */
+.hush-photo-tile {
+  content-visibility: auto;
+  contain-intrinsic-size: 240px;
 }
 
 .hush-brand-preloader {
