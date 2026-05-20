@@ -412,9 +412,9 @@ a:hover,
   }
 
   .hush-logo {
-    height: clamp(22px, 1.7vw, 32px) !important;
+    height: clamp(26px, 2.2vw, 40px) !important;
     width: auto;
-    max-width: min(44vw, 190px);
+    max-width: min(44vw, 240px);
   }
 
   .hush-nav-links,

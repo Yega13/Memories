@@ -323,7 +323,7 @@ export default function AlbumPage() {
       <div className="hush-container pb-12">
 
         {!isOwner && (
-          <div className="flex items-center justify-end gap-2 mb-4">
+          <div className="flex items-center justify-end gap-2 mb-4 mt-5">
             {album.face_finder_enabled && photos.some((p) => p.media_type !== 'video') && (
               <button
                 onClick={() => setShowFaceFinder(true)}
