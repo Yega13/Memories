@@ -148,6 +148,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [, setBulkDeleteConfirming] = useState(false)
   const [lightboxFlipped, setLightboxFlipped] = useState(false)
   const [settingCover, setSettingCover] = useState(false)
+  // Photo IDs whose full-resolution original is cached in the browser. Used so the lightbox can
+  // display the (already-cached) thumbnail instantly while the original loads, then swap when
+  // ready. Without this, every swipe shows a blank box while the multi-MB original downloads.
+  const [lightboxOriginalLoadedIds, setLightboxOriginalLoadedIds] = useState<Set<string>>(new Set())
 
   // Stable key over the set of photo IDs. Lets effects depend on "did the tile set change?"
   // instead of "did the photos array reference change?" — the latter happens on every realtime
@@ -159,6 +163,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         .map((id) => photos.find((photo) => photo.id === id))
         .filter((photo): photo is Photo => Boolean(photo))
     : photos
+  // Mirror viewerPhotos into a ref so the lightbox-preload effect can read the latest list
+  // without depending on viewerPhotos identity (which changes every render).
+  const viewerPhotosRef = useRef<Photo[]>(viewerPhotos)
+  viewerPhotosRef.current = viewerPhotos
   const current = lightbox !== null ? viewerPhotos[lightbox] ?? null : null
   const overlayOpen = lightbox !== null || slideshowPickerOpen
   const slideshowMode = slideshowPhotoIds !== null
@@ -1148,6 +1156,35 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     lastTapRef.current = 0
   }, [current?.id, resetZoom])
 
+  // Prefetch the current original + ±2 neighbors as soon as the lightbox index changes. The
+  // browser image cache means the visible <img> (and every subsequent swipe) paints from cache
+  // instead of starting a fresh multi-MB download. Skip videos — their players manage their own
+  // buffering and originals are huge. The state flip flag is set once the prefetch onload fires
+  // so the visible <img> can swap from the cached thumb to the full original.
+  useEffect(() => {
+    if (lightbox === null) return
+    if (typeof window === 'undefined') return
+    const viewer = viewerPhotosRef.current
+    for (const delta of [0, 1, -1, 2, -2]) {
+      const i = lightbox + delta
+      if (i < 0 || i >= viewer.length) continue
+      const photo = viewer[i]
+      if (!photo || photo.media_type === 'video' || !photo.url) continue
+      const loader = new window.Image()
+      // Cast: fetchPriority is widely supported but not in all DOM lib versions.
+      ;(loader as HTMLImageElement & { fetchPriority?: string }).fetchPriority = delta === 0 ? 'high' : 'low'
+      loader.onload = () => {
+        setLightboxOriginalLoadedIds((prev) => {
+          if (prev.has(photo.id)) return prev
+          const next = new Set(prev)
+          next.add(photo.id)
+          return next
+        })
+      }
+      loader.src = photo.url
+    }
+  }, [lightbox])
+
   useEffect(() => {
     const maybeMediaNode = lightboxMediaNode
     if (!maybeMediaNode) return
@@ -1557,11 +1594,29 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               <div className={`hush-photo-flip relative w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={current.url}
+                  src={
+                    current.thumb_url && !lightboxOriginalLoadedIds.has(current.id)
+                      ? current.thumb_url
+                      : current.url
+                  }
                   alt={current.caption || ''}
                   className="block max-h-[min(70vh,760px)] max-w-full object-contain"
                   ref={(node) => setLightboxMediaNode(node)}
                   style={mediaZoomStyle(current)}
+                  onLoad={(e) => {
+                    // Mark loaded once the original (not the thumb) finishes painting. The src
+                    // logic above falls back to thumb_url while the original is still being
+                    // fetched — once the loaded set includes this photo's id, we keep showing
+                    // the original.
+                    if (e.currentTarget.src.endsWith(current.url) || !current.thumb_url) {
+                      setLightboxOriginalLoadedIds((prev) => {
+                        if (prev.has(current.id)) return prev
+                        const next = new Set(prev)
+                        next.add(current.id)
+                        return next
+                      })
+                    }
+                  }}
                   onError={() => markBroken(current.id)}
                   onClick={(e) => e.stopPropagation()}
                   onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
