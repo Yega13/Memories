@@ -1617,7 +1617,21 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       })
                     }
                   }}
-                  onError={() => markBroken(current.id)}
+                  onError={() => {
+                    // If the (cached-thumb) placeholder errored, swap to the original instead
+                    // of marking the whole photo broken — the original is on a different path
+                    // and may load fine. Only the original failing means the row is truly broken.
+                    if (current.thumb_url && !lightboxOriginalLoadedIds.has(current.id)) {
+                      setLightboxOriginalLoadedIds((prev) => {
+                        if (prev.has(current.id)) return prev
+                        const next = new Set(prev)
+                        next.add(current.id)
+                        return next
+                      })
+                      return
+                    }
+                    markBroken(current.id)
+                  }}
                   onClick={(e) => e.stopPropagation()}
                   onDoubleClick={(e) => { e.stopPropagation(); toggleZoom(e) }}
                   onMouseDown={handleMediaMouseDown}
