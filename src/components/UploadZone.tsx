@@ -576,7 +576,11 @@ function wait(ms: number): Promise<void> {
 }
 
 function isRetriableStorageError(message: string): boolean {
-  return /failed to fetch|network|timeout|abort/i.test(message)
+  return /failed to fetch|load failed|network|timeout|abort|temporarily unavailable/i.test(message)
+}
+
+function isRetriableResponseStatus(status: number): boolean {
+  return status === 408 || status === 425 || status === 429 || status >= 500
 }
 
 function isExistingObjectError(message: string): boolean {
@@ -1076,23 +1080,40 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   }
 
   async function saveUploadedRows(rows: PhotoInsertRow[]): Promise<{ inserted: number; rejected: number }> {
-    const res = await fetch('/api/album/photos/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ album_id: album.id, photos: rows }),
-    })
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: string
-      inserted_count?: number
-      rejected_count?: number
+    let lastError: Error | null = null
+
+    for (let attempt = 1; attempt <= 4; attempt += 1) {
+      try {
+        const res = await fetch('/api/album/photos/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ album_id: album.id, photos: rows }),
+        })
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string
+          inserted_count?: number
+          rejected_count?: number
+        }
+
+        if (res.ok) {
+          return {
+            inserted: typeof body.inserted_count === 'number' ? body.inserted_count : rows.length,
+            rejected: typeof body.rejected_count === 'number' ? body.rejected_count : 0,
+          }
+        }
+
+        lastError = new Error(body.error ?? 'Could not save uploaded files')
+        if (!isRetriableResponseStatus(res.status) || attempt === 4) throw lastError
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err))
+        lastError = error
+        if (!isRetriableStorageError(error.message) || attempt === 4) throw error
+      }
+
+      await wait(Math.min(700 * attempt * attempt, 5000))
     }
-    if (!res.ok) throw new Error(body.error ?? 'Could not save uploaded files')
-    // Defensive defaults: server is expected to return inserted_count/rejected_count, but if a
-    // stale deploy returns the old shape ({ ok: true }), treat all rows as inserted.
-    return {
-      inserted: typeof body.inserted_count === 'number' ? body.inserted_count : rows.length,
-      rejected: typeof body.rejected_count === 'number' ? body.rejected_count : 0,
-    }
+
+    throw lastError ?? new Error('Could not save uploaded files')
   }
 
   return (

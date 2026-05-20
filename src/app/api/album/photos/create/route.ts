@@ -71,29 +71,96 @@ export async function POST(req: Request) {
     )
   }
 
-  let insertError = (await admin.from('photos').insert(valid)).error
+  const storagePaths = [...new Set(valid.map((row) => row.storage_path))]
+  const { data: existingRows, error: existingError } = await admin
+    .from('photos')
+    .select('storage_path')
+    .eq('album_id', albumId)
+    .in('storage_path', storagePaths)
+
+  if (existingError) {
+    console.error('[photos/create] duplicate check failed:', existingError.message)
+    return NextResponse.json({ error: 'Could not save uploaded files' }, { status: 500, headers: NO_STORE })
+  }
+
+  const existingPaths = new Set((existingRows ?? []).map((row) => row.storage_path).filter(Boolean))
+  const seenPaths = new Set(existingPaths)
+  let rowsToInsert = valid.filter((row) => {
+    if (seenPaths.has(row.storage_path)) return false
+    seenPaths.add(row.storage_path)
+    return true
+  })
+
+  if (rowsToInsert.length === 0) {
+    return NextResponse.json(
+      { ok: true, inserted_count: 0, existing_count: valid.length, rejected_count: rejectedCount },
+      { headers: NO_STORE },
+    )
+  }
+
+  let insertError = (await admin.from('photos').insert(rowsToInsert)).error
   // If the thumb_path / thumb_url columns don't exist yet (migration not applied), strip them
   // and retry. The original upload + grid still work — they just won't have thumbnails until
   // the column lands.
   if (insertError && /thumb_path|thumb_url|column .* does not exist|schema cache/i.test(insertError.message ?? '')) {
-    const stripped = valid.map((row) => {
+    const stripped = rowsToInsert.map((row) => {
       const { thumb_path: _tp, thumb_url: _tu, ...rest } = row
       void _tp; void _tu
       return rest
     })
     insertError = (await admin.from('photos').insert(stripped)).error
   }
+  if (insertError && isDuplicateInsertError(insertError)) {
+    const { data: refreshedRows, error: refreshedError } = await admin
+      .from('photos')
+      .select('storage_path')
+      .eq('album_id', albumId)
+      .in('storage_path', storagePaths)
+
+    if (refreshedError) {
+      console.error('[photos/create] duplicate refresh failed:', refreshedError.message)
+      return NextResponse.json({ error: 'Could not save uploaded files' }, { status: 500, headers: NO_STORE })
+    }
+
+    const refreshedPaths = new Set((refreshedRows ?? []).map((row) => row.storage_path).filter(Boolean))
+    rowsToInsert = rowsToInsert.filter((row) => !refreshedPaths.has(row.storage_path))
+    if (rowsToInsert.length === 0) {
+      return NextResponse.json(
+        { ok: true, inserted_count: 0, existing_count: valid.length, rejected_count: rejectedCount },
+        { headers: NO_STORE },
+      )
+    }
+
+    insertError = (await admin.from('photos').insert(rowsToInsert)).error
+    if (insertError && /thumb_path|thumb_url|column .* does not exist|schema cache/i.test(insertError.message ?? '')) {
+      const stripped = rowsToInsert.map((row) => {
+        const { thumb_path: _tp, thumb_url: _tu, ...rest } = row
+        void _tp; void _tu
+        return rest
+      })
+      insertError = (await admin.from('photos').insert(stripped)).error
+    }
+  }
   if (insertError) {
     console.error('[photos/create] insert failed:', insertError.message)
     return NextResponse.json({ error: 'Could not save uploaded files' }, { status: 500, headers: NO_STORE })
   }
 
-  void maybeNotifyOwner(admin, album, valid.length)
+  void maybeNotifyOwner(admin, album, rowsToInsert.length)
 
   return NextResponse.json(
-    { ok: true, inserted_count: valid.length, rejected_count: rejectedCount },
+    {
+      ok: true,
+      inserted_count: rowsToInsert.length,
+      existing_count: valid.length - rowsToInsert.length,
+      rejected_count: rejectedCount,
+    },
     { headers: NO_STORE },
   )
+}
+
+function isDuplicateInsertError(error: { code?: string; message?: string }) {
+  return error.code === '23505' || /duplicate key|unique constraint/i.test(error.message ?? '')
 }
 
 function shapePhotoRow(albumId: string, row: PhotoRow) {
