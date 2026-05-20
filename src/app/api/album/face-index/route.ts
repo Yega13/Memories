@@ -90,7 +90,13 @@ async function handlePost(req: Request) {
       const faceIds = await indexPhotoFaces(album.id, photo.id, photo.url)
       await admin.from('photos').update({ face_ids: faceIds }).eq('id', photo.id)
       return NextResponse.json({ indexed: 1 }, { headers: NO_STORE })
-    } catch {
+    } catch (err) {
+      // Log the actual reason so `wrangler tail` can show why a photo was marked unindexable.
+      // Previously this was a bare `catch {}` which masked AWS credentials/region/throttling
+      // issues entirely.
+      const name = (err as { name?: string }).name ?? 'Unknown'
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[face-index] indexPhotoFaces failed:', photo.id, name, message)
       await admin.from('photos').update({ face_ids: [] }).eq('id', photo.id)
       return NextResponse.json({ indexed: 0 }, { headers: NO_STORE })
     }
@@ -120,7 +126,10 @@ async function handlePost(req: Request) {
       const faceIds = await indexPhotoFaces(album.id, photo.id, photo.url)
       await admin.from('photos').update({ face_ids: faceIds }).eq('id', photo.id)
       indexed++
-    } catch {
+    } catch (err) {
+      const name = (err as { name?: string }).name ?? 'Unknown'
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[face-index/fallback] indexPhotoFaces failed:', photo.id, name, message)
       await admin.from('photos').update({ face_ids: [] }).eq('id', photo.id)
     }
   }

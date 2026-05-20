@@ -14,6 +14,44 @@ type Step = 'indexing' | 'selfie' | 'searching' | 'results' | 'error'
 
 type Match = { photoId: string; similarity: number }
 
+// Downscale + re-encode the selfie before upload. Phone cameras produce 3-8 MB JPEGs, and the
+// face-search Worker has to fetch, parse, base64-encode and re-sign that whole payload before
+// sending to AWS Rekognition. Large payloads have been hitting Cloudflare's CPU limits on
+// search, returning a 503 HTML interstitial that the UI can't parse. Rekognition only needs a
+// roughly 1024px image (faces of ~50px are enough for matching), so we shrink here. Best-effort:
+// if anything goes wrong, fall back to the original file.
+const SELFIE_MAX_DIM = 1024
+const SELFIE_QUALITY = 0.85
+async function downscaleSelfie(file: File): Promise<File> {
+  if (file.size < 400 * 1024) return file
+  try {
+    const bitmap = await createImageBitmap(file)
+    try {
+      const longest = Math.max(bitmap.width, bitmap.height)
+      if (longest <= SELFIE_MAX_DIM) return file
+      const scale = SELFIE_MAX_DIM / longest
+      const w = Math.max(1, Math.round(bitmap.width * scale))
+      const h = Math.max(1, Math.round(bitmap.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return file
+      ctx.drawImage(bitmap, 0, 0, w, h)
+      const blob: Blob | null = await new Promise((resolve) =>
+        canvas.toBlob((b) => resolve(b), 'image/jpeg', SELFIE_QUALITY),
+      )
+      if (!blob) return file
+      const baseName = file.name.replace(/\.[^.]+$/, '') || 'selfie'
+      return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg', lastModified: Date.now() })
+    } finally {
+      bitmap.close()
+    }
+  } catch {
+    return file
+  }
+}
+
 export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
   const [step, setStep] = useState<Step>('indexing')
   const [indexed, setIndexed] = useState(0)
@@ -131,9 +169,11 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
     setStep('searching')
 
     try {
+      // Compress the selfie before upload — see downscaleSelfie() for the reason.
+      const compactSelfie = await downscaleSelfie(selfieFile)
       const form = new FormData()
       form.append('slug', albumSlug)
-      form.append('selfie', selfieFile)
+      form.append('selfie', compactSelfie)
 
       const res = await fetch('/api/album/face-search', { method: 'POST', body: form })
       const bodyText = await res.text()

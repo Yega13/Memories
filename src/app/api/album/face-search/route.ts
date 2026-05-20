@@ -9,6 +9,24 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 const MAX_SELFIE_BYTES = 5 * 1024 * 1024 // 5MB — Rekognition limit
 
 export async function POST(req: Request) {
+  try {
+    return await handlePost(req)
+  } catch (err) {
+    // Without this outer catch, any unhandled error (e.g. an AWS Rekognition error not in the
+    // explicit list below) crashes the Worker and Cloudflare returns its 503 HTML interstitial
+    // — which the client can't parse, so the user sees a useless "Server error (503): <!DOCTYPE
+    // html>" message. Logging the real reason here lets us diagnose via `wrangler tail`.
+    const name = (err as { name?: string }).name ?? 'Unknown'
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[face-search] unhandled:', name, message)
+    return NextResponse.json(
+      { error: `Face search failed (${name}). Please try again or contact support.` },
+      { status: 500, headers: NO_STORE },
+    )
+  }
+}
+
+async function handlePost(req: Request) {
   let slug: string
   let selfieBytes: Uint8Array
 
@@ -64,6 +82,7 @@ export async function POST(req: Request) {
     matches = await searchFacesByImage(album.id, selfieBytes)
   } catch (err: unknown) {
     const name = (err as { name?: string }).name
+    const message = err instanceof Error ? err.message : String(err)
     if (name === 'InvalidParameterException') {
       return NextResponse.json(
         { error: 'No face detected in selfie. Try a clearer photo facing the camera.' },
@@ -76,7 +95,14 @@ export async function POST(req: Request) {
         { status: 422, headers: NO_STORE },
       )
     }
-    throw err
+    // Surface other Rekognition errors with their AWS name so we can diagnose. Previously a
+    // re-throw here bubbled out of the handler and Cloudflare returned a 503 HTML interstitial
+    // with no clue what went wrong (AccessDenied, Throttling, etc.).
+    console.error('[face-search] Rekognition error:', name, message)
+    return NextResponse.json(
+      { error: `Face search failed: ${name ?? 'Unknown'} — ${message.slice(0, 200)}` },
+      { status: 502, headers: NO_STORE },
+    )
   }
 
   return NextResponse.json({ matches }, { headers: NO_STORE })
