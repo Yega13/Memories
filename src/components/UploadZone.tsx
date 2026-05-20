@@ -811,7 +811,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         const { error } = await supabase.storage
           .from('Photos')
-          .upload(path, item.file, { contentType: item.file.type || undefined })
+          .upload(path, item.file, { contentType: item.file.type || undefined, cacheControl: '604800' })
         if (!error || isExistingObjectError(error.message)) {
           originalUploaded = true
           break
@@ -833,7 +833,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
           const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
           const { error: tErr } = await supabase.storage
             .from('Photos')
-            .upload(tPath, thumb.blob, { contentType: thumb.blob.type || undefined })
+            .upload(tPath, thumb.blob, { contentType: thumb.blob.type || undefined, cacheControl: '604800' })
           if (!tErr || isExistingObjectError(tErr.message)) {
             thumbPath = tPath
             thumbUrl = supabase.storage.from('Photos').getPublicUrl(tPath).data.publicUrl

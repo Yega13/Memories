@@ -1108,10 +1108,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => observer.observe(tile))
     window.addEventListener('resize', measureTiles)
 
-    // Pre-warm tiles that are within ~one viewport of the user. Was 1200 px which on a 400-photo
-    // album triggers near-simultaneous fetches of ALL originals (multi-GB) over mobile data,
-    // saturating the network and getting old decodes evicted from memory. 400 px is enough to
-    // hide the gap on normal scrolls without hammering the network.
+    // Pre-warm thumbnails before they enter the viewport. Now that grid images are small
+    // thumbnails, a larger margin helps fast up/down scrolling without hammering the network.
     const preloadObserver = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -1124,7 +1122,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           preloadObserver.unobserve(entry.target)
         }
       },
-      { rootMargin: '400px' },
+      { rootMargin: '900px' },
     )
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => preloadObserver.observe(tile))
 
@@ -1258,7 +1256,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                     decoding="async"
                     // Grid thumbnails are background work — let the browser deprioritise these
                     // in favour of the currently-visible lightbox image and any active uploads.
-                    fetchPriority="low"
                     draggable={false}
                     className={mediaImageClass(hover)}
                     style={{
