@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { MEDIA_DISPLAY_FILTER_OPTIONS, type MediaDisplayFilter } from '@/lib/media-display'
 import { type Album, type Photo } from '@/lib/supabase'
 
@@ -45,6 +46,38 @@ export default function PhotoSettingsModal({
   onAuthorChange,
   onSave,
 }: Props) {
+  const [radiusDraft, setRadiusDraft] = useState(String(radius))
+  const [radiusEditing, setRadiusEditing] = useState(false)
+
+  useEffect(() => {
+    if (!radiusEditing) setRadiusDraft(String(radius))
+  }, [radius, radiusEditing])
+
+  function parseRadiusDraft(value: string): number | null {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const parsed = Number(trimmed)
+    if (!Number.isFinite(parsed)) return null
+    return Math.max(0, Math.min(radiusMax, Math.round(parsed)))
+  }
+
+  function commitRadiusDraft() {
+    const next = parseRadiusDraft(radiusDraft)
+    if (next == null) {
+      setRadiusDraft(String(radius))
+      return
+    }
+    onRadiusChange(next)
+    setRadiusDraft(String(next))
+  }
+
+  function changeRadiusDraft(value: string) {
+    const digitsOnly = value.replace(/[^\d]/g, '')
+    setRadiusDraft(digitsOnly)
+    const next = parseRadiusDraft(digitsOnly)
+    if (next != null) onRadiusChange(next)
+  }
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6" style={{ background: 'rgba(26, 43, 26, 0.42)', backdropFilter: 'blur(8px)' }} onMouseDown={(e) => {
       if (e.target === e.currentTarget) onClose()
@@ -110,17 +143,42 @@ export default function PhotoSettingsModal({
               className="w-full"
             />
             <input
-              type="number"
-              min={0}
-              max={radiusMax}
-              value={radius}
-              onChange={(e) => onRadiusChange(Number(e.target.value))}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={radiusDraft}
+              onChange={(e) => changeRadiusDraft(e.target.value)}
+              onFocus={() => {
+                setRadiusEditing(true)
+                setRadiusDraft(String(radius))
+              }}
+              onBlur={() => {
+                setRadiusEditing(false)
+                commitRadiusDraft()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur()
+                } else if (e.key === 'Escape') {
+                  setRadiusDraft(String(radius))
+                  e.currentTarget.blur()
+                }
+              }}
               onPointerDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
               className="mt-2 w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
               style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
             />
-            <button type="button" onClick={onRadiusReset} className="mt-2 text-xs" style={{ color: '#A89880' }}>
+            <button
+              type="button"
+              onClick={() => {
+                setRadiusEditing(false)
+                setRadiusDraft(String(album.media_radius ?? 12))
+                onRadiusReset()
+              }}
+              className="mt-2 text-xs"
+              style={{ color: '#A89880' }}
+            >
               Use global radius
             </button>
           </div>

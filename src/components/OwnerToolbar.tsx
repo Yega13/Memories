@@ -97,6 +97,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [backgroundError, setBackgroundError] = useState('')
   const [showBackgroundLibrary, setShowBackgroundLibrary] = useState(false)
   const [mediaRadius, setMediaRadius] = useState(album.media_radius ?? 12)
+  const [mediaRadiusDraft, setMediaRadiusDraft] = useState(String(album.media_radius ?? 12))
+  const [mediaRadiusEditing, setMediaRadiusEditing] = useState(false)
   const [savedMediaRadius, setSavedMediaRadius] = useState(album.media_radius ?? 12)
   const [videoAutoplay, setVideoAutoplay] = useState(!!album.video_autoplay)
   const [mediaFilter, setMediaFilter] = useState<MediaDisplayFilter>(album.media_filter ?? 'none')
@@ -137,6 +139,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }, [mediaRadius, onAlbumUpdated, radiusMax])
 
+  useEffect(() => {
+    if (!mediaRadiusEditing) setMediaRadiusDraft(String(mediaRadius))
+  }, [mediaRadius, mediaRadiusEditing])
+
   const loadCollections = useCallback(async () => {
     setCollectionsLoading(true)
     try {
@@ -167,6 +173,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setCollectionError('')
       setCollectionDescription('')
       setMediaRadius(album.media_radius ?? 12)
+      setMediaRadiusDraft(String(album.media_radius ?? 12))
+      setMediaRadiusEditing(false)
       setSavedMediaRadius(album.media_radius ?? 12)
       setVideoAutoplay(!!album.video_autoplay)
       setMediaFilter(album.media_filter ?? 'none')
@@ -384,6 +392,31 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setMediaSaved(false)
     // Debounced persistence — radius slider fires many onChange events while dragging.
     scheduleAutoSave(nextRadius, videoAutoplay, mediaFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
+  }
+
+  function parseMediaRadiusDraft(value: string): number | null {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const parsed = Number(trimmed)
+    if (!Number.isFinite(parsed)) return null
+    return Math.max(0, Math.min(radiusMax, Math.round(parsed)))
+  }
+
+  function commitMediaRadiusDraft() {
+    const nextRadius = parseMediaRadiusDraft(mediaRadiusDraft)
+    if (nextRadius == null) {
+      setMediaRadiusDraft(String(mediaRadius))
+      return
+    }
+    applyMediaRadius(nextRadius)
+    setMediaRadiusDraft(String(nextRadius))
+  }
+
+  function changeMediaRadiusDraft(value: string) {
+    const digitsOnly = value.replace(/[^\d]/g, '')
+    setMediaRadiusDraft(digitsOnly)
+    const nextRadius = parseMediaRadiusDraft(digitsOnly)
+    if (nextRadius != null) applyMediaRadius(nextRadius)
   }
 
   function applySlideshowInterval(value: number) {
@@ -909,11 +942,27 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                         className="w-full"
                       />
                       <input
-                        type="number"
-                        min={0}
-                        max={radiusMax}
-                        value={mediaRadius}
-                        onChange={(e) => applyMediaRadius(Number(e.target.value))}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        value={mediaRadiusDraft}
+                        onChange={(e) => changeMediaRadiusDraft(e.target.value)}
+                        onFocus={() => {
+                          setMediaRadiusEditing(true)
+                          setMediaRadiusDraft(String(mediaRadius))
+                        }}
+                        onBlur={() => {
+                          setMediaRadiusEditing(false)
+                          commitMediaRadiusDraft()
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.currentTarget.blur()
+                          } else if (e.key === 'Escape') {
+                            setMediaRadiusDraft(String(mediaRadius))
+                            e.currentTarget.blur()
+                          }
+                        }}
                         className="mt-2 w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
                         style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
                       />
