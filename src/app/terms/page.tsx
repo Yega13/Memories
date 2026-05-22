@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import AccountNavLink from "@/components/AccountNavLink";
 
 export const runtime = "nodejs";
 
@@ -105,9 +106,18 @@ export default function TermsPage() {
             draggable={false}
           />
         </Link>
-        <Link href="/support" className="text-sm font-medium" style={INK}>
-          Support
-        </Link>
+        <div className="hush-nav-links">
+          <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Pricing
+          </Link>
+          <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Collabs
+          </Link>
+          <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Support
+          </Link>
+          <AccountNavLink />
+        </div>
       </nav>
 
       <article className="hush-readable hush-fade-up py-16">

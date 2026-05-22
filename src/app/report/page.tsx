@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
+import AccountNavLink from "@/components/AccountNavLink";
 import ReportForm from "./ReportForm";
 
 export const runtime = "nodejs";
@@ -63,6 +64,18 @@ export default function ReportPage() {
             style={{ width: "auto" }}
           />
         </Link>
+        <div className="hush-nav-links">
+          <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Pricing
+          </Link>
+          <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Collabs
+          </Link>
+          <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Support
+          </Link>
+          <AccountNavLink />
+        </div>
       </nav>
 
       <section className="hush-readable hush-fade-up pt-12 text-center sm:pt-20">

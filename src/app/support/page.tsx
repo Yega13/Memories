@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Mail, MessageCircle, Clock } from "lucide-react";
+import AccountNavLink from "@/components/AccountNavLink";
 import SupportForm from "./SupportForm";
 
 export const runtime = "nodejs";
@@ -127,6 +128,18 @@ export default function SupportPage() {
             style={{ width: "auto" }}
           />
         </Link>
+        <div className="hush-nav-links">
+          <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Pricing
+          </Link>
+          <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            Collabs
+          </Link>
+          <span className="text-sm font-semibold underline underline-offset-4" style={{ color: "#254F22" }}>
+            Support
+          </span>
+          <AccountNavLink />
+        </div>
       </nav>
 
       {/* Hero */}
