@@ -29,7 +29,7 @@ const PROTECTED_MANAGEMENT_SLUGS = new Set([
   'talixfans',
 ])
 
-// Set via Cloudflare secret: PROTECTED_MANAGEMENT_EMAILS=email1@x.com,email2@x.com
+// Set via Cloudflare secret: PROTECTED_MANAGEMENT_EMAILS=alinagnuni3@gmail.com,yeganyansuren13@gmail.com
 // If the env var is not configured the feature is disabled (anyone with the owner token can access).
 const PROTECTED_MANAGEMENT_EMAILS: Set<string> | null = process.env.PROTECTED_MANAGEMENT_EMAILS
   ? new Set(process.env.PROTECTED_MANAGEMENT_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
