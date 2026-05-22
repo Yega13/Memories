@@ -67,15 +67,14 @@ export async function POST(req: Request) {
     }
 
     const key = `${albumId}/${filename}`
-    let upload: { uploadId: string }
     try {
-      upload = await bucket.createMultipartUpload(key, { httpMetadata: { contentType } })
+      const upload = await bucket.createMultipartUpload(key, { httpMetadata: { contentType } })
+      return NextResponse.json({ uploadId: upload.uploadId, key }, { headers: NO_STORE })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[r2/multipart] createMultipartUpload failed:', msg)
       return NextResponse.json({ error: `Failed to init upload: ${msg}` }, { status: 500, headers: NO_STORE })
     }
-    return NextResponse.json({ uploadId: upload.uploadId, key }, { headers: NO_STORE })
   }
 
   // ── chunk ─────────────────────────────────────────────────────────────────
