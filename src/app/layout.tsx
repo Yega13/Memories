@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Playfair_Display, Playwrite_GB_J } from "next/font/google";
+import Script from "next/script";
 import AppToastViewport from "@/components/AppToast";
 import BackToTopButton from "@/components/BackToTopButton";
 import SiteFooter from "@/components/SiteFooter";
@@ -335,6 +336,15 @@ export default function RootLayout({
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-5JMF0RM5Q6"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-5JMF0RM5Q6');`,
+          }}
         />
         <InitialPreloader />
         {children}

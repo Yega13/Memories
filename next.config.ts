@@ -2,11 +2,11 @@ import type { NextConfig } from "next";
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://pagead2.googlesyndication.com https://www.googletagservices.com https://partner.googleadservices.com https://tpc.googlesyndication.com https://adservice.google.com https://challenges.cloudflare.com",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.googletagservices.com https://partner.googleadservices.com https://tpc.googlesyndication.com https://adservice.google.com https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://zleajzevvhugkwlqlolt.supabase.co wss://zleajzevvhugkwlqlolt.supabase.co https://challenges.cloudflare.com https://upload.videodelivery.net",
+  "connect-src 'self' https://zleajzevvhugkwlqlolt.supabase.co wss://zleajzevvhugkwlqlolt.supabase.co https://challenges.cloudflare.com https://upload.videodelivery.net https://www.google-analytics.com https://analytics.google.com https://stats.g.doubleclick.net",
   "media-src 'self' blob: https://videos.hushare.space https://zleajzevvhugkwlqlolt.supabase.co https://videodelivery.net https://*.videodelivery.net",
   "frame-src 'self' https://challenges.cloudflare.com https://googleads.g.doubleclick.net https://tpc.googlesyndication.com https://iframe.videodelivery.net https://*.videodelivery.net",
   "worker-src 'self' blob:",
