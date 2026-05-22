@@ -1,5 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import AccountNavLink from '@/components/AccountNavLink'
 
 export const metadata = { robots: { index: false, follow: false } }
 
@@ -229,12 +230,18 @@ export default function InfoPage() {
             draggable={false}
           />
         </Link>
-        <span
-          className="text-[11px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-full"
-          style={{ background: 'rgba(124,74,45,0.1)', color: '#7C4A2D' }}
-        >
-          Internal
-        </span>
+        <div className="hush-nav-links">
+          <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+            Pricing
+          </Link>
+          <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+            Collabs
+          </Link>
+          <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+            Support
+          </Link>
+          <AccountNavLink />
+        </div>
       </nav>
 
       <div className="hush-readable py-14">
