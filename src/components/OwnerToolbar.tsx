@@ -2,8 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
-import JSZip from 'jszip'
-import { saveAs } from 'file-saver'
 import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, MAX_SLIDESHOW_INTERVAL_MS, MIN_SLIDESHOW_INTERVAL_MS, MEDIA_DISPLAY_FILTER_OPTIONS, MEDIA_HOVER_EFFECT_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, SLIDESHOW_ANIMATION_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
@@ -525,6 +523,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     if (photos.length === 0) return
     setZipping(true)
     setZipProgress({ done: 0, total: photos.length, failed: 0 })
+    const [{ default: JSZip }, { saveAs }] = await Promise.all([import('jszip'), import('file-saver')])
     const zip = new JSZip()
     const folder = zip.folder(album.title) || zip
 

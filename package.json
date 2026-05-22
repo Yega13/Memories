@@ -15,7 +15,6 @@
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-rekognition": "^3.1048.0",
     "@fontsource/playfair-display": "^5.2.8",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.104.0",
@@ -23,7 +22,7 @@
     "heic2any": "^0.0.4",
     "jszip": "^3.10.1",
     "lucide-react": "^1.8.0",
-    "next": "15.5.15",
+    "next": "^15.5.18",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "uuid": "^14.0.0"

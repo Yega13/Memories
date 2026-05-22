@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -30,6 +31,16 @@ export async function POST(req: Request) {
   const title = String(body.title ?? '').trim().slice(0, 120)
   if (!title) {
     return NextResponse.json({ error: 'Please give your album a name' }, { status: 400, headers: NO_STORE })
+  }
+
+  // 30 albums per hour per IP. Fail-open: if the rate_limit_events table doesn't exist
+  // yet the request is allowed through. Run the 20260522 migration to activate this.
+  const rl = await checkRateLimit(clientIpKey(req, 'album_create'), 60 * 60, 30)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many albums created. Please try again later.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(rl.retryAfterSeconds) } },
+    )
   }
 
   const supabase = await createClient()

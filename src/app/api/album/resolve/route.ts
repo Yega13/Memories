@@ -87,13 +87,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
   }
 
-  return await buildResponse(byCustom, ownerToken)
+  // Pass the already-fetched tier so buildResponse doesn't make a second DB call.
+  return await buildResponse(byCustom, ownerToken, tier)
 }
 
-async function buildResponse(album: FullAlbum, ownerToken = '') {
+async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awaited<ReturnType<typeof getUserTierById>>) {
   // Owner tier drives both the upload cap returned to the client AND the
-  // password-enforcement decision. Compute it once.
-  const ownerTier = await getUserTierById(album.user_id)
+  // password-enforcement decision. Use the cached value when available (custom-slug
+  // path already fetched it) to save a DB round-trip on every album load.
+  const ownerTier = cachedTier ?? await getUserTierById(album.user_id)
   const upload_caps = uploadCapsForTier(ownerTier)
 
   // Password enforcement is conditional on the OWNER's tier - if they've

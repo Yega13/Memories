@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX, mediaTextOrNull } from '@/lib/media-text'
 import { sendPhotoNotificationEmail } from '@/lib/email'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -54,6 +55,16 @@ export async function POST(req: Request) {
     .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null; last_notification_at: string | null }>()
   if (!album) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  }
+
+  // 120 upload batches per 10 min per IP (~2/sec sustained — well above any real user,
+  // low enough to stop a scripted flood). Fail-open if rate_limit_events table missing.
+  const rl = await checkRateLimit(clientIpKey(req, `photo_upload:${albumId}`), 10 * 60, 120)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Upload rate limit exceeded. Please slow down.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(rl.retryAfterSeconds) } },
+    )
   }
 
   // Per-row tolerant insert: previously one bad row rejected the entire batch of up to 100,
