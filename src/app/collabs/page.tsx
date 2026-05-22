@@ -59,7 +59,15 @@ export default function CollabsPage() {
     <main className="min-h-screen" style={{ background: "#FDFAF5" }}>
 
       {/* Nav */}
-      <nav className="hush-container-xl hush-nav">
+      <nav
+        className="hush-nav sticky top-0 z-50 flex items-center justify-between"
+        style={{
+          background: "rgba(253, 250, 245, 0.85)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          borderBottom: "1px solid rgba(221, 213, 197, 0.5)",
+        }}
+      >
         <Link href="/" aria-label="Hushare home">
           <Image
             src="/logo/logo-dark-transparent.png"
