@@ -67,7 +67,14 @@ export async function POST(req: Request) {
     }
 
     const key = `${albumId}/${filename}`
-    const upload = await bucket.createMultipartUpload(key, { httpMetadata: { contentType } })
+    let upload: { uploadId: string }
+    try {
+      upload = await bucket.createMultipartUpload(key, { httpMetadata: { contentType } })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[r2/multipart] createMultipartUpload failed:', msg)
+      return NextResponse.json({ error: `Failed to init upload: ${msg}` }, { status: 500, headers: NO_STORE })
+    }
     return NextResponse.json({ uploadId: upload.uploadId, key }, { headers: NO_STORE })
   }
 
@@ -130,8 +137,14 @@ export async function POST(req: Request) {
     if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
     if (!Array.isArray(parts) || parts.length === 0) return NextResponse.json({ error: 'Invalid parts' }, { status: 400, headers: NO_STORE })
 
-    const upload = bucket.resumeMultipartUpload(key, uploadId)
-    await upload.complete(parts)
+    try {
+      const upload = bucket.resumeMultipartUpload(key, uploadId)
+      await upload.complete(parts)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[r2/multipart] complete failed:', msg, 'key', key)
+      return NextResponse.json({ error: `Upload complete failed: ${msg}` }, { status: 500, headers: NO_STORE })
+    }
     return NextResponse.json({ storage_path: key, url: `https://${publicHost}/${key}` }, { headers: NO_STORE })
   }
 
@@ -146,8 +159,14 @@ export async function POST(req: Request) {
     if (!UPLOAD_ID_RE.test(uploadId)) return NextResponse.json({ error: 'Invalid uploadId' }, { status: 400, headers: NO_STORE })
     if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
 
-    const upload = bucket.resumeMultipartUpload(key, uploadId)
-    await upload.abort()
+    try {
+      const upload = bucket.resumeMultipartUpload(key, uploadId)
+      await upload.abort()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[r2/multipart] abort failed:', msg, 'key', key)
+      return NextResponse.json({ error: `Abort failed: ${msg}` }, { status: 500, headers: NO_STORE })
+    }
     return NextResponse.json({ ok: true }, { headers: NO_STORE })
   }
 

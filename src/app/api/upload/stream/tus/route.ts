@@ -79,20 +79,29 @@ export async function POST(req: Request) {
     )
   }
 
-  const res = await fetch(`${STREAM_API_BASE}/accounts/${config.accountId}/stream?direct_user=true`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      'Tus-Resumable': '1.0.0',
-      'Upload-Length': String(Math.round(totalSize)),
-      'Upload-Metadata': tusMetadata({
-        name: filename,
-        filename,
-        filetype: contentType,
-        album: albumId,
-      }),
-    },
-  })
+  const streamInitSignal = AbortSignal.timeout(30_000)
+  let res: Response
+  try {
+    res = await fetch(`${STREAM_API_BASE}/accounts/${config.accountId}/stream?direct_user=true`, {
+      method: 'POST',
+      signal: streamInitSignal,
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        'Tus-Resumable': '1.0.0',
+        'Upload-Length': String(Math.round(totalSize)),
+        'Upload-Metadata': tusMetadata({
+          name: filename,
+          filename,
+          filetype: contentType,
+          album: albumId,
+        }),
+      },
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error('[upload/stream/tus] init fetch failed:', msg)
+    return NextResponse.json({ error: `Stream init failed: ${msg}` }, { status: 502, headers: NO_STORE })
+  }
 
   const uploadUrl = res.headers.get('location') ?? ''
   const uid = res.headers.get('stream-media-id') ?? uidFromLocation(uploadUrl)
