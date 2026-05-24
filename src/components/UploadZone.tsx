@@ -530,6 +530,7 @@ type PendingItem = {
   kind: MediaKind
   caption: string
   author: string
+  heic?: boolean
 }
 
 type UploadStatus = {
@@ -749,35 +750,15 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         continue
       }
 
-      let uploadFile = file
-      if (kind === 'image' && isHeicFile(file)) {
-        // Yield to the browser before each HEIC conversion so the "Preparing…" UI can repaint.
-        // heic2any blocks the main thread for a few seconds per file; without yielding the user
-        // sees a frozen page.
-        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)))
-        try {
-          uploadFile = await convertHeicToJpeg(file)
-        } catch (err) {
-          // Surface the real error so we can tell apart worker-bootstrap failures, timeouts,
-          // and actual heic2any decode errors. The generic message was hiding the root cause.
-          const errMsg = err instanceof Error ? err.message : String(err)
-          rejected.push(`${file.name}: HEIC failed (${errMsg})`)
-          continue
-        }
-        if (uploadFile.size > cap) {
-          rejected.push(
-            `${file.name}: converted JPG is ${formatFileSize(uploadFile.size)}, above the ${formatFileSize(cap)} limit`,
-          )
-          continue
-        }
-      }
+      const heic = kind === 'image' && isHeicFile(file)
 
       next.push({
-        file: uploadFile,
-        preview: URL.createObjectURL(uploadFile),
+        file,
+        preview: URL.createObjectURL(file),
         kind,
         caption: '',
         author: '',
+        heic,
       })
     }
 
@@ -801,7 +782,22 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
   }
 
   async function uploadItem(item: PendingItem): Promise<PhotoInsertRow> {
-    const ext = extensionFor(item.file, item.kind)
+    // Convert HEIC just-in-time so the prepare phase is instant for bulk iPhone uploads.
+    // Conversion runs here with the existing upload concurrency (3–5 parallel) instead of
+    // sequentially in addFiles, cutting perceived wait from O(n) to O(n/concurrency).
+    let uploadFile = item.file
+    if (item.heic) {
+      try {
+        uploadFile = await convertHeicToJpeg(item.file)
+        const cap = item.kind === 'video' ? caps.video : caps.image
+        if (uploadFile.size > cap) throw new Error(`Converted JPG is ${formatFileSize(uploadFile.size)}, above the ${formatFileSize(cap)} limit`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        throw new Error(`${item.file.name}: HEIC conversion failed (${msg})`)
+      }
+    }
+
+    const ext = extensionFor(uploadFile, item.kind)
     const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
     const filename = `${baseId}.${ext}`
 
@@ -811,7 +807,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         const { error } = await supabase.storage
           .from('Photos')
-          .upload(path, item.file, { contentType: item.file.type || undefined, cacheControl: '604800' })
+          .upload(path, uploadFile, { contentType: uploadFile.type || undefined, cacheControl: '604800' })
         if (!error || isExistingObjectError(error.message)) {
           originalUploaded = true
           break
@@ -828,7 +824,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       let thumbPath: string | null = null
       let thumbUrl: string | null = null
       try {
-        const thumb = await generateImageThumbnail(item.file)
+        const thumb = await generateImageThumbnail(uploadFile)
         if (thumb) {
           const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
           const { error: tErr } = await supabase.storage
