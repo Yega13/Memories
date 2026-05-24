@@ -1,0 +1,101 @@
+# Hushare Issues
+
+---
+
+## #1 — Arrangement: "Could not save media order" on large albums
+**Status:** FIXED  
+**Area:** API — `/api/album/photos/reorder`
+
+**Problem:** On albums with many photos, saving drag-and-drop order failed with "Could not save media order". Root cause was N individual UPDATE queries fired in parallel, exhausting Supabase's connection pool. A batch-of-20 workaround was added but still does many round-trips and can partially fail (first N batches succeed, last one fails → album left in half-ordered state).
+
+**Fix:** Replaced all individual row UPDATEs with a single PostgreSQL RPC call (`batch_set_sort_order`) that uses `unnest()` to do one atomic `UPDATE … FROM (SELECT unnest…)` across all rows. One round-trip, zero partial-failure risk, album_id enforced at the database level.  
+**Files:** `supabase/migrations/20260524_batch_sort_order_rpc.sql`, `src/app/api/album/photos/reorder/route.ts`
+
+---
+
+## #2 — thumb_path / thumb_url columns missing from DB
+**Status:** OPEN  
+**Area:** Database / migrations
+
+**Problem:** No migration adds `thumb_path` / `thumb_url` to the `photos` table. The `photos/create` route has a fallback that silently strips them on insert. Every image loads full-resolution in the grid instead of a small preview thumbnail, making the grid slow. Thumbnail data generated client-side is wasted work.
+
+---
+
+## #3 — Videos failing — 97/100 with XHR network errors (chunk 1)
+**Status:** OPEN  
+**Area:** Upload — Cloudflare Stream / R2 multipart
+
+**Problem:** Nearly all video uploads fail. Both short and long videos error on chunk 1. Stream TUS path fails and falls back to R2 multipart, which also drops. Likely a Cloudflare WAF / Worker body-size / connection-timeout issue at the edge.
+
+---
+
+## #4 — Video poster/thumbnail never appears after upload
+**Status:** OPEN  
+**Area:** Upload — poster queue / `uploadToR2` (no retry)
+
+**Problem:** After a video uploads via R2 (fallback path), `uploadToR2` for the poster JPEG has zero retry logic — one network blip = permanent failure. Stream-backed videos use `stream_thumbnail_url` which is returned by Cloudflare but may not be valid until the video finishes processing. Net result: video tiles always show the generic "Play" placeholder.
+
+---
+
+## #5 — Upload stops / freezes when tab is backgrounded
+**Status:** OPEN  
+**Area:** Upload — UploadZone.tsx / Web Locks
+
+**Problem:** The Web Locks API (`navigator.locks.request`) doesn't fully prevent throttling on iOS Safari when the tab is hidden. Long uploads (100+ photos, any video) pause until the user returns to the tab. No Service Worker is in place as a proper fix.
+
+---
+
+## #6 — Upload speed too slow (100 photos > 5 min, target ~2 min)
+**Status:** OPEN  
+**Area:** Upload — UploadZone.tsx
+
+**Problem:** Concurrency is capped at 3 (mobile) or 5 (desktop). Each image upload is sequential within its worker slot. Thumbnail generation adds latency inline. HEIC conversion is per-file and expensive. Combined with Supabase storage being single-region, 100 photos routinely takes 5+ minutes.
+
+---
+
+## #7 — Album share link has no OG thumbnail
+**Status:** OPEN  
+**Area:** SEO / `[slug]/page.tsx` — Open Graph meta
+
+**Problem:** When a Hushare album link is pasted into iMessage, WhatsApp, Slack, etc., there is no preview image. Needs `og:image` set to either the album's cover photo or the first photo in the album. Also needs a custom OG image when the album has a cover set.
+
+---
+
+## #8 — No way to create a second collection from the website
+**Status:** OPEN  
+**Area:** Account page / OwnerToolbar
+
+**Problem:** The only path to create a collection is through an album's owner toolbar → Settings → "Add to collection". Once one collection exists there is no standalone "Create collection" button anywhere on the site or account dashboard. Users with multiple albums who already have one collection are stuck.
+
+---
+
+## #9 — uploadToR2 (poster uploads, small videos) has no retry logic
+**Status:** OPEN  
+**Area:** UploadZone.tsx — `uploadToR2()`
+
+**Problem:** `uploadToR2` wraps a single XHR with no retry loop. Any transient network error (mobile carrier proxy drop, brief Cloudflare hiccup) causes a permanent failure for that upload. This is specifically why video posters fail — they are small uploads through this path, and without retry there is no recovery.
+
+---
+
+## #10 — WAF / Cloudflare edge still dropping multipart chunk connections
+**Status:** OPEN  
+**Area:** Infrastructure / Cloudflare
+
+**Problem:** Even with the WAF skip rule in place, `chunk 1` multipart errors occur on both short and long videos. This suggests either the skip rule isn't targeting the right route, a Worker CPU time limit is being hit on large chunks, or the edge is rewriting `Content-Type: multipart/form-data` in a way the Worker doesn't expect.
+
+---
+
+## #11 — No E2E test suite — bugs only found manually
+**Status:** OPEN  
+**Area:** Testing / CI
+
+**Problem:** There is no automated end-to-end test suite (Playwright, Cypress, etc.). Upload failures, arrangement bugs, and missing DB columns were all found by hand. Any new deployment can silently regress any of the above.
+
+---
+
+## Future / Version 2 items
+
+- Competitor analysis & feature gap list
+- Full billing model + profit/loss calculation  
+- Mobile UI/UX polish pass  
+- UI polish (desktop + mobile)  

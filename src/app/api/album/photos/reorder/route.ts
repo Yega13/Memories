@@ -56,24 +56,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true }, { headers: NO_STORE })
   }
 
-  // Batch updates 20 at a time to avoid exhausting Supabase's connection pool on large albums.
-  const BATCH = 20
-  for (let i = 0; i < validIds.length; i += BATCH) {
-    const slice = validIds.slice(i, i + BATCH)
-    const results = await Promise.all(
-      slice.map((id, j) =>
-        admin
-          .from('photos')
-          .update({ sort_order: i + j })
-          .eq('id', id)
-          .eq('album_id', access.album.id),
-      ),
-    )
-    const failure = results.find((r) => r.error)
-    if (failure?.error) {
-      console.error('[photos/reorder] update failed:', failure.error.message)
-      return NextResponse.json({ error: 'Could not save media order' }, { status: 500, headers: NO_STORE })
-    }
+  // Single atomic UPDATE via RPC — one round-trip, no partial-failure risk.
+  // The function uses unnest() so the DB applies all sort_order values in one statement
+  // and enforces album_id at the query level.
+  const { error: rpcError } = await admin.rpc('batch_set_sort_order', {
+    p_album_id: access.album.id,
+    p_ids: validIds,
+    p_orders: validIds.map((_, i) => i),
+  })
+
+  if (rpcError) {
+    console.error('[photos/reorder] rpc failed:', rpcError.message)
+    return NextResponse.json({ error: 'Could not save media order' }, { status: 500, headers: NO_STORE })
   }
 
   return NextResponse.json({ ok: true }, { headers: NO_STORE })
