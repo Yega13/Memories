@@ -52,25 +52,28 @@ export async function POST(req: Request) {
   // existing sort_order (null) and appear after the explicitly ordered items.
   const validIds = photoIds.filter((id) => albumPhotoIds.has(id))
 
-  // Parallelize the per-row updates — sequentially this was ~50 ms × N round-trips, which made
-  // reordering large albums feel laggy. Supabase handles a couple dozen concurrent updates fine.
   if (validIds.length === 0) {
     return NextResponse.json({ ok: true }, { headers: NO_STORE })
   }
 
-  const results = await Promise.all(
-    validIds.map((id, index) =>
-      admin
-        .from('photos')
-        .update({ sort_order: index })
-        .eq('id', id)
-        .eq('album_id', access.album.id),
-    ),
-  )
-  const failure = results.find((r) => r.error)
-  if (failure?.error) {
-    console.error('[photos/reorder] update failed:', failure.error.message)
-    return NextResponse.json({ error: 'Could not save media order' }, { status: 500, headers: NO_STORE })
+  // Batch updates 20 at a time to avoid exhausting Supabase's connection pool on large albums.
+  const BATCH = 20
+  for (let i = 0; i < validIds.length; i += BATCH) {
+    const slice = validIds.slice(i, i + BATCH)
+    const results = await Promise.all(
+      slice.map((id, j) =>
+        admin
+          .from('photos')
+          .update({ sort_order: i + j })
+          .eq('id', id)
+          .eq('album_id', access.album.id),
+      ),
+    )
+    const failure = results.find((r) => r.error)
+    if (failure?.error) {
+      console.error('[photos/reorder] update failed:', failure.error.message)
+      return NextResponse.json({ error: 'Could not save media order' }, { status: 500, headers: NO_STORE })
+    }
   }
 
   return NextResponse.json({ ok: true }, { headers: NO_STORE })
