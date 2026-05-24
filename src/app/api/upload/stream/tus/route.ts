@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const streamInitSignal = AbortSignal.timeout(30_000)
+  const streamInitSignal = AbortSignal.timeout(8_000)
   let res: Response
   try {
     res = await fetch(`${STREAM_API_BASE}/accounts/${config.accountId}/stream?direct_user=true`, {
