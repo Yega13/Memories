@@ -942,16 +942,16 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         const myIndex = cursor
         cursor += 1
         const item = queue[myIndex]
+        // Revoke the preview blob URL as soon as this worker picks up the item.
+        // The preview is no longer displayed once uploading starts, and revoking early
+        // prevents 100+ decoded images sitting in memory simultaneously (mobile OOM crash).
+        if (!revokedPreviews.has(myIndex)) {
+          URL.revokeObjectURL(item.preview)
+          revokedPreviews.add(myIndex)
+        }
         try {
           const row = await uploadItem(item)
           rows[myIndex] = row
-          // Free the preview blob URL immediately on success — for 200-file sessions this drops
-          // peak browser memory significantly. Failed items keep their previews alive so the
-          // user can see what they're retrying.
-          if (!revokedPreviews.has(myIndex)) {
-            URL.revokeObjectURL(item.preview)
-            revokedPreviews.add(myIndex)
-          }
         } catch (e) {
           // Leave rows[myIndex] as null — item stays in pending for retry. Capture the message
           // so the toast surfaces the real reason (e.g. "Chunk 3 failed: ...") instead of just
