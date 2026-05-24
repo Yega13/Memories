@@ -736,10 +736,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     const filesArr = Array.from(files)
     for (let idx = 0; idx < filesArr.length; idx++) {
       const file = filesArr[idx]
-      if (isHeicFile(file)) {
-        rejected.push(`${file.name}: HEIC is temporarily unavailable. Please upload JPEG or PNG.`)
-        continue
-      }
       const kind = detectKind(file)
       if (!kind) {
         rejected.push(`${file.name}: unsupported file type`)
