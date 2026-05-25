@@ -386,7 +386,16 @@ export default function AlbumPage() {
       {arrangeMode && (
         <button
           type="button"
-          onClick={() => setArrangeMode(false)}
+          onClick={(e) => {
+            const y = window.scrollY
+            e.currentTarget.blur()
+            setArrangeMode(false)
+            requestAnimationFrame(() => {
+              document.documentElement.style.scrollBehavior = 'auto'
+              window.scrollTo(0, y)
+              requestAnimationFrame(() => { document.documentElement.style.scrollBehavior = '' })
+            })
+          }}
           className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold shadow-lg transition active:scale-95"
           style={{ background: '#254F22', color: '#FDFAF5' }}
         >
