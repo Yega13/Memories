@@ -243,12 +243,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       cancelAnimationFrame(autoScrollRafRef.current)
       autoScrollRafRef.current = null
     }
+    document.documentElement.style.scrollBehavior = ''
   }
 
   function updateAutoScroll(clientY: number) {
-    const ZONE = 260  // px from viewport edge that triggers scroll
-    const MIN = 25    // px/frame at zone entry
-    const MAX = 160   // px/frame at viewport edge
+    const ZONE = 120  // px from viewport edge that triggers scroll
+    const MIN = 12    // px/frame at zone entry
+    const MAX = 55    // px/frame at viewport edge
     const vh = window.innerHeight
     let vel = 0
     if (clientY < ZONE) {
@@ -262,8 +263,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (vel !== 0 && autoScrollRafRef.current == null) {
       const tick = () => {
         if (autoScrollVelRef.current === 0) { autoScrollRafRef.current = null; return }
-        const scrollEl = document.scrollingElement ?? document.documentElement
-        scrollEl.scrollTop += autoScrollVelRef.current
+        document.documentElement.style.scrollBehavior = 'auto'
+        window.scrollBy(0, autoScrollVelRef.current)
         autoScrollRafRef.current = requestAnimationFrame(tick)
       }
       autoScrollRafRef.current = requestAnimationFrame(tick)
