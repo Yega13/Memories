@@ -7,7 +7,7 @@ import { formatDuration } from '@/lib/media'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
-import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings, Star, ArrowLeftRight } from 'lucide-react'
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings, Star, Move } from 'lucide-react'
 
 type Props = {
   album: Album
@@ -1435,7 +1435,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       cursor: reorderDraggingId === photo.id ? 'grabbing' : 'grab',
                     }}
                   >
-                    <ArrowLeftRight className="w-4 h-4" style={{ color: '#FDFAF5', pointerEvents: 'none' }} />
+                    <Move className="w-4 h-4" style={{ color: '#FDFAF5', pointerEvents: 'none' }} />
                   </div>
                 )}
               </div>
@@ -1476,20 +1476,26 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     <>
       {showArrangeHint && (
         <div
-          className="flex items-start gap-3 rounded-xl px-4 py-3 mb-4"
-          style={{ background: '#EDE7DB', border: '1px solid rgba(37,79,34,0.20)' }}
+          className="flex items-center gap-3 rounded-2xl px-4 py-3 mb-4"
+          style={{ background: '#254F22' }}
         >
-          <ArrowLeftRight className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#254F22' }} />
-          <p className="flex-1 text-sm leading-snug" style={{ color: '#4A3728' }}>
-            Tap the <strong>↔</strong> handle on any photo, then drag it onto another to swap their positions.
+          {/* Mini replica of the tile handle so users can visually match it */}
+          <span
+            className="shrink-0 flex items-center justify-center rounded-lg"
+            style={{ width: 28, height: 28, background: 'rgba(255,255,255,0.18)' }}
+          >
+            <Move className="w-3.5 h-3.5" style={{ color: '#FDFAF5', pointerEvents: 'none' }} />
+          </span>
+          <p className="flex-1 text-sm leading-snug" style={{ color: '#FDFAF5' }}>
+            Tap this handle on any photo, then drag it onto another to swap.
           </p>
           <button
             type="button"
             aria-label="Dismiss arrange tip"
-            className="shrink-0 p-1 rounded-md opacity-60 hover:opacity-100 transition-opacity"
+            className="shrink-0 opacity-50 hover:opacity-100 transition-opacity"
             onClick={() => setShowArrangeHint(false)}
           >
-            <X className="w-4 h-4" style={{ color: '#4A3728' }} />
+            <X className="w-4 h-4" style={{ color: '#FDFAF5' }} />
           </button>
         </div>
       )}
