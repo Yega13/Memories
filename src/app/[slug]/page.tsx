@@ -382,6 +382,20 @@ export default function AlbumPage() {
           </div>
         )}
       </div>
+
+      {arrangeMode && (
+        <button
+          type="button"
+          onClick={() => setArrangeMode(false)}
+          className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold shadow-lg transition active:scale-95"
+          style={{ background: '#254F22', color: '#FDFAF5' }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Done
+        </button>
+      )}
     </main>
   )
 }
