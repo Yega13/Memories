@@ -1010,26 +1010,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     </div>
 
                     <div>
-                      <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Hover effect</label>
-                      <select
-                        value={mediaHover}
-                        onChange={(e) => {
-                          const nextHover = e.target.value as MediaHoverEffect
-                          setMediaHover(nextHover)
-                          onAlbumUpdated({ media_hover: nextHover })
-                          setMediaSaved(false)
-                          void saveMediaSettings(mediaRadius, videoAutoplay, mediaFilter, nextHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
-                        }}
-                        className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-                        style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', color: '#254F22' }}
-                      >
-                        {MEDIA_HOVER_EFFECT_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
                       <label className="mb-2 block text-xs font-medium" style={{ color: '#7C5C3E' }}>Grid</label>
                       <div className="grid grid-cols-4 gap-2">
                         {MOBILE_GRID_COLUMN_OPTIONS.map((option) => {

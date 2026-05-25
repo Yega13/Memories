@@ -36,11 +36,8 @@ function filterFor(photo: Photo, album: Album): MediaDisplayFilter {
   return photo.display_filter ?? album.media_filter ?? 'none'
 }
 
-function mediaImageClass(hover: Album['media_hover']): string {
-  const classes = ['hush-media-img', 'object-cover']
-  if (hover === 'zoom') classes.push('hush-media-hover-zoom')
-  if (hover === 'mono') classes.push('hush-media-hover-mono')
-  return classes.join(' ')
+function mediaImageClass(): string {
+  return 'hush-media-img object-cover'
 }
 
 function streamFrameSrc(photo: Photo, autoplay: boolean): string {
@@ -1283,7 +1280,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           const isBroken = broken.has(photo.id)
           const mediaRadius = previewRadiusFor(photo)
           const filter = cssMediaDisplayFilter(previewFilterFor(photo))
-          const hover = album.media_hover ?? 'none'
           const mediaName = mediaNameFor(photo)
           const isGridFlipped = Boolean(mediaName && flippedPhotoId === photo.id)
           const isReorderMode = arrangeMode || reorderDraggingId != null
@@ -1292,7 +1288,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           return (
             <div key={photo.id}>
               <div
-                className={`${hover === 'lift' ? 'hush-hover-lift ' : ''}${isReorderMode ? 'hush-reorder-ring ' : ''}${isReorderDragging || isReorderTarget ? 'hush-reorder-ring-solid ' : ''}hush-photo-tile group relative aspect-square overflow-hidden cursor-pointer`}
+                className={`${isReorderMode ? 'hush-reorder-ring ' : ''}${isReorderDragging || isReorderTarget ? 'hush-reorder-ring-solid ' : ''}hush-photo-tile relative aspect-square overflow-hidden cursor-pointer`}
                 data-photo-id={photo.id}
                 style={{
                   background: '#EDE7DB',
@@ -1335,7 +1331,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                     // Grid thumbnails are background work — let the browser deprioritise these
                     // in favour of the currently-visible lightbox image and any active uploads.
                     draggable={false}
-                    className={mediaImageClass(hover)}
+                    className={mediaImageClass()}
                     style={{
                       position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
                       '--hush-media-filter': filter,
@@ -1383,7 +1379,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       className="absolute inset-0 flex items-center justify-center pointer-events-none"
                     >
                       <span
-                        className={`rounded-full flex items-center justify-center${hover === 'zoom' ? ' transition group-hover:scale-110' : ''}`}
+                        className="rounded-full flex items-center justify-center"
                         style={{
                           width: 44,
                           height: 44,
@@ -1406,16 +1402,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   </>
                 )}
 
-                {hover === 'fade' && (
-                  <div className="absolute inset-0 opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none" style={{ background: 'rgba(0,0,0,0.18)' }} />
-                )}
-                {hover !== 'none' && (photo.caption || photo.author_name) && (
-                  <div className="absolute bottom-0 left-0 right-0 p-2 translate-y-full group-hover:translate-y-0 transition"
-                    style={{ background: 'linear-gradient(to top, rgba(37,79,34,0.85), transparent)' }}>
-                    {photo.caption && <p className="text-xs font-medium truncate" style={{ color: '#FDFAF5' }}>{photo.caption}</p>}
-                    {photo.author_name && <p className="text-xs truncate" style={{ color: '#C5D9C2' }}>by {photo.author_name}</p>}
-                  </div>
-                )}
                 {isGridFlipped && (
                   <div className="hush-grid-photo-back" style={{ borderRadius: mediaRadius }}>
                     <strong className="hush-photo-back-title">{mediaName}</strong>
