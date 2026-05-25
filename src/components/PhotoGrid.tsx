@@ -99,6 +99,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const slideshowTimerStartedAtRef = useRef(0)
   const slideshowRemainingMsRef = useRef<number | null>(null)
   const reorderTimerRef = useRef<number | null>(null)
+  const pendingOrderRef = useRef<Photo[] | null>(null)
+  const prevArrangeModeRef = useRef(arrangeMode)
   const reorderDragIdRef = useRef<string | null>(null)
   const reorderTargetIdRef = useRef<string | null>(null)
   const reorderSuppressedClickRef = useRef(false)
@@ -673,13 +675,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     const fromIndex = photos.findIndex((photo) => photo.id === dragId)
     const toIndex = photos.findIndex((photo) => photo.id === targetId)
     if (fromIndex < 0 || toIndex < 0) return
-
-    // Swap the two tiles. Insert-before shifts every photo between the two positions,
-    // which looks completely wrong in a grid — dragging photo 3 to position 47 would
-    // visibly move 44 other photos. Swap is what users expect: only these two change places.
     const nextPhotos = [...photos]
     ;[nextPhotos[fromIndex], nextPhotos[toIndex]] = [nextPhotos[toIndex], nextPhotos[fromIndex]]
-    void savePhotoOrder(nextPhotos.map((photo, index) => ({ ...photo, sort_order: index })))
+    // Accumulate swaps locally — the save fires once when the user clicks Done (arrangeMode → false).
+    const ordered = nextPhotos.map((photo, index) => ({ ...photo, sort_order: index }))
+    pendingOrderRef.current = ordered
+    onPhotosReordered(ordered)
   }
 
   function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
@@ -1052,6 +1053,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (localStorage.getItem(ARRANGE_HINT_KEY)) return
     localStorage.setItem(ARRANGE_HINT_KEY, '1')
     setShowArrangeHint(true)
+  }, [arrangeMode])
+
+  useEffect(() => {
+    const wasArranging = prevArrangeModeRef.current
+    prevArrangeModeRef.current = arrangeMode
+    // arrange mode just turned off AND there are unsaved swaps — fire a single save
+    if (wasArranging && !arrangeMode && pendingOrderRef.current) {
+      void savePhotoOrder(pendingOrderRef.current)
+      pendingOrderRef.current = null
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arrangeMode])
 
   useEffect(() => {
