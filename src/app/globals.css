@@ -1328,6 +1328,13 @@ html {
 }
 
 @keyframes hush-reorder-border {
+  from {
+    background-position:
+      0 0,
+      0 100%,
+      0 0,
+      100% 0;
+  }
   to {
     background-position:
       14px 0,
