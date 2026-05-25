@@ -7,7 +7,7 @@ import { formatDuration } from '@/lib/media'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
-import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings, Star, GripVertical } from 'lucide-react'
+import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings, Star, ArrowLeftRight } from 'lucide-react'
 
 type Props = {
   album: Album
@@ -98,6 +98,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const slideshowRemainingMsRef = useRef<number | null>(null)
   const reorderTimerRef = useRef<number | null>(null)
   const reorderDragIdRef = useRef<string | null>(null)
+  const reorderTargetIdRef = useRef<string | null>(null)
   const reorderSuppressedClickRef = useRef(false)
   const reorderDragPointerRef = useRef<Point | null>(null)
   const reorderDragTileSizeRef = useRef<number>(90)
@@ -680,14 +681,32 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || !isOwner || !ownerToken || reorderSaving) return
-    // In arrange mode the drag handle (GripVertical overlay) owns the drag — tile body does
-    // nothing on pointer-down. This removes both the "mouse-leave cancels the 1000ms timer"
-    // bug on desktop and the "scroll steals the gesture" bug on mobile.
-    if (arrangeMode) return
+    if (arrangeMode) {
+      // Only the drag handle (data-drag-handle) initiates a drag. Detecting it here on the
+      // tile (rather than a separate onPointerDown on the handle) means setPointerCapture is
+      // called on e.currentTarget — the tile — which is exactly what onPointerMove/Up expect.
+      // stopPropagation on the handle itself would prevent this from firing at all.
+      if (!(e.target as HTMLElement).closest('[data-drag-handle]')) return
+      e.preventDefault()
+      clearReorderTimer()
+      const tileEl = e.currentTarget
+      const rect = tileEl.getBoundingClientRect()
+      reorderDragIdRef.current = photo.id
+      reorderTargetIdRef.current = photo.id
+      reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
+      reorderDragTileSizeRef.current = Math.round(Math.min(rect.width, rect.height) * 0.82)
+      try { if (tileEl.isConnected) tileEl.setPointerCapture(e.pointerId) } catch {}
+      reorderSuppressedClickRef.current = true
+      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
+      setReorderDraggingId(photo.id)
+      setReorderTargetId(photo.id)
+      setDragGhostPointer({ x: e.clientX, y: e.clientY })
+      return
+    }
     if (e.pointerType === 'touch') return
     const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
     if (coarsePointer) return
-    // Desktop only from here: long hold enters select mode (no arrange mode needed)
+    // Desktop only: 500ms hold enters select mode
     clearReorderTimer()
     reorderDragIdRef.current = photo.id
     reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
@@ -699,33 +718,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
       setSelectMode(true)
       setSelectedIds(new Set([photo.id]))
-    }, 1000)
-  }
-
-  // Drag initiated from the dedicated GripVertical handle — works instantly with no timer,
-  // no scroll conflict, and no mouse-leave cancellation. The pointer is captured to the
-  // parent tile so the tile's onPointerMove / onPointerUp handlers receive all future events.
-  function startDragFromHandle(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
-    if (!isOwner || !ownerToken || reorderSaving) return
-    e.preventDefault()
-    e.stopPropagation()
-    clearReorderTimer()
-    const tileEl = e.currentTarget.closest<HTMLElement>('[data-photo-id]')
-    const pointerId = e.pointerId
-    reorderDragIdRef.current = photo.id
-    reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
-    if (tileEl) {
-      const rect = tileEl.getBoundingClientRect()
-      reorderDragTileSizeRef.current = Math.round(Math.min(rect.width, rect.height) * 0.82)
-      try {
-        if (tileEl.isConnected) tileEl.setPointerCapture(pointerId)
-      } catch {}
-    }
-    reorderSuppressedClickRef.current = true
-    window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
-    setReorderDraggingId(photo.id)
-    setReorderTargetId(photo.id)
-    setDragGhostPointer({ x: e.clientX, y: e.clientY })
+    }, 500)
   }
 
   // Mobile long-press → enter bulk-select. Uses native touch events because Android Chrome's
@@ -782,7 +775,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
-    // Check only the ref — it is set synchronously in startDragFromHandle so this works
+    // Check only the ref — it is set synchronously in startReorderPress so this works
     // even before the React state update (reorderDraggingId) has been committed.
     if (!reorderDragIdRef.current) return
     e.preventDefault()
@@ -790,14 +783,20 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     setDragGhostPointer({ x: e.clientX, y: e.clientY })
     const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-photo-id]')
     const targetId = target?.dataset.photoId
-    if (targetId) setReorderTargetId(targetId)
+    if (targetId) {
+      reorderTargetIdRef.current = targetId
+      setReorderTargetId(targetId)
+    }
   }
 
   function finishReorder(e: React.PointerEvent<HTMLDivElement>) {
     clearReorderTimer()
-    const dragId = reorderDraggingId
-    const targetId = reorderTargetId
+    // Read refs — they are set synchronously in startReorderPress, so they are always
+    // current even if React hasn't committed the matching state updates yet.
+    const dragId = reorderDragIdRef.current
+    const targetId = reorderTargetIdRef.current
     reorderDragIdRef.current = null
+    reorderTargetIdRef.current = null
     reorderDragPointerRef.current = null
     setReorderDraggingId(null)
     setReorderTargetId(null)
@@ -805,9 +804,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (dragId) {
       e.preventDefault()
       reorderSuppressedClickRef.current = true
-      window.setTimeout(() => {
-        reorderSuppressedClickRef.current = false
-      }, 0)
+      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 0)
       if (targetId) movePhoto(dragId, targetId)
     }
   }
@@ -1233,13 +1230,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   // NOTE: hooks must come before any early return — that's why this is positioned above the
   // empty-state branch even though it isn't used until later.
   const tileHandlersRef = useRef({
-    handleTileClick, startReorderPress, startDragFromHandle, handleReorderMove, finishReorder,
+    handleTileClick, startReorderPress, handleReorderMove, finishReorder,
     handleTilePointerTouchStart, handleTileTouchMove, handleTileTouchEnd,
     clearReorderTimer, toggleGridCardBack, setPosterBroken, markBroken,
     reorderDraggingActive: reorderDraggingId != null,
   })
   tileHandlersRef.current = {
-    handleTileClick, startReorderPress, startDragFromHandle, handleReorderMove, finishReorder,
+    handleTileClick, startReorderPress, handleReorderMove, finishReorder,
     handleTilePointerTouchStart, handleTileTouchMove, handleTileTouchEnd,
     clearReorderTimer, toggleGridCardBack, setPosterBroken, markBroken,
     reorderDraggingActive: reorderDraggingId != null,
@@ -1416,6 +1413,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 {arrangeMode && (
                   <div
                     className="absolute top-1.5 left-1.5 z-20 flex items-center justify-center rounded-md"
+                    data-drag-handle="true"
                     style={{
                       touchAction: 'none',
                       width: 28,
@@ -1425,9 +1423,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                       WebkitBackdropFilter: 'blur(4px)',
                       cursor: reorderDraggingId === photo.id ? 'grabbing' : 'grab',
                     }}
-                    onPointerDown={(e) => { e.stopPropagation(); tileHandlersRef.current.startDragFromHandle(photo, e) }}
                   >
-                    <GripVertical className="w-4 h-4" style={{ color: '#FDFAF5', pointerEvents: 'none' }} />
+                    <ArrowLeftRight className="w-4 h-4" style={{ color: '#FDFAF5', pointerEvents: 'none' }} />
                   </div>
                 )}
               </div>

@@ -20,10 +20,17 @@
 
 ---
 
-**Problem (1c — drag broken on desktop + mobile scroll conflict):** Timer-based drag had two fatal flaws: (1) on desktop, any mouse movement off the tile before the 1000ms timer fired triggered `onPointerLeave` → `clearReorderTimer()` → drag cancelled silently. (2) on mobile, a 150ms timer still allowed the browser to claim the touch as a scroll gesture before `setPointerCapture` could take over.
+**Problem (1c — drag broken on desktop + mobile scroll conflict):** Timer-based drag had two fatal flaws: (1) on desktop, any mouse movement off the tile before the 1000ms timer fired triggered `onPointerLeave` → `clearReorderTimer()` → drag cancelled silently. (2) on mobile, a 150ms timer still allowed the browser to claim the touch as a scroll gesture before `setPointerCapture` could take over. A partial fix added `startDragFromHandle` with its own `onPointerDown` + `stopPropagation`, but that function read `reorderDraggingId` / `reorderTargetId` STATE from inside `finishReorder`, which may not be committed yet — so `finishReorder` saw null and never called `movePhoto`. Drags silently succeeded visually but didn't swap anything.
 
-**Fix (1c):** Added a dedicated `GripVertical` drag handle overlay on each tile in arrange mode. The handle has `touchAction: 'none'` and calls `startDragFromHandle` on `pointerDown`, which *immediately* sets `reorderDraggingId` and calls `setPointerCapture` on the parent tile — no timer, no scroll conflict, no mouse-leave cancellation. `startReorderPress` on the tile body now returns early in arrange mode (handle owns drag). `handleReorderMove` now checks the ref (`reorderDragIdRef`) instead of the state so it works before the first React re-render commits.  
-**File:** `src/components/PhotoGrid.tsx` — `startDragFromHandle`, `startReorderPress`, `handleReorderMove`, tile `useMemo`
+**Fix (1c — permanent):**
+- `startReorderPress` now handles arrange mode inline: checks `(e.target).closest('[data-drag-handle]')`. If from the handle: immediately sets both refs (`reorderDragIdRef`, `reorderTargetIdRef`) and calls `setPointerCapture` on `e.currentTarget` (the tile) — no timer, no `stopPropagation`, no separate function.
+- `startDragFromHandle` deleted entirely.
+- `handleReorderMove` now also writes `reorderTargetIdRef.current` alongside `setReorderTargetId`.
+- `finishReorder` reads `reorderDragIdRef.current` and `reorderTargetIdRef.current` (refs, always current) instead of the stale state values — root cause of the swap never happening.
+- Desktop hold-to-select timer reduced from 1000ms → 500ms.
+- Handle icon changed from `GripVertical` to `ArrowLeftRight` (swap metaphor).
+
+**File:** `src/components/PhotoGrid.tsx` — `startReorderPress`, `handleReorderMove`, `finishReorder`, tile `useMemo`, imports
 
 ---
 
