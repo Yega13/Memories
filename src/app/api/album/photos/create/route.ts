@@ -110,17 +110,6 @@ export async function POST(req: Request) {
   }
 
   let insertError = (await admin.from('photos').insert(rowsToInsert)).error
-  // If the thumb_path / thumb_url columns don't exist yet (migration not applied), strip them
-  // and retry. The original upload + grid still work — they just won't have thumbnails until
-  // the column lands.
-  if (insertError && /thumb_path|thumb_url|column .* does not exist|schema cache/i.test(insertError.message ?? '')) {
-    const stripped = rowsToInsert.map((row) => {
-      const { thumb_path: _tp, thumb_url: _tu, ...rest } = row
-      void _tp; void _tu
-      return rest
-    })
-    insertError = (await admin.from('photos').insert(stripped)).error
-  }
   if (insertError && isDuplicateInsertError(insertError)) {
     const { data: refreshedRows, error: refreshedError } = await admin
       .from('photos')
@@ -143,14 +132,6 @@ export async function POST(req: Request) {
     }
 
     insertError = (await admin.from('photos').insert(rowsToInsert)).error
-    if (insertError && /thumb_path|thumb_url|column .* does not exist|schema cache/i.test(insertError.message ?? '')) {
-      const stripped = rowsToInsert.map((row) => {
-        const { thumb_path: _tp, thumb_url: _tu, ...rest } = row
-        void _tp; void _tu
-        return rest
-      })
-      insertError = (await admin.from('photos').insert(stripped)).error
-    }
   }
   if (insertError) {
     console.error('[photos/create] insert failed:', insertError.message)

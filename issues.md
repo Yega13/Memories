@@ -35,10 +35,13 @@
 ---
 
 ## #2 — thumb_path / thumb_url columns missing from DB
-**Status:** OPEN  
+**Status:** FIXED  
 **Area:** Database / migrations
 
-**Problem:** No migration adds `thumb_path` / `thumb_url` to the `photos` table. The `photos/create` route has a fallback that silently strips them on insert. Every image loads full-resolution in the grid instead of a small preview thumbnail, making the grid slow. Thumbnail data generated client-side is wasted work.
+**Problem:** No migration added `thumb_path` / `thumb_url` to the `photos` table. The `photos/create` route had a fallback that silently stripped them on insert. Every image loaded full-resolution in the grid instead of a small preview thumbnail. Thumbnail data generated client-side was wasted work.
+
+**Fix:** Added `supabase/migrations/20260525_photos_thumbnails.sql` — two `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements for `thumb_path text` and `thumb_url text`. The upload pipeline (UploadZone) and API route (photos/create) already handled these fields correctly; the DB was the only missing piece. Also removed the now-dead fallback strip logic from the API route.  
+**Files:** `supabase/migrations/20260525_photos_thumbnails.sql`, `src/app/api/album/photos/create/route.ts`
 
 ---
 

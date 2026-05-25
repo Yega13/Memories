@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b \"c:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\src\\\\app\\\\api\")"
+    ]
+  }
+}
