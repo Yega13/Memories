@@ -4,12 +4,26 @@
 
 ## #1 — Arrangement: "Could not save media order" on large albums
 **Status:** FIXED  
-**Area:** API — `/api/album/photos/reorder`
+**Area:** API — `/api/album/photos/reorder`, `src/components/PhotoGrid.tsx`
 
-**Problem:** On albums with many photos, saving drag-and-drop order failed with "Could not save media order". Root cause was N individual UPDATE queries fired in parallel, exhausting Supabase's connection pool. A batch-of-20 workaround was added but still does many round-trips and can partially fail (first N batches succeed, last one fails → album left in half-ordered state).
+**Problem (1a — saving):** On albums with many photos, saving drag-and-drop order failed with "Could not save media order". Root cause was N individual UPDATE queries fired in parallel, exhausting Supabase's connection pool.
 
-**Fix:** Replaced all individual row UPDATEs with a single PostgreSQL RPC call (`batch_set_sort_order`) that uses `unnest()` to do one atomic `UPDATE … FROM (SELECT unnest…)` across all rows. One round-trip, zero partial-failure risk, album_id enforced at the database level.  
+**Fix (1a):** Replaced all individual row UPDATEs with a single PostgreSQL RPC call (`batch_set_sort_order`) using `unnest()` — one atomic round-trip, zero partial-failure risk.  
 **Files:** `supabase/migrations/20260524_batch_sort_order_rpc.sql`, `src/app/api/album/photos/reorder/route.ts`
+
+---
+
+**Problem (1b — swap logic):** `movePhoto` used "insert-before" (splice + re-insert). Dragging photo A to photo B's slot inserted A before B and shifted every photo between their positions by one. In a 60-photo album, dragging from position 3 to position 47 moved 44 photos. Users saw the dragged photo go to the right place but everything else shift unexpectedly.
+
+**Fix (1b):** Changed to a direct swap: `[nextPhotos[from], nextPhotos[to]] = [nextPhotos[to], nextPhotos[from]]`. Only two photos change positions; everything else is untouched. Also fixes "50+ album order looks wrong" since large shifts no longer happen.  
+**File:** `src/components/PhotoGrid.tsx` — `movePhoto()`
+
+---
+
+**Problem (1c — mobile scroll blocked):** `touchAction: 'none'` was applied to every tile as soon as arrange mode was entered, not just during an active drag. This prevented page scrolling on mobile, making photos below the fold unreachable.
+
+**Fix (1c):** `touchAction` is now only set to `'none'` when `reorderDraggingId !== null` (a drag is actually in flight). Once `setPointerCapture` is called at drag-start, the captured pointer ignores `touchAction` anyway.  
+**File:** `src/components/PhotoGrid.tsx` — tile `style` inside `useMemo`
 
 ---
 

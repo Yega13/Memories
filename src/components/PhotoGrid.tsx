@@ -670,9 +670,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     const toIndex = photos.findIndex((photo) => photo.id === targetId)
     if (fromIndex < 0 || toIndex < 0) return
 
+    // Swap the two tiles. Insert-before shifts every photo between the two positions,
+    // which looks completely wrong in a grid — dragging photo 3 to position 47 would
+    // visibly move 44 other photos. Swap is what users expect: only these two change places.
     const nextPhotos = [...photos]
-    const [dragged] = nextPhotos.splice(fromIndex, 1)
-    nextPhotos.splice(toIndex, 0, dragged)
+    ;[nextPhotos[fromIndex], nextPhotos[toIndex]] = [nextPhotos[toIndex], nextPhotos[fromIndex]]
     void savePhotoOrder(nextPhotos.map((photo, index) => ({ ...photo, sort_order: index })))
   }
 
@@ -1262,7 +1264,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                   background: '#EDE7DB',
                   borderRadius: mediaRadius,
                   opacity: isReorderDragging ? 0.58 : 1,
-                  touchAction: (arrangeMode || !!reorderDraggingId) ? 'none' : 'manipulation',
+                  // Block touch-based scrolling ONLY while a drag is in flight.
+                  // Keeping 'none' for the whole arrange session blocked page scroll on mobile,
+                  // making it impossible to reach photos below the fold before dragging.
+                  // Once a drag starts (reorderDraggingId set + setPointerCapture called),
+                  // the captured pointer ignores touchAction anyway.
+                  touchAction: !!reorderDraggingId ? 'none' : 'manipulation',
                   WebkitTouchCallout: 'none',
                   userSelect: 'none',
                 }}
