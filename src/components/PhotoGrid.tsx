@@ -720,7 +720,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     // Accumulate swaps locally — the save fires once when the user clicks Done (arrangeMode → false).
     const ordered = nextPhotos.map((photo, index) => ({ ...photo, sort_order: index }))
     pendingOrderRef.current = ordered
+    const y = window.scrollY
     onPhotosReordered(ordered)
+    requestAnimationFrame(() => {
+      document.documentElement.style.scrollBehavior = 'auto'
+      window.scrollTo(0, y)
+      requestAnimationFrame(() => { document.documentElement.style.scrollBehavior = '' })
+    })
   }
 
   function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
