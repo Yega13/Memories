@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir /s /b \"c:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\src\\\\app\\\\api\")"
+      "Bash(dir /s /b \"c:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\src\\\\app\\\\api\")",
+      "Bash(cat wrangler.toml)",
+      "Bash(cat wrangler.json)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d.get\\('scripts',{}\\), indent=2\\)\\)\")"
     ]
   }
 }

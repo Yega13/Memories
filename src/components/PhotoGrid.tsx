@@ -103,6 +103,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const prevArrangeModeRef = useRef(arrangeMode)
   const reorderDragIdRef = useRef<string | null>(null)
   const reorderTargetIdRef = useRef<string | null>(null)
+  // True only while an arrange-mode drag is in flight. reorderDragIdRef is set on ANY
+  // pointer-down (even normal mode, for the hold-to-select timer), so finishReorder and
+  // handleReorderMove must check this flag instead of the drag id to avoid swapping photos
+  // and suppressing clicks outside arrange mode.
+  const isArrangeDragRef = useRef(false)
   const reorderSuppressedClickRef = useRef(false)
   const reorderDragPointerRef = useRef<Point | null>(null)
   const reorderDragTileSizeRef = useRef<number>(90)
@@ -700,6 +705,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
       reorderDragTileSizeRef.current = Math.round(Math.min(rect.width, rect.height) * 0.82)
       try { if (tileEl.isConnected) tileEl.setPointerCapture(e.pointerId) } catch {}
+      isArrangeDragRef.current = true
       reorderSuppressedClickRef.current = true
       window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
       setReorderDraggingId(photo.id)
@@ -779,9 +785,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function handleReorderMove(e: React.PointerEvent<HTMLDivElement>) {
-    // Check only the ref — it is set synchronously in startReorderPress so this works
-    // even before the React state update (reorderDraggingId) has been committed.
-    if (!reorderDragIdRef.current) return
+    if (!isArrangeDragRef.current) return
     e.preventDefault()
     reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
     setDragGhostPointer({ x: e.clientX, y: e.clientY })
@@ -795,17 +799,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function finishReorder(e: React.PointerEvent<HTMLDivElement>) {
     clearReorderTimer()
-    // Read refs — they are set synchronously in startReorderPress, so they are always
-    // current even if React hasn't committed the matching state updates yet.
+    const wasArrangeDrag = isArrangeDragRef.current
     const dragId = reorderDragIdRef.current
     const targetId = reorderTargetIdRef.current
+    isArrangeDragRef.current = false
     reorderDragIdRef.current = null
     reorderTargetIdRef.current = null
     reorderDragPointerRef.current = null
     setReorderDraggingId(null)
     setReorderTargetId(null)
     setDragGhostPointer(null)
-    if (dragId) {
+    if (wasArrangeDrag && dragId) {
       e.preventDefault()
       reorderSuppressedClickRef.current = true
       window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 0)
