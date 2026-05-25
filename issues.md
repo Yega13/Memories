@@ -20,10 +20,10 @@
 
 ---
 
-**Problem (1c — mobile scroll blocked):** `touchAction: 'none'` was applied to every tile as soon as arrange mode was entered, not just during an active drag. This prevented page scrolling on mobile, making photos below the fold unreachable.
+**Problem (1c — drag broken on desktop + mobile scroll conflict):** Timer-based drag had two fatal flaws: (1) on desktop, any mouse movement off the tile before the 1000ms timer fired triggered `onPointerLeave` → `clearReorderTimer()` → drag cancelled silently. (2) on mobile, a 150ms timer still allowed the browser to claim the touch as a scroll gesture before `setPointerCapture` could take over.
 
-**Fix (1c):** `touchAction` is now only set to `'none'` when `reorderDraggingId !== null` (a drag is actually in flight). Once `setPointerCapture` is called at drag-start, the captured pointer ignores `touchAction` anyway.  
-**File:** `src/components/PhotoGrid.tsx` — tile `style` inside `useMemo`
+**Fix (1c):** Added a dedicated `GripVertical` drag handle overlay on each tile in arrange mode. The handle has `touchAction: 'none'` and calls `startDragFromHandle` on `pointerDown`, which *immediately* sets `reorderDraggingId` and calls `setPointerCapture` on the parent tile — no timer, no scroll conflict, no mouse-leave cancellation. `startReorderPress` on the tile body now returns early in arrange mode (handle owns drag). `handleReorderMove` now checks the ref (`reorderDragIdRef`) instead of the state so it works before the first React re-render commits.  
+**File:** `src/components/PhotoGrid.tsx` — `startDragFromHandle`, `startReorderPress`, `handleReorderMove`, tile `useMemo`
 
 ---
 
