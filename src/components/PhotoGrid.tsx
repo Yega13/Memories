@@ -105,6 +105,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   // handleReorderMove must check this flag instead of the drag id to avoid swapping photos
   // and suppressing clicks outside arrange mode.
   const isArrangeDragRef = useRef(false)
+  const autoScrollVelRef = useRef(0)   // px/frame: + = down, - = up, 0 = stopped
+  const autoScrollRafRef = useRef<number | null>(null)
   const reorderSuppressedClickRef = useRef(false)
   const reorderDragPointerRef = useRef<Point | null>(null)
   const reorderDragTileSizeRef = useRef<number>(90)
@@ -232,6 +234,34 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     if (reorderTimerRef.current != null) {
       window.clearTimeout(reorderTimerRef.current)
       reorderTimerRef.current = null
+    }
+  }
+
+  function stopAutoScroll() {
+    autoScrollVelRef.current = 0
+    if (autoScrollRafRef.current != null) {
+      cancelAnimationFrame(autoScrollRafRef.current)
+      autoScrollRafRef.current = null
+    }
+  }
+
+  function updateAutoScroll(clientY: number) {
+    const ZONE = 80   // px from viewport edge that triggers scroll
+    const MAX = 14    // max px per frame at the very edge
+    const vh = window.innerHeight
+    let vel = 0
+    if (clientY < ZONE) vel = -Math.ceil(MAX * (1 - clientY / ZONE))
+    else if (clientY > vh - ZONE) vel = Math.ceil(MAX * (1 - (vh - clientY) / ZONE))
+    autoScrollVelRef.current = vel
+    if (vel !== 0 && autoScrollRafRef.current == null) {
+      const tick = () => {
+        if (autoScrollVelRef.current === 0) { autoScrollRafRef.current = null; return }
+        window.scrollBy(0, autoScrollVelRef.current)
+        autoScrollRafRef.current = requestAnimationFrame(tick)
+      }
+      autoScrollRafRef.current = requestAnimationFrame(tick)
+    } else if (vel === 0) {
+      stopAutoScroll()
     }
   }
 
@@ -786,6 +816,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     e.preventDefault()
     reorderDragPointerRef.current = { x: e.clientX, y: e.clientY }
     setDragGhostPointer({ x: e.clientX, y: e.clientY })
+    updateAutoScroll(e.clientY)
     const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-photo-id]')
     const targetId = target?.dataset.photoId
     if (targetId) {
@@ -796,6 +827,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   function finishReorder(e: React.PointerEvent<HTMLDivElement>) {
     clearReorderTimer()
+    stopAutoScroll()
     const wasArrangeDrag = isArrangeDragRef.current
     const dragId = reorderDragIdRef.current
     const targetId = reorderTargetIdRef.current
@@ -1425,19 +1457,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
                 )}
                 {arrangeMode && (
                   <div
-                    className="absolute top-1.5 left-1.5 z-20 flex items-center justify-center rounded-md"
+                    className="absolute top-1.5 left-1.5 z-20 flex items-center justify-center rounded-md w-7 h-7 md:w-9 md:h-9"
                     data-drag-handle="true"
                     style={{
                       touchAction: 'none',
-                      width: 28,
-                      height: 28,
                       background: 'rgba(37,79,34,0.78)',
                       backdropFilter: 'blur(4px)',
                       WebkitBackdropFilter: 'blur(4px)',
                       cursor: reorderDraggingId === photo.id ? 'grabbing' : 'grab',
                     }}
                   >
-                    <Move className="w-4 h-4" style={{ color: '#FDFAF5', pointerEvents: 'none' }} />
+                    <Move className="w-4 h-4 md:w-5 md:h-5" style={{ color: '#FDFAF5', pointerEvents: 'none' }} />
                   </div>
                 )}
               </div>
