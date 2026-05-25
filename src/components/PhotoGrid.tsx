@@ -246,8 +246,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function updateAutoScroll(clientY: number) {
-    const ZONE = 80   // px from viewport edge that triggers scroll
-    const MAX = 14    // max px per frame at the very edge
+    const ZONE = 120  // px from viewport edge that triggers scroll
+    const MAX = 28    // max px per frame at the very edge
     const vh = window.innerHeight
     let vel = 0
     if (clientY < ZONE) vel = -Math.ceil(MAX * (1 - clientY / ZONE))
