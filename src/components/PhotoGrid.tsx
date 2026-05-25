@@ -26,6 +26,8 @@ type Props = {
   onCoverSet?: (photoId: string | null) => void
 }
 
+const ARRANGE_HINT_KEY = 'hush-arrange-hint-seen'
+
 function radiusFor(photo: Photo, album: Album, forceGlobalRadius = false): number {
   return forceGlobalRadius ? album.media_radius ?? 12 : photo.display_radius ?? album.media_radius ?? 12
 }
@@ -126,6 +128,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const [reorderDraggingId, setReorderDraggingId] = useState<string | null>(null)
   const [reorderTargetId, setReorderTargetId] = useState<string | null>(null)
   const [reorderSaving, setReorderSaving] = useState(false)
+  const [showArrangeHint, setShowArrangeHint] = useState(false)
   const [dragGhostPointer, setDragGhostPointer] = useState<Point | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [broken, setBroken] = useState<Set<string>>(new Set())
@@ -1044,6 +1047,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }, [isOwner, photos, slideshowRequestId])
 
   useEffect(() => {
+    if (!arrangeMode) { setShowArrangeHint(false); return }
+    if (typeof window === 'undefined') return
+    if (localStorage.getItem(ARRANGE_HINT_KEY)) return
+    localStorage.setItem(ARRANGE_HINT_KEY, '1')
+    setShowArrangeHint(true)
+  }, [arrangeMode])
+
+  useEffect(() => {
     setFlippedPhotoId(null)
   }, [current?.id])
 
@@ -1463,6 +1474,25 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   return (
     <>
+      {showArrangeHint && (
+        <div
+          className="flex items-start gap-3 rounded-xl px-4 py-3 mb-4"
+          style={{ background: '#EDE7DB', border: '1px solid rgba(37,79,34,0.20)' }}
+        >
+          <ArrowLeftRight className="w-5 h-5 mt-0.5 shrink-0" style={{ color: '#254F22' }} />
+          <p className="flex-1 text-sm leading-snug" style={{ color: '#4A3728' }}>
+            Tap the <strong>↔</strong> handle on any photo, then drag it onto another to swap their positions.
+          </p>
+          <button
+            type="button"
+            aria-label="Dismiss arrange tip"
+            className="shrink-0 p-1 rounded-md opacity-60 hover:opacity-100 transition-opacity"
+            onClick={() => setShowArrangeHint(false)}
+          >
+            <X className="w-4 h-4" style={{ color: '#4A3728' }} />
+          </button>
+        </div>
+      )}
       <div
         ref={gridRef}
         className="hush-photo-grid grid gap-3 xl:gap-4"
