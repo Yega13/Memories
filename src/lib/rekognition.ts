@@ -138,7 +138,9 @@ export async function indexPhotoFaces(albumId: string, photoId: string, imageUrl
     QualityFilter: 'AUTO',
   }) as IndexResult
 
-  return (result.FaceRecords ?? []).map(r => r.Face!.FaceId!)
+  return (result.FaceRecords ?? [])
+    .map(r => r.Face?.FaceId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)
 }
 
 export async function searchFacesByImage(

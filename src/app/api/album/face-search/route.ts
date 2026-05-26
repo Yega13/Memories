@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { ensureCollection, searchFacesByImage } from '@/lib/rekognition'
+import { searchFacesByImage } from '@/lib/rekognition'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 const MAX_SELFIE_BYTES = 5 * 1024 * 1024 // 5MB — Rekognition limit
+
+// Same injection guard as face-index: bare interpolation into .or() is unsafe.
+const SLUG_RE = /^[a-zA-Z0-9._-]{1,200}$/
+function isValidSlug(s: string): boolean { return SLUG_RE.test(s) }
 
 export async function POST(req: Request) {
   try {
@@ -45,8 +49,8 @@ async function handlePost(req: Request) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400, headers: NO_STORE })
   }
 
-  if (!slug) {
-    return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
+  if (!slug || !isValidSlug(slug)) {
+    return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
   }
 
   const admin = createAdminClient()
@@ -75,7 +79,9 @@ async function handlePost(req: Request) {
     )
   }
 
-  await ensureCollection(album.id)
+  // ensureCollection is intentionally omitted here: indexedCount > 0 guarantees the collection
+  // already exists (faces can only be indexed into an existing collection). Calling it anyway
+  // would add an unnecessary Rekognition round-trip (~100-300 ms) to every search.
 
   let matches: { photoId: string; similarity: number }[]
   try {

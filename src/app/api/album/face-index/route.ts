@@ -7,6 +7,12 @@ export const maxDuration = 60
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
+// Validate slugs before embedding them in PostgREST .or() filters. A bare string interpolation
+// like `slug.eq.${slug}` is vulnerable to injection: a slug containing commas or PostgREST
+// operators (e.g. "a,id.gt.0") would expand into extra filter arms that match unintended rows.
+const SLUG_RE = /^[a-zA-Z0-9._-]{1,200}$/
+function isValidSlug(s: string): boolean { return SLUG_RE.test(s) }
+
 // Rekognition rejects images > 5 MB via the direct-bytes API, and even smaller multi-MB
 // originals burn Cloudflare Worker CPU during fetch + base64 + signing. Convert the standard
 // Supabase public URL into a /render/image/ transform URL so we get a downscaled JPEG instead.
@@ -42,7 +48,7 @@ async function resolveAlbum(slug: string) {
 // GET: returns all unindexed photo IDs so the client can distribute work across concurrent workers
 export async function GET(req: Request) {
   const slug = new URL(req.url).searchParams.get('slug')?.trim() ?? ''
-  if (!slug) return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
+  if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
   const { admin, album } = await resolveAlbum(slug)
   if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
@@ -88,7 +94,7 @@ async function handlePost(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  if (!slug) return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
+  if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
   const { admin, album } = await resolveAlbum(slug)
   if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })

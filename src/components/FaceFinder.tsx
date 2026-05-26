@@ -61,8 +61,15 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
   const [matches, setMatches] = useState<Match[]>([])
   const [errorMsg, setErrorMsg] = useState('')
   const [lightbox, setLightbox] = useState<Photo | null>(null)
+  // Two separate inputs so "Upload from files" doesn't permanently destroy the capture attribute
+  // on the shared element. removeAttribute('capture') on a single <input> is irreversible for
+  // the lifetime of that DOM node, breaking the camera button on any subsequent retake.
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const indexingDone = useRef(false)
+  // Track whether the last error came from indexing or from the search step, so "Try again"
+  // can skip re-indexing (which already succeeded) and go directly back to the selfie step.
+  const errorOrigin = useRef<'indexing' | 'search'>('indexing')
 
   // Count indexable photos (images only)
   const imagePhotos = photos.filter((p) => p.media_type !== 'video')
@@ -86,6 +93,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
     try {
       const res = await fetch(`/api/album/face-index?slug=${encodeURIComponent(albumSlug)}`)
       if (!res.ok) {
+        errorOrigin.current = 'indexing'
         setStep('error')
         setErrorMsg('Failed to start indexing. Please try again.')
         return
@@ -94,6 +102,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
       ids = data.ids
       dbTotal = data.total || imagePhotos.length
     } catch {
+      errorOrigin.current = 'indexing'
       setStep('error')
       setErrorMsg('Network error during indexing. Please try again.')
       return
@@ -195,6 +204,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
           setStep('selfie')
           return
         }
+        errorOrigin.current = 'search'
         setStep('error')
         setErrorMsg(json.error ?? `Search failed (${res.status})`)
         return
@@ -203,6 +213,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
       setMatches(json.matches ?? [])
       setStep('results')
     } catch {
+      errorOrigin.current = 'search'
       setStep('error')
       setErrorMsg('Network error. Please try again.')
     }
@@ -215,6 +226,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
     setMatches([])
     setErrorMsg('')
     setStep('selfie')
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -333,7 +345,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
                 ) : (
                   <div className="flex flex-col gap-3">
                     <button
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => cameraInputRef.current?.click()}
                       className="hush-press w-full py-10 rounded-2xl flex flex-col items-center gap-3 transition hover:opacity-80"
                       style={{ background: 'rgba(255,255,255,0.04)', border: '2px dashed rgba(123,175,118,0.3)' }}
                     >
@@ -341,21 +353,14 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
                       <span className="text-sm font-semibold" style={{ color: '#A8C9A3' }}>Take a photo or choose from library</span>
                       <span className="text-xs" style={{ color: '#3D5C3A' }}>JPG, PNG — max 5MB</span>
                     </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      capture="user"
-                      className="hidden"
-                      onChange={handleFileChange}
-                    />
+                    {/* capture="user" opens the front camera on mobile. A separate input without
+                        capture is used for the gallery button so that removeAttribute('capture')
+                        is never needed — mutating the shared DOM node would permanently break the
+                        camera button for the rest of the component's lifetime. */}
+                    <input ref={cameraInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={handleFileChange} />
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
                     <button
-                      onClick={() => {
-                        if (fileInputRef.current) {
-                          fileInputRef.current.removeAttribute('capture')
-                          fileInputRef.current.click()
-                        }
-                      }}
+                      onClick={() => fileInputRef.current?.click()}
                       className="hush-press w-full py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition hover:opacity-80"
                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: '#7BAF76' }}
                     >
@@ -431,7 +436,17 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
                 <p className="font-semibold" style={{ color: '#FDFAF5' }}>Something went wrong</p>
                 <p className="text-sm max-w-xs" style={{ color: '#5C7A59' }}>{errorMsg}</p>
                 <button
-                  onClick={() => { indexingDone.current = false; setStep('indexing'); runIndexing() }}
+                  onClick={() => {
+                    setErrorMsg('')
+                    if (errorOrigin.current === 'search') {
+                      // Indexing already succeeded — just go back to the selfie step.
+                      setStep('selfie')
+                    } else {
+                      indexingDone.current = false
+                      setStep('indexing')
+                      runIndexing()
+                    }
+                  }}
                   className="hush-press px-5 py-2.5 rounded-xl text-sm font-semibold transition hover:opacity-90"
                   style={{ background: '#254F22', color: '#FDFAF5' }}
                 >
