@@ -5,6 +5,19 @@ import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, cssMediaDisplayFilter, type MediaDisplayFilter, type SlideshowAnimation } from '@/lib/media-display'
 import { formatDuration } from '@/lib/media'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
+import {
+  HOLD_TO_SELECT_MS,
+  HOLD_TO_SELECT_MOBILE_MS,
+  SUPPRESS_CLICK_AFTER_REORDER_MS,
+  SUPPRESS_CLICK_AFTER_SELECT_MS,
+  SWIPE_THRESHOLD_PX,
+  SWIPE_VELOCITY_MIN,
+  SWIPE_RESET_ANIMATE_MS,
+  GRID_PRELOAD_MARGIN_PX,
+  AUTO_SCROLL_ZONE_PX,
+  AUTO_SCROLL_MIN_PX_FRAME,
+  AUTO_SCROLL_MAX_PX_FRAME,
+} from '@/lib/constants'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal, { type PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsModal'
 import { Download, Trash2, X, ChevronLeft, ChevronRight, Play, Pause, Check, Settings, Star, Move } from 'lucide-react'
@@ -247,17 +260,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   function updateAutoScroll(clientY: number) {
-    const ZONE = 120  // px from viewport edge that triggers scroll
-    const MIN = 7     // px/frame at zone entry
-    const MAX = 30    // px/frame at viewport edge
     const vh = window.innerHeight
     let vel = 0
-    if (clientY < ZONE) {
-      const t = 1 - clientY / ZONE
-      vel = -Math.ceil(MIN + (MAX - MIN) * t)
-    } else if (clientY > vh - ZONE) {
-      const t = 1 - (vh - clientY) / ZONE
-      vel = Math.ceil(MIN + (MAX - MIN) * t)
+    if (clientY < AUTO_SCROLL_ZONE_PX) {
+      const t = 1 - clientY / AUTO_SCROLL_ZONE_PX
+      vel = -Math.ceil(AUTO_SCROLL_MIN_PX_FRAME + (AUTO_SCROLL_MAX_PX_FRAME - AUTO_SCROLL_MIN_PX_FRAME) * t)
+    } else if (clientY > vh - AUTO_SCROLL_ZONE_PX) {
+      const t = 1 - (vh - clientY) / AUTO_SCROLL_ZONE_PX
+      vel = Math.ceil(AUTO_SCROLL_MIN_PX_FRAME + (AUTO_SCROLL_MAX_PX_FRAME - AUTO_SCROLL_MIN_PX_FRAME) * t)
     }
     autoScrollVelRef.current = vel
     if (vel !== 0 && autoScrollRafRef.current == null) {
@@ -748,7 +758,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       try { if (tileEl.isConnected) tileEl.setPointerCapture(e.pointerId) } catch {}
       isArrangeDragRef.current = true
       reorderSuppressedClickRef.current = true
-      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
+      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, SUPPRESS_CLICK_AFTER_REORDER_MS)
       setReorderDraggingId(photo.id)
       setReorderTargetId(photo.id)
       setDragGhostPointer({ x: e.clientX, y: e.clientY })
@@ -766,10 +776,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     reorderTimerRef.current = window.setTimeout(() => {
       reorderTimerRef.current = null
       reorderSuppressedClickRef.current = true
-      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
+      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, SUPPRESS_CLICK_AFTER_REORDER_MS)
       setSelectMode(true)
       setSelectedIds(new Set([photo.id]))
-    }, 500)
+    }, HOLD_TO_SELECT_MS)
   }
 
   // Mobile long-press → enter bulk-select. Uses native touch events because Android Chrome's
@@ -789,10 +799,10 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
       // Suppress the click and any subsequent contextmenu (Android Chrome fires it ~600 ms in)
       // for a window long enough to outlast the gesture.
       reorderSuppressedClickRef.current = true
-      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 800)
+      window.setTimeout(() => { reorderSuppressedClickRef.current = false }, SUPPRESS_CLICK_AFTER_SELECT_MS)
       setSelectMode(true)
       setSelectedIds(new Set([photo.id]))
-    }, 550)
+    }, HOLD_TO_SELECT_MOBILE_MS)
   }
 
   function handleTileTouchMove(e: React.TouchEvent<HTMLDivElement>) {
@@ -907,7 +917,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
         setSelectMode(true)
         setSelectedIds(new Set([photo.id]))
         reorderSuppressedClickRef.current = true
-        window.setTimeout(() => { reorderSuppressedClickRef.current = false }, 300)
+        window.setTimeout(() => { reorderSuppressedClickRef.current = false }, SUPPRESS_CLICK_AFTER_REORDER_MS)
       }
       return
     }
@@ -1016,11 +1026,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     const deltaY = touch.clientY - start.y
     const elapsed = Date.now() - start.time
     const velocity = Math.abs(deltaX) / Math.max(1, elapsed)
-    const isHorizontalSwipe = Math.abs(deltaX) >= 42 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15
-    if (!isHorizontalSwipe && velocity < 0.42) {
+    const isHorizontalSwipe = Math.abs(deltaX) >= SWIPE_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) * 1.15
+    if (!isHorizontalSwipe && velocity < SWIPE_VELOCITY_MIN) {
       setSwipeAnimating(true)
       setSwipeOffset(0)
-      window.setTimeout(() => setSwipeAnimating(false), 180)
+      window.setTimeout(() => setSwipeAnimating(false), SWIPE_RESET_ANIMATE_MS)
       return
     }
 
@@ -1209,7 +1219,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           preloadObserver.unobserve(entry.target)
         }
       },
-      { rootMargin: '900px' },
+      { rootMargin: `${GRID_PRELOAD_MARGIN_PX}px` },
     )
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => preloadObserver.observe(tile))
 
@@ -1624,7 +1634,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
               swipeRef.current = null
               setSwipeAnimating(true)
               setSwipeOffset(0)
-              window.setTimeout(() => setSwipeAnimating(false), 180)
+              window.setTimeout(() => setSwipeAnimating(false), SWIPE_RESET_ANIMATE_MS)
             }}
           >
             {slideshowMode && (

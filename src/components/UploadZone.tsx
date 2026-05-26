@@ -12,6 +12,7 @@ import {
 } from '@/lib/media'
 import { formatFileSize } from '@/lib/utils'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
+import { R2_SINGLE_UPLOAD_TIMEOUT_MS, R2_CHUNK_UPLOAD_TIMEOUT_MS, UPLOAD_CONCURRENCY_MOBILE, UPLOAD_CONCURRENCY_DESKTOP } from '@/lib/constants'
 import { showAppToast } from '@/components/AppToast'
 import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
@@ -22,7 +23,8 @@ type StreamUploadResult = {
   stream_thumbnail_url: string
 }
 
-async function uploadToR2(
+// Single XHR attempt — no retry logic here, that lives in uploadToR2.
+function uploadToR2Once(
   file: File | Blob,
   albumId: string,
   filename: string,
@@ -34,20 +36,17 @@ async function uploadToR2(
   form.append('albumId', albumId)
   form.append('filename', filename)
   form.append('kind', kind)
-
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', '/api/upload/r2')
+    xhr.timeout = R2_SINGLE_UPLOAD_TIMEOUT_MS
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable) return
       onProgress?.(Math.round((event.loaded / event.total) * 100))
     }
     xhr.onload = () => {
       let body: { error?: string; storage_path?: string; url?: string } = {}
-      try {
-        body = JSON.parse(xhr.responseText || '{}')
-      } catch {
-      }
+      try { body = JSON.parse(xhr.responseText || '{}') } catch {}
       if (xhr.status < 200 || xhr.status >= 300) {
         reject(new Error(body.error || `R2 upload returned ${xhr.status}`))
         return
@@ -59,8 +58,31 @@ async function uploadToR2(
       resolve({ storage_path: body.storage_path, url: body.url })
     }
     xhr.onerror = () => reject(new Error('Network error during R2 upload'))
+    xhr.ontimeout = () => reject(new Error('R2 upload timed out'))
     xhr.send(form)
   })
+}
+
+// Retries uploadToR2Once up to 5 times with exponential backoff. Transient network
+// drops (carrier proxy resets, brief Cloudflare hiccups) are the primary failure mode
+// for poster uploads and small videos — a single retry loop catches them all.
+async function uploadToR2(
+  file: File | Blob,
+  albumId: string,
+  filename: string,
+  kind: 'video' | 'poster',
+  onProgress?: (percent: number) => void,
+): Promise<R2UploadResult> {
+  let lastError: Error = new Error('Upload failed')
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      return await uploadToR2Once(file, albumId, filename, kind, onProgress)
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e))
+      if (attempt < 5) await wait(Math.min(1500 * attempt, 8000))
+    }
+  }
+  throw lastError
 }
 
 // Large video upload via R2 multipart — splits the file into chunks each sent through the Worker.
@@ -139,7 +161,7 @@ async function uploadVideoMultipart(
       xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber} via ${transport}`))
       xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber} via ${transport}`))
       // Five minutes gives slow mobile data enough time for a 5 MB chunk before retrying.
-      xhr.timeout = 300_000
+      xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
       if (transport === 'raw') {
         xhr.send(chunk)
       } else {
@@ -289,7 +311,7 @@ async function uploadVideoToStream(
           }
           xhr.onerror = () => reject(new Error(`Network error during Stream upload (attempt ${attempt}, offset ${start}/${file.size})`))
           xhr.ontimeout = () => reject(new Error(`Timeout during Stream upload (attempt ${attempt}, offset ${start}/${file.size})`))
-          xhr.timeout = 300_000
+          xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
           xhr.send(chunk)
         })
         onProgress?.(Math.round(Math.min(95, (offset / file.size) * 95)))
@@ -921,7 +943,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
     // Mobile carriers don't love too many parallel uploads, so coarse pointers get 3; desktop 5.
     const coarsePointer = typeof window !== 'undefined'
       && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    const concurrency = Math.min(coarsePointer ? 3 : 5, queue.length)
+    const concurrency = Math.min(coarsePointer ? UPLOAD_CONCURRENCY_MOBILE : UPLOAD_CONCURRENCY_DESKTOP, queue.length)
 
     setUploadStatus({
       fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`,
@@ -942,16 +964,28 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         const myIndex = cursor
         cursor += 1
         const item = queue[myIndex]
-        // Revoke the preview blob URL as soon as this worker picks up the item.
-        // The preview is no longer displayed once uploading starts, and revoking early
-        // prevents 100+ decoded images sitting in memory simultaneously (mobile OOM crash).
-        if (!revokedPreviews.has(myIndex)) {
-          URL.revokeObjectURL(item.preview)
-          revokedPreviews.add(myIndex)
+        // HEIC conversion runs inside uploadItem and can take 10-30s. Set the status
+        // label to "Converting" before the call so the UI doesn't appear frozen.
+        if (item.heic) {
+          setUploadStatus({
+            fileName: item.file.name,
+            index: completed + 1,
+            total: queue.length,
+            phase: 'Converting',
+            percent: Math.max(4, Math.round((completed / queue.length) * 90)),
+          })
         }
         try {
           const row = await uploadItem(item)
           rows[myIndex] = row
+          // Revoke the preview URL only after a successful upload. Revoking at pickup
+          // was too early — failed items need their preview blob alive so the retry UI
+          // can show the image. Revoking here still frees memory promptly for the
+          // common success path.
+          if (!revokedPreviews.has(myIndex)) {
+            URL.revokeObjectURL(item.preview)
+            revokedPreviews.add(myIndex)
+          }
         } catch (e) {
           // Leave rows[myIndex] as null — item stays in pending for retry. Capture the message
           // so the toast surfaces the real reason (e.g. "Chunk 3 failed: ...") instead of just
