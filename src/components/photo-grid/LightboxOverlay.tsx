@@ -254,15 +254,6 @@ export default function LightboxOverlay({
               autoPlay={slideshowMode ? !slideshowPaused : videoAutoplay}
               playsInline
               onLoadedMetadata={(e) => { e.currentTarget.volume = 0.5 }}
-              onPlay={(e) => {
-                // Browsers (especially Android Chrome) sometimes force-mute autoplay.
-                // Attempt to unmute once playback starts. iOS Safari will silently ignore this
-                // when autoplay was triggered without a direct gesture.
-                if (e.currentTarget.muted) {
-                  e.currentTarget.muted = false
-                  e.currentTarget.volume = 0.5
-                }
-              }}
               className="block max-h-[min(65vh,680px)] max-w-full object-contain"
               ref={(node) => {
                 onVideoRef(node)
