@@ -13,6 +13,7 @@ import PasswordGate from '@/components/PasswordGate'
 import RevealCountdown from '@/components/RevealCountdown'
 import GuestShareButton from '@/components/GuestShareButton'
 import FaceFinder from '@/components/FaceFinder'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
 
 const DEFAULT_BG = '#FDFAF5'
@@ -346,13 +347,16 @@ export default function AlbumPage() {
         )}
 
         {showFaceFinder && (
-          <FaceFinder
-            albumSlug={album.custom_slug ?? album.slug}
-            photos={photos}
-            onClose={() => setShowFaceFinder(false)}
-          />
+          <ErrorBoundary>
+            <FaceFinder
+              albumSlug={album.custom_slug ?? album.slug}
+              photos={photos}
+              onClose={() => setShowFaceFinder(false)}
+            />
+          </ErrorBoundary>
         )}
         <UploadZone album={album} onPhotoAdded={handlePhotoAdded} />
+        <ErrorBoundary>
         <PhotoGrid
           album={album}
           photos={photos}
@@ -369,6 +373,7 @@ export default function AlbumPage() {
           coverPhotoId={album.cover_photo_id}
           onCoverSet={(photoId) => handleAlbumUpdated({ cover_photo_id: photoId })}
         />
+        </ErrorBoundary>
 
         {!isOwner && (
           <div className="mt-8 text-center">
