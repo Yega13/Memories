@@ -107,7 +107,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [slideshowAnimation, setSlideshowAnimation] = useState<SlideshowAnimation>(album.slideshow_animation ?? 'fade')
   const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
-  const [mediaSaved, setMediaSaved] = useState(false)
 
   const [revealInput, setRevealInput] = useState(() => toDatetimeLocal(album.reveal_at ?? null))
   const [revealSaving, setRevealSaving] = useState(false)
@@ -133,7 +132,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     if (mediaRadius > radiusMax) {
       setMediaRadius(radiusMax)
       onAlbumUpdated({ media_radius: radiusMax }, { forceGlobalRadius: true })
-      setMediaSaved(false)
     }
   }, [mediaRadius, onAlbumUpdated, radiusMax])
 
@@ -182,7 +180,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setSlideshowIntervalMs(album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS)
       setSlideshowAnimation(album.slideshow_animation ?? 'fade')
       setMediaError('')
-      setMediaSaved(false)
       setRevealInput(toDatetimeLocal(album.reveal_at ?? null))
       setRevealError('')
       setRevealSaved(false)
@@ -302,7 +299,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter, nextHover = mediaHover, nextMobileGridColumns = mobileGridColumns, nextSlideshowIntervalMs = slideshowIntervalMs, nextSlideshowAnimation = slideshowAnimation) {
     setMediaSaving(true)
     setMediaError('')
-    setMediaSaved(false)
     try {
       const resetRadiusOverrides = nextRadius !== savedMediaRadius
       const resetFilterOverrides = nextFilter !== savedMediaFilter
@@ -337,7 +333,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         { media_radius: result.media_radius, video_autoplay: result.video_autoplay, media_filter: result.media_filter, media_hover: result.media_hover, mobile_grid_columns: result.mobile_grid_columns, slideshow_interval_ms: result.slideshow_interval_ms, slideshow_animation: result.slideshow_animation },
         { forceGlobalRadius: false, resetRadiusOverrides, resetFilterOverrides },
       )
-      setMediaSaved(true)
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Network error'
       setMediaError(message)
@@ -386,7 +381,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     const nextRadius = Math.max(0, Math.min(radiusMax, Math.round(value)))
     setMediaRadius(nextRadius)
     onAlbumUpdated({ media_radius: nextRadius }, { forceGlobalRadius: true })
-    setMediaSaved(false)
     // Debounced persistence — radius slider fires many onChange events while dragging.
     scheduleAutoSave(nextRadius, videoAutoplay, mediaFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
   }
@@ -420,7 +414,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     const nextInterval = Math.max(MIN_SLIDESHOW_INTERVAL_MS, Math.min(MAX_SLIDESHOW_INTERVAL_MS, Math.round(value)))
     setSlideshowIntervalMs(nextInterval)
     onAlbumUpdated({ slideshow_interval_ms: nextInterval })
-    setMediaSaved(false)
     scheduleAutoSave(mediaRadius, videoAutoplay, mediaFilter, mediaHover, mobileGridColumns, nextInterval, slideshowAnimation)
   }
 
@@ -978,7 +971,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           const nextAutoplay = e.target.checked
                           setVideoAutoplay(nextAutoplay)
                           onAlbumUpdated({ video_autoplay: nextAutoplay })
-                          setMediaSaved(false)
                           // Auto-save so the toggle persists across refresh without needing the
                           // explicit Save button. Passing nextAutoplay explicitly because the
                           // setVideoAutoplay above hasn't taken effect in this closure yet.
@@ -996,7 +988,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           const nextFilter = e.target.value as MediaDisplayFilter
                           setMediaFilter(nextFilter)
                           onAlbumUpdated({ media_filter: nextFilter })
-                          setMediaSaved(false)
                           void saveMediaSettings(mediaRadius, videoAutoplay, nextFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, slideshowAnimation)
                         }}
                         className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
@@ -1020,7 +1011,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                               onClick={() => {
                                 setMobileGridColumns(option.value)
                                 onAlbumUpdated({ mobile_grid_columns: option.value })
-                                setMediaSaved(false)
                                 void saveMediaSettings(mediaRadius, videoAutoplay, mediaFilter, mediaHover, option.value, slideshowIntervalMs, slideshowAnimation)
                               }}
                               className="hush-press rounded-lg py-2 text-sm font-semibold"
@@ -1041,7 +1031,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     </div>
 
                     {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}
-                    {mediaSaved && !mediaError && <p className="text-xs" style={{ color: '#254F22' }}>Saved.</p>}
                     <button
                       onClick={() => saveMediaSettings()}
                       disabled={mediaSaving}
@@ -1107,7 +1096,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                           const nextAnimation = e.target.value as SlideshowAnimation
                           setSlideshowAnimation(nextAnimation)
                           onAlbumUpdated({ slideshow_animation: nextAnimation })
-                          setMediaSaved(false)
                           void saveMediaSettings(mediaRadius, videoAutoplay, mediaFilter, mediaHover, mobileGridColumns, slideshowIntervalMs, nextAnimation)
                         }}
                         className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
@@ -1120,7 +1108,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     </div>
 
                     {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}
-                    {mediaSaved && !mediaError && <p className="text-xs" style={{ color: '#254F22' }}>Saved.</p>}
                     <button
                       onClick={() => saveMediaSettings()}
                       disabled={mediaSaving}

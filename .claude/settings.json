@@ -11,7 +11,8 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Sort-Object)",
       "Bash(xargs grep -l \"reveal_at\\\\|password_protected\\\\|password_hash\\\\|face_finder\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(xargs grep -l \"face_finder_enabled\\\\|FaceFinder\")"
     ]
   }
 }
