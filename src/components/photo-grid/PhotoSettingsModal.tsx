@@ -73,7 +73,7 @@ export default function PhotoSettingsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6" style={{ background: 'rgba(26, 43, 26, 0.42)', backdropFilter: 'blur(8px)' }} onMouseDown={(e) => {
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 py-6" data-scroll-allowed="true" style={{ background: 'rgba(26, 43, 26, 0.42)', backdropFilter: 'blur(8px)' }} onMouseDown={(e) => {
       if (e.target === e.currentTarget) onClose()
     }}>
       <div className="hush-modal-pop w-full max-w-sm rounded-2xl shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>

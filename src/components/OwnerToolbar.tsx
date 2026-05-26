@@ -338,7 +338,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         { forceGlobalRadius: false, resetRadiusOverrides, resetFilterOverrides },
       )
       setMediaSaved(true)
-      showAppToast('Settings saved.')
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Network error'
       setMediaError(message)

@@ -200,11 +200,13 @@ export default function LightboxOverlay({
       )}
 
       <div
-        className={`hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] mx-4 sm:mx-16 flex flex-col items-center gap-4${slideshowMode ? ' hush-slideshow-stage' : ''}`}
+        className={`hush-modal-pop relative z-10 max-w-[min(96vw,1100px)] mx-4 sm:mx-16 flex flex-col items-center gap-4 [&::-webkit-scrollbar]:hidden${slideshowMode ? ' hush-slideshow-stage' : ''}`}
         data-scroll-allowed="true"
         style={{
           maxHeight: 'min(95svh, 90vh)',
           overflowY: 'auto',
+          overflowX: 'hidden',
+          scrollbarWidth: 'none',
           touchAction: 'pan-y',
           transform: `translateX(${swipeOffset}px) scale(${Math.max(0.94, 1 - Math.min(Math.abs(swipeOffset), 180) / 1800)})`,
           transition: swipeAnimating ? 'transform 150ms ease-out' : 'none',
@@ -251,6 +253,16 @@ export default function LightboxOverlay({
               controls
               autoPlay={slideshowMode ? !slideshowPaused : videoAutoplay}
               playsInline
+              onLoadedMetadata={(e) => { e.currentTarget.volume = 0.5 }}
+              onPlay={(e) => {
+                // Browsers (especially Android Chrome) sometimes force-mute autoplay.
+                // Attempt to unmute once playback starts. iOS Safari will silently ignore this
+                // when autoplay was triggered without a direct gesture.
+                if (e.currentTarget.muted) {
+                  e.currentTarget.muted = false
+                  e.currentTarget.volume = 0.5
+                }
+              }}
               className="block max-h-[min(65vh,680px)] max-w-full object-contain"
               ref={(node) => {
                 onVideoRef(node)

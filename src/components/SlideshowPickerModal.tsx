@@ -109,6 +109,16 @@ export default function SlideshowPickerModal({
                     <Play className="h-7 w-7" />
                   </span>
                 )}
+                {photo.media_type === 'video' && thumbSrc && (
+                  <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span
+                      className="rounded-full flex items-center justify-center"
+                      style={{ width: 28, height: 28, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+                    >
+                      <Play className="h-3.5 w-3.5" style={{ color: '#FDFAF5', marginLeft: 1 }} fill="#FDFAF5" />
+                    </span>
+                  </span>
+                )}
                 <span
                   className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full"
                   style={{
