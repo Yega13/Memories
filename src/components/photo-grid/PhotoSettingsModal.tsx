@@ -12,8 +12,6 @@ type Props = {
   filter: PhotoFilterChoice
   caption: string
   author: string
-  saving: boolean
-  error: string
   radiusMax: number
   captionMax: number
   authorMax: number
@@ -23,7 +21,6 @@ type Props = {
   onFilterChange: (value: PhotoFilterChoice) => void
   onCaptionChange: (value: string) => void
   onAuthorChange: (value: string) => void
-  onSave: () => void
 }
 
 export default function PhotoSettingsModal({
@@ -33,8 +30,6 @@ export default function PhotoSettingsModal({
   filter,
   caption,
   author,
-  saving,
-  error,
   radiusMax,
   captionMax,
   authorMax,
@@ -44,7 +39,6 @@ export default function PhotoSettingsModal({
   onFilterChange,
   onCaptionChange,
   onAuthorChange,
-  onSave,
 }: Props) {
   const [radiusDraft, setRadiusDraft] = useState(String(radius))
   const [radiusEditing, setRadiusEditing] = useState(false)
@@ -198,16 +192,7 @@ export default function PhotoSettingsModal({
             </select>
           </div>
 
-          {error && <p className="text-xs" style={{ color: '#C0392B' }}>{error}</p>}
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            className="hush-press w-full rounded-lg py-2 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
-            style={{ background: '#254F22', color: '#FDFAF5' }}
-          >
-            {saving ? 'Saving...' : 'Save settings'}
-          </button>
+          <p className="text-xs text-center" style={{ color: '#A89880' }}>Changes are saved when you close.</p>
         </div>
       </div>
     </div>

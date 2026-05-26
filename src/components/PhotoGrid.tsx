@@ -104,7 +104,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     settingsSaving, settingsError,
     setSettingsPhoto, setSettingsRadius, setSettingsFilter, setSettingsCaption, setSettingsAuthor,
     openSettings, previewRadiusFor, previewFilterFor, radiusMaxFor,
-    applySettingsRadius, savePhotoSettings,
+    applySettingsRadius, savePhotoSettings, closeSettings,
   } = usePhotoSettings({
     album,
     slug,
@@ -127,6 +127,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     previewRadiusFor,
     previewFilterFor,
   })
+
+  const zoomScaleRef = useRef(1)
+  zoomScaleRef.current = zoomScale
 
   const overlayOpen = lightbox !== null || slideshowPickerOpen
   const slideshowIntervalMs = album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS
@@ -324,8 +327,8 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
-      if (e.key === 'ArrowLeft') { e.preventDefault(); prev() }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); next() }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); if (zoomScaleRef.current <= 1) prev() }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); if (zoomScaleRef.current <= 1) next() }
       else if (e.key === 'Escape') { e.preventDefault(); closeLightbox() }
     }
     window.addEventListener('keydown', onKey)
@@ -612,18 +615,15 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           filter={settingsFilter}
           caption={settingsCaption}
           author={settingsAuthor}
-          saving={settingsSaving}
-          error={settingsError}
           radiusMax={radiusMaxFor(settingsPhoto)}
           captionMax={MEDIA_CAPTION_MAX}
           authorMax={MEDIA_AUTHOR_MAX}
-          onClose={() => setSettingsPhoto(null)}
+          onClose={closeSettings}
           onRadiusChange={applySettingsRadius}
           onRadiusReset={() => setSettingsRadius(album.media_radius ?? 12)}
           onFilterChange={setSettingsFilter}
           onCaptionChange={setSettingsCaption}
           onAuthorChange={setSettingsAuthor}
-          onSave={savePhotoSettings}
         />
       )}
     </>

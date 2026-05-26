@@ -34,6 +34,7 @@ export type PhotoSettings = {
   radiusMaxFor: (photo: Photo) => number
   applySettingsRadius: (value: number) => void
   savePhotoSettings: () => Promise<void>
+  closeSettings: () => void
 }
 
 function radiusFor(
@@ -152,6 +153,52 @@ export function usePhotoSettings({
     }
   }
 
+  // Close the modal immediately and save in the background. Used by the ✕ button so
+  // the user can adjust freely and only see one toast when they're done.
+  function closeSettings() {
+    const photo = settingsPhoto
+    const radius = settingsRadius
+    const filter = settingsFilter
+    const caption = settingsCaption
+    const author = settingsAuthor
+    setSettingsPhoto(null)
+    if (!photo || !ownerToken) return
+    void fetch('/api/album/photo/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug,
+        owner_token: ownerToken,
+        photo_id: photo.id,
+        display_radius: radius === (album.media_radius ?? 12) ? null : radius,
+        display_filter: filter === 'global' ? null : filter,
+        caption: caption.trim() || null,
+        author_name: author.trim() || null,
+      }),
+    }).then(async (res) => {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string
+        display_radius?: number | null
+        display_filter?: MediaDisplayFilter | null
+        caption?: string | null
+        author_name?: string | null
+      }
+      if (!res.ok) {
+        showAppToast(body.error ?? `Save failed (${res.status})`, 'error')
+        return
+      }
+      onPhotoUpdated(photo.id, {
+        display_radius: body.display_radius ?? null,
+        display_filter: body.display_filter ?? null,
+        caption: body.caption ?? null,
+        author_name: body.author_name ?? null,
+      })
+      showAppToast('Media settings saved.')
+    }).catch(() => {
+      showAppToast('Network error', 'error')
+    })
+  }
+
   // Clamp settingsRadius when the available maximum shrinks (e.g. lightbox opens).
   useEffect(() => {
     if (!settingsPhoto) return
@@ -180,5 +227,6 @@ export function usePhotoSettings({
     radiusMaxFor,
     applySettingsRadius,
     savePhotoSettings,
+    closeSettings,
   }
 }
