@@ -1,7 +1,9 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { MediaDisplayFilter, MediaHoverEffect, MobileGridColumns, SlideshowAnimation } from '@/lib/media-display'
+import type { UploadCaps } from '@/lib/media'
 
 export type { MediaDisplayFilter, MediaHoverEffect, MobileGridColumns, SlideshowAnimation } from '@/lib/media-display'
+export type { UploadCaps } from '@/lib/media'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
@@ -14,19 +16,22 @@ export type Album = {
   custom_slug: string | null
   title: string
   description: string | null
-  background_theme?: string | null
-  media_radius?: number
-  video_autoplay?: boolean
-  media_filter?: MediaDisplayFilter
-  media_hover?: MediaHoverEffect
-  mobile_grid_columns?: MobileGridColumns
-  slideshow_interval_ms?: number
-  slideshow_animation?: SlideshowAnimation
-  password_protected?: boolean
-  upload_caps?: { image: number; video: number }
-  cover_photo_id?: string | null
-  reveal_at?: string | null
-  face_finder_enabled?: boolean
+  // Nullable in DB — passed through as-is by the API
+  background_theme: string | null
+  cover_photo_id: string | null
+  reveal_at: string | null
+  // Normalized by the API route (never undefined on the client)
+  media_radius: number
+  video_autoplay: boolean
+  media_filter: MediaDisplayFilter
+  media_hover: MediaHoverEffect
+  mobile_grid_columns: MobileGridColumns
+  slideshow_interval_ms: number
+  slideshow_animation: SlideshowAnimation
+  // Computed by the API route from owner tier / password hash
+  password_protected: boolean
+  upload_caps: UploadCaps
+  face_finder_enabled: boolean
   created_at: string
 }
 
