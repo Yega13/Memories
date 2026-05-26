@@ -150,46 +150,81 @@ export default function AlbumPage() {
     fetchAlbum()
   }, [fetchAlbum])
 
-  // Real-time: new photos added by anyone appear instantly without refresh
+  // Real-time: new photos added by anyone appear instantly without refresh.
+  // On CHANNEL_ERROR / TIMED_OUT / CLOSED, exponential-backoff reconnect fires and a
+  // full photo refetch recovers any events that arrived during the gap.
   useEffect(() => {
     if (!album) return
-    const channel = supabase
-      .channel(`album-photos-${album.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'photos', filter: `album_id=eq.${album.id}` },
-        (payload) => {
-          const incoming = payload.new as Photo
-          setPhotos((prev) => {
-            if (prev.some((p) => p.id === incoming.id)) return prev
-            return [...prev, incoming]
-          })
-        },
-      )
-      .on(
-        'postgres_changes',
-        // No server-side filter on DELETE — Postgres only writes the PK to WAL by default
-        // (REPLICA IDENTITY FULL would be needed). Filter client-side instead: any photo not
-        // in our current list is a no-op, so this is safe in a multi-album environment.
-        { event: 'DELETE', schema: 'public', table: 'photos' },
-        (payload) => {
-          const deletedId = (payload.old as { id: string }).id
-          setPhotos((prev) => prev.filter((p) => p.id !== deletedId))
-        },
-      )
-      .on(
-        'postgres_changes',
-        // UPDATE: keeps guests in sync when the owner changes a photo's caption, filter, radius,
-        // sort_order, etc. Without this they'd see stale data until refresh.
-        { event: 'UPDATE', schema: 'public', table: 'photos', filter: `album_id=eq.${album.id}` },
-        (payload) => {
-          const updated = payload.new as Photo
-          setPhotos((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
-        },
-      )
-      .subscribe()
+    const albumId = album.id
+    let active = true
+    let retryCount = 0
+    let retryTimer: number | null = null
+    let currentChannel: ReturnType<typeof supabase.channel> | null = null
 
-    return () => { void supabase.removeChannel(channel) }
+    function connect() {
+      if (!active) return
+      if (currentChannel) void supabase.removeChannel(currentChannel)
+
+      currentChannel = supabase
+        .channel(`album-photos-${albumId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'photos', filter: `album_id=eq.${albumId}` },
+          (payload) => {
+            const incoming = payload.new as Photo
+            setPhotos((prev) => {
+              if (prev.some((p) => p.id === incoming.id)) return prev
+              return [...prev, incoming]
+            })
+          },
+        )
+        .on(
+          'postgres_changes',
+          // No server-side filter on DELETE — Postgres only writes the PK to WAL by default
+          // (REPLICA IDENTITY FULL would be needed). Filter client-side instead: any photo not
+          // in our current list is a no-op, so this is safe in a multi-album environment.
+          { event: 'DELETE', schema: 'public', table: 'photos' },
+          (payload) => {
+            const deletedId = (payload.old as { id: string }).id
+            setPhotos((prev) => prev.filter((p) => p.id !== deletedId))
+          },
+        )
+        .on(
+          'postgres_changes',
+          // UPDATE: keeps guests in sync when the owner changes a photo's caption, filter, radius,
+          // sort_order, etc. Without this they'd see stale data until refresh.
+          { event: 'UPDATE', schema: 'public', table: 'photos', filter: `album_id=eq.${albumId}` },
+          (payload) => {
+            const updated = payload.new as Photo
+            setPhotos((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
+          },
+        )
+        .subscribe((status, err) => {
+          if (!active) return
+          if (status === 'SUBSCRIBED') {
+            if (retryCount > 0) {
+              // Events may have been missed during the gap — resync the full photo list.
+              void fetchPhotos(albumId)
+            }
+            retryCount = 0
+            return
+          }
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (err) console.warn('[realtime] channel issue:', status, (err as Error).message)
+            const delay = Math.min(2_000 * (retryCount + 1), 30_000)
+            retryCount++
+            retryTimer = window.setTimeout(connect, delay)
+          }
+        })
+    }
+
+    connect()
+
+    return () => {
+      active = false
+      if (retryTimer != null) window.clearTimeout(retryTimer)
+      if (currentChannel) void supabase.removeChannel(currentChannel)
+    }
   // album?.id is intentional — reconnecting on every album field change would thrash the subscription
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [album?.id])
