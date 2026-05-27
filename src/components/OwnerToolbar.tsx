@@ -105,7 +105,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [mobileGridColumns, setMobileGridColumns] = useState<MobileGridColumns>(album.mobile_grid_columns ?? 3)
   const [slideshowIntervalMs, setSlideshowIntervalMs] = useState(album.slideshow_interval_ms ?? DEFAULT_SLIDESHOW_INTERVAL_MS)
   const [slideshowAnimation, setSlideshowAnimation] = useState<SlideshowAnimation>(album.slideshow_animation ?? 'fade')
-  const [mediaSaving, setMediaSaving] = useState(false)
   const [mediaError, setMediaError] = useState('')
 
   const [revealInput, setRevealInput] = useState(() => toDatetimeLocal(album.reveal_at ?? null))
@@ -297,7 +296,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   }
 
   async function saveMediaSettings(nextRadius = mediaRadius, nextAutoplay = videoAutoplay, nextFilter = mediaFilter, nextHover = mediaHover, nextMobileGridColumns = mobileGridColumns, nextSlideshowIntervalMs = slideshowIntervalMs, nextSlideshowAnimation = slideshowAnimation) {
-    setMediaSaving(true)
     setMediaError('')
     try {
       const resetRadiusOverrides = nextRadius !== savedMediaRadius
@@ -337,8 +335,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const message = e instanceof Error ? e.message : 'Network error'
       setMediaError(message)
       showAppToast(message, 'error')
-    } finally {
-      setMediaSaving(false)
     }
   }
 
@@ -1031,14 +1027,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     </div>
 
                     {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}
-                    <button
-                      onClick={() => saveMediaSettings()}
-                      disabled={mediaSaving}
-                      className="hush-press w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ background: '#254F22', color: '#FDFAF5' }}
-                    >
-                      {mediaSaving ? 'Saving...' : 'Save media display'}
-                    </button>
                   </div>
                 )}
               </section>
@@ -1108,14 +1096,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     </div>
 
                     {mediaError && <p className="text-xs" style={{ color: '#C0392B' }}>{mediaError}</p>}
-                    <button
-                      onClick={() => saveMediaSettings()}
-                      disabled={mediaSaving}
-                      className="hush-press w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ background: '#254F22', color: '#FDFAF5' }}
-                    >
-                      {mediaSaving ? 'Saving...' : 'Save slideshow settings'}
-                    </button>
                   </div>
                 )}
               </section>
