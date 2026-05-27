@@ -67,6 +67,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const indexingDone = useRef(false)
+  const indexingAbort = useRef<AbortController | null>(null)
   // Track whether the last error came from indexing or from the search step, so "Try again"
   // can skip re-indexing (which already succeeded) and go directly back to the selfie step.
   const errorOrigin = useRef<'indexing' | 'search'>('indexing')
@@ -87,11 +88,15 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
       return
     }
 
+    const abort = new AbortController()
+    indexingAbort.current = abort
+    const { signal } = abort
+
     // Step 1: fetch all unindexed photo IDs so workers can be assigned non-overlapping subsets
     let ids: string[] = []
     let dbTotal = imagePhotos.length
     try {
-      const res = await fetch(`/api/album/face-index?slug=${encodeURIComponent(albumSlug)}`)
+      const res = await fetch(`/api/album/face-index?slug=${encodeURIComponent(albumSlug)}`, { signal })
       if (!res.ok) {
         errorOrigin.current = 'indexing'
         setStep('error')
@@ -101,7 +106,8 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
       const data = (await res.json()) as { ids: string[]; total: number }
       ids = data.ids
       dbTotal = data.total || imagePhotos.length
-    } catch {
+    } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') return
       errorOrigin.current = 'indexing'
       setStep('error')
       setErrorMsg('Network error during indexing. Please try again.')
@@ -125,13 +131,16 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
 
     async function indexWorker(startIdx: number) {
       for (let i = startIdx; i < ids.length; i += CONCURRENT) {
+        if (signal.aborted) return
         try {
           await fetch('/api/album/face-index', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ slug: albumSlug, photoId: ids[i] }),
+            signal,
           })
-        } catch {
+        } catch (err) {
+          if ((err as { name?: string }).name === 'AbortError') return
           // network error on a single photo — continue with the rest
         }
         done++
@@ -141,6 +150,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
 
     await Promise.all(Array.from({ length: CONCURRENT }, (_, i) => indexWorker(i)))
 
+    if (signal.aborted) return
     indexingDone.current = true
     setStep('selfie')
     // imagePhotos is a derived array — depending on the full reference would re-create runIndexing
@@ -151,6 +161,11 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
   useEffect(() => {
     runIndexing()
   }, [runIndexing])
+
+  // Cancel in-flight indexing workers if the modal is closed mid-index.
+  useEffect(() => {
+    return () => { indexingAbort.current?.abort() }
+  }, [])
 
   // Revoke whatever object URL is currently set when the modal unmounts. Tracking via ref so
   // the cleanup function sees the latest value at unmount time, not the value at mount.
@@ -190,6 +205,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
       try {
         json = JSON.parse(bodyText) as { matches?: Match[]; error?: string }
       } catch {
+        errorOrigin.current = 'search'
         setStep('error')
         setErrorMsg(`Server error (${res.status}): ${bodyText.slice(0, 300) || '(empty response)'}`)
         return
@@ -442,6 +458,8 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
                       // Indexing already succeeded — just go back to the selfie step.
                       setStep('selfie')
                     } else {
+                      indexingAbort.current?.abort()
+                      indexingAbort.current = null
                       indexingDone.current = false
                       setStep('indexing')
                       runIndexing()
