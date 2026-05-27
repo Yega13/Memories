@@ -80,6 +80,57 @@ export async function sendPhotoNotificationEmail(
   await sendEmail(ownerEmail, subject, html, text)
 }
 
+export async function sendBillingReminderEmail(
+  ownerEmail: string,
+  tier: string,
+  renewalDate: string,
+  accountUrl: string,
+) {
+  const tierLabel = tier === 'studio' ? 'Studio' : 'Pro'
+  const subject = `Your Hushare ${tierLabel} plan renews tomorrow`
+
+  const html = `
+<div style="font-family:-apple-system,system-ui,sans-serif;color:#254F22;max-width:560px;margin:0 auto;padding:24px;">
+  <h2 style="margin:0 0 16px;font-size:18px;">Subscription renewing soon</h2>
+  <p style="margin:0 0 16px;color:#5C4A3C;">
+    Your <strong>Hushare ${escapeHtml(tierLabel)} plan</strong> is scheduled to renew on
+    <strong>${escapeHtml(renewalDate)}</strong>.
+  </p>
+  <p style="margin:0 0 20px;color:#5C4A3C;">
+    No action needed — your subscription will continue automatically.
+    If you'd like to make changes, visit your account.
+  </p>
+  <a href="${escapeHtml(accountUrl)}"
+     style="display:inline-block;background:#254F22;color:#FDFAF5;text-decoration:none;border-radius:10px;padding:10px 20px;font-size:14px;font-weight:600;">
+    Manage subscription
+  </a>
+  <hr style="border:none;border-top:1px solid #E8E0D0;margin:24px 0 12px;" />
+  <p style="margin:0;color:#B0A090;font-size:12px;">
+    You received this because you have an active subscription on
+    <a href="${escapeHtml(SITE_URL)}" style="color:#B0A090;">Hushare</a>.
+    To stop receiving these emails, reply with "unsubscribe" or email
+    <a href="mailto:husharesupport@gmail.com" style="color:#B0A090;">husharesupport@gmail.com</a>.
+  </p>
+  <p style="margin:6px 0 0;color:#B0A090;font-size:11px;">${escapeHtml(MAILING_ADDRESS)}</p>
+</div>`
+
+  const text = [
+    subject,
+    '',
+    `Your Hushare ${tierLabel} plan is scheduled to renew on ${renewalDate}.`,
+    '',
+    'No action needed — your subscription will continue automatically.',
+    'If you\'d like to make changes, visit your account:',
+    accountUrl,
+    '',
+    'You received this because you have an active subscription on Hushare.',
+    'To unsubscribe, reply to this email or contact husharesupport@gmail.com.',
+    MAILING_ADDRESS,
+  ].join('\n')
+
+  await sendEmail(ownerEmail, subject, html, text)
+}
+
 export async function sendExpiryWarningEmail(
   ownerEmail: string,
   albumTitle: string,
