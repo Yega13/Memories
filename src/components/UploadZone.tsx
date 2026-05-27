@@ -739,17 +739,38 @@ async function convertHeicToJpeg(file: File): Promise<File> {
 // Replacing SDK calls with XHR gives us an explicit timeout (R2_SINGLE_UPLOAD_TIMEOUT_MS)
 // and a proper error/retry surface matching the R2 upload path.
 
+// Deduplicates concurrent getSession() calls. When 3–5 upload workers all start
+// simultaneously in incognito mode (no cached session), letting each call getSession()
+// independently could trigger concurrent auth-state reads on the SSR cookie client,
+// potentially filling connection slots before any upload has started.
+let _uploadTokenPromise: Promise<string> | null = null
+
+function getUploadToken(): Promise<string> {
+  if (!_uploadTokenPromise) {
+    _uploadTokenPromise = supabase.auth.getSession()
+      .then(({ data: { session } }) => session?.access_token ?? supabaseAnonKey)
+      .finally(() => { _uploadTokenPromise = null })
+  }
+  return _uploadTokenPromise
+}
+
 function uploadToSupabaseOnce(
   file: File | Blob,
   path: string,
   token: string,
   contentType: string | undefined,
 ): Promise<void> {
+  // Normalize URL — guard against trailing slash in the env var
+  const base = supabaseUrl.replace(/\/$/, '')
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${supabaseUrl}/storage/v1/object/Photos/${path}`)
+    xhr.open('POST', `${base}/storage/v1/object/Photos/${path}`)
     xhr.timeout = R2_SINGLE_UPLOAD_TIMEOUT_MS
     xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    // apikey is required by Supabase's API gateway to route and identify the project.
+    // The JS SDK always sends it alongside Authorization; omitting it can cause the edge
+    // to drop the connection (manifesting as "Failed to fetch") rather than returning 4xx.
+    xhr.setRequestHeader('apikey', supabaseAnonKey)
     xhr.setRequestHeader('x-upsert', 'false')
     xhr.setRequestHeader('cache-control', 'max-age=604800')
     if (contentType) xhr.setRequestHeader('Content-Type', contentType)
@@ -770,8 +791,7 @@ async function uploadToSupabaseStorage(
   path: string,
   contentType: string | undefined,
 ): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token ?? supabaseAnonKey
+  const token = await getUploadToken()
   let lastError: Error = new Error('Upload failed')
   for (let attempt = 1; attempt <= 5; attempt++) {
     try {

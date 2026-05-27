@@ -131,3 +131,113 @@
 - Full billing model + profit/loss calculation  
 - Mobile UI/UX polish pass  
 - UI polish (desktop + mobile)  
+
+---
+
+## Suggestions
+
+Items from competitive analysis and internal audit. Not bugs — things to build, change, or remove when the time is right. Ordered by estimated impact.
+
+---
+
+### S1 — OG image for album share links
+**Priority: High**  
+**Area:** SEO / `src/app/[slug]/page.tsx`
+
+When a host pastes their album link into WhatsApp, iMessage, or Slack, there is no preview image — just a raw URL. This is how 90% of album links get distributed. Set `og:image` to the album's cover photo, or the first photo if no cover is set. One route + one meta tag. Highest return-on-effort item on this list.
+
+---
+
+### S2 — AI content moderation
+**Priority: High**  
+**Area:** Upload pipeline / `src/app/api/album/photos/create/route.ts`
+
+Without moderation, the product is unusable for corporate events and school functions. A single inappropriate upload on a venue projector ends the relationship. AWS Rekognition already integrated — `DetectModerationLabels` can be called on upload. Add a per-album toggle in owner settings (off by default, on for Pro+). Kululu charges $99/event for this. We can ship it as a Pro feature.
+
+---
+
+### S3 — Move Face Finder down to Pro tier
+**Priority: High**  
+**Area:** `src/app/api/album/resolve/route.ts`, `src/lib/subscriptions.ts`, pricing page
+
+Face Finder is the strongest technical differentiator in the market. Currently gated to Max ($10/month). GuestCam charges $45/event as an add-on — our subscription model is already cheaper annually for repeat users, but only if they can access the feature. Moving Face Finder to Pro ($4/month) makes the Pro upgrade dramatically more compelling and removes the main reason a wedding host would evaluate GuestCam instead.
+
+---
+
+### S4 — Audio guestbook
+**Priority: High**  
+**Area:** New feature
+
+GuestCam's single biggest differentiator. Guests record a short voice message via browser (WebRTC) — no app, no phone number needed. Stored alongside photos. Hosts get an emotional keepsake a photo grid alone can't replace. This is the one feature that makes GuestCam feel irreplaceable at weddings. Removing that advantage closes the main competitive gap.
+
+---
+
+### S5 — Guest reactions (emoji) on photos
+**Priority: Medium**  
+**Area:** New feature / `src/components/photo-grid/`
+
+Guests upload a photo and it disappears into the grid with zero feedback. No like, no heart — nothing. This kills repeat engagement. Reactions are a small build (new `photo_reactions` table, Realtime subscription, single emoji picker on each tile) but meaningfully increase how long guests stay on the album and how often they return.
+
+---
+
+### S6 — QR code download in owner toolbar
+**Priority: Medium**  
+**Area:** `src/components/OwnerToolbar.tsx`
+
+Every competitor generates a downloadable QR code for the album. Right now hosts have to use a third-party site to get a QR code for their table cards. This should be a one-click download in the owner toolbar — generate a PNG of the album URL as a QR code using a client-side library (e.g. `qrcode`). No backend needed.
+
+---
+
+### S7 — Multi-language guest interface
+**Priority: Medium**  
+**Area:** `src/app/[slug]/page.tsx`, guest-facing components
+
+GuestCam supports 17 languages. Destination weddings and international events have guests who don't speak English. Auto-detect from `Accept-Language` header; priority markets are Portuguese, Spanish, French. Only the guest-facing strings need translating — owner UI can stay English for now.
+
+---
+
+### S8 — Create collection from the account dashboard
+**Priority: Medium**  
+**Area:** Account page / `src/components/OwnerToolbar.tsx`
+
+Currently the only way to create a collection is through an album's owner toolbar → Settings → "Add to collection". If no collection exists yet, that path works. Once one collection exists, there is no way to create a second one — no standalone button anywhere. Max users paying for Collections can only have one. Fix: add a "New collection" button to the account dashboard.
+
+---
+
+### S9 — SEO presence / comparison pages
+**Priority: Medium**  
+**Area:** Marketing / `src/app/`
+
+Hushare appears in zero "best wedding photo sharing app 2026" articles despite beating competitors on several dimensions. A single honest "Hushare vs GuestCam" page showing side-by-side pricing over 10 events (GuestCam: $970+, Hushare: $120/year) is the strongest sales argument available and currently lives nowhere. Add comparison landing pages for the top 3 competitors.
+
+---
+
+### S10 — Face Finder rate limiting
+**Priority: Medium (cost risk)**  
+**Area:** `src/app/api/album/face-search/route.ts`
+
+Any guest can hammer the search endpoint in a loop. Each call triggers a billed AWS Rekognition `SearchFacesByImage`. Low probability event but when it hits it will be sudden and expensive. Defer until closer to scale, but don't forget it. Tracked separately as issue #12.
+
+---
+
+### S11 — E2E test suite
+**Priority: Medium (engineering health)**  
+**Area:** Testing / CI
+
+Every bug in this file was found manually in production. The arrangement bug, the missing DB columns, the drag-and-drop failures — all caught by hand. Playwright covering the 3 golden paths (create album → upload photo → guest views) would catch regressions before they ship. Low urgency now, becomes critical once there are paying users who notice every regression.
+
+---
+
+### S12 — Upload retry logic for R2 / poster uploads
+**Priority: Low (partially overlaps issue #9)**  
+**Area:** `src/components/UploadZone.tsx` — `uploadToR2()`
+
+`uploadToR2` wraps a single XHR with no retry. One network blip = permanent failure for poster JPEGs and small video uploads. Add exponential backoff with 3 retries. Directly linked to issue #9 (poster thumbnail never appearing) and issue #4.
+
+---
+
+### S13 — RSVP / event management (v2 consideration)
+**Priority: Low**  
+**Area:** New feature
+
+Fotify and Wedibox include RSVP, seating charts, and DJ requests as part of their event platform pitch. This pulls Hushare into a different product category (event management vs photo sharing) and is a significant scope expansion. Only worth considering once the core photo + video experience is flawless and market position is established. Do not build prematurely.
