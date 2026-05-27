@@ -840,13 +840,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
     if (item.kind === 'image') {
       const path = `${album.id}/${filename}`
-
-      // Start thumbnail generation before the upload begins. Generation is CPU-bound
-      // (createImageBitmap + canvas drawImage) while the upload is I/O-bound, so both
-      // make progress in parallel. By the time the upload finishes the thumbnail is
-      // usually ready, eliminating the sequential wait.
-      const thumbPromise = generateImageThumbnail(uploadFile).catch(() => null)
-
       let originalUploaded = false
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         const { error } = await supabase.storage
@@ -868,7 +861,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       let thumbPath: string | null = null
       let thumbUrl: string | null = null
       try {
-        const thumb = await thumbPromise
+        const thumb = await generateImageThumbnail(uploadFile)
         if (thumb) {
           const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
           const { error: tErr } = await supabase.storage

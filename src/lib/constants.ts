@@ -58,10 +58,11 @@ export const UPLOAD_CONCURRENCY_DESKTOP = 5
 
 // Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency
 // above — these run inside a single video's uploadVideoMultipart call.
-// Desktop: 4 parallel chunks saturates a typical broadband connection without hammering R2.
-// Mobile: 2 keeps carrier connections stable while still halving sequential upload time.
+// Both mobile and desktop use 2 parallel chunks. This doubles throughput vs sequential
+// while keeping each Worker invocation isolated — 4 simultaneous chunk requests caused
+// Worker cold-start contention on burst uploads, manifesting as "failed to fetch."
 export const R2_MULTIPART_CONCURRENCY_MOBILE = 2
-export const R2_MULTIPART_CONCURRENCY_DESKTOP = 4
+export const R2_MULTIPART_CONCURRENCY_DESKTOP = 2
 
 // TUS chunk size for Cloudflare Stream uploads (PATCH requests sent directly to Stream).
 // Stream supports up to 200 MB per chunk. 20 MB is safe at 1.5 Mbps (≈107 s < 300 s timeout)
