@@ -12,7 +12,7 @@ import {
 } from '@/lib/media'
 import { formatFileSize } from '@/lib/utils'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
-import { R2_SINGLE_UPLOAD_TIMEOUT_MS, R2_CHUNK_UPLOAD_TIMEOUT_MS, UPLOAD_CONCURRENCY_MOBILE, UPLOAD_CONCURRENCY_DESKTOP } from '@/lib/constants'
+import { R2_SINGLE_UPLOAD_TIMEOUT_MS, R2_CHUNK_UPLOAD_TIMEOUT_MS, UPLOAD_CONCURRENCY_MOBILE, UPLOAD_CONCURRENCY_DESKTOP, R2_MULTIPART_CONCURRENCY_MOBILE, R2_MULTIPART_CONCURRENCY_DESKTOP, STREAM_CHUNK_SIZE_BYTES } from '@/lib/constants'
 import { showAppToast } from '@/components/AppToast'
 import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
@@ -90,7 +90,6 @@ async function uploadToR2(
 // chunks = each connection holds open for less time, halving exposure to mid-flight drops by
 // carrier proxies or Cloudflare's edge. More chunks per video but the retry path is cheap.
 const CHUNK_SIZE = 5 * 1024 * 1024
-const STREAM_CHUNK_SIZE = 5 * 1024 * 1024
 type ChunkTransport = 'form' | 'raw'
 
 function prefersRawChunkUpload(): boolean {
@@ -116,18 +115,26 @@ async function uploadVideoMultipart(
   const { uploadId, key } = initBody
   if (!uploadId || !key) throw new Error('Invalid upload init response')
 
-  // Step 2: upload chunks sequentially (each is a separate Worker request).
-  // Each chunk is retried up to 3 times on transient failures — without this, a single
-  // dropped TCP connection on flaky mobile data would tank the entire video upload.
+  // Step 2: upload chunks in parallel. R2 multipart accepts out-of-order parts as long as
+  // each carries the correct partNumber. Parallel workers halve upload time on fast connections
+  // and match carrier throughput more effectively on mobile.
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
-  const parts: { partNumber: number; etag: string }[] = []
+  const partResults: Array<{ partNumber: number; etag: string } | null> = new Array(totalChunks).fill(null)
   let uploadedBytes = 0
+  let chunkCursor = 0
+  let abortTriggered = false
 
-  async function uploadChunkOnce(
+  const primaryTransport: ChunkTransport = prefersRawChunkUpload() ? 'raw' : 'form'
+  const fallbackTransport: ChunkTransport = primaryTransport === 'raw' ? 'form' : 'raw'
+  const chunkConcurrency = prefersRawChunkUpload()
+    ? R2_MULTIPART_CONCURRENCY_MOBILE
+    : R2_MULTIPART_CONCURRENCY_DESKTOP
+
+  function uploadChunkOnce(
     partNumber: number,
     chunk: Blob,
-    end: number,
-    start: number,
+    chunkStart: number,
+    chunkEnd: number,
     transport: ChunkTransport,
   ) {
     return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
@@ -146,7 +153,7 @@ async function uploadVideoMultipart(
       }
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return
-        const chunkUploaded = event.loaded / event.total * (end - start)
+        const chunkUploaded = (event.loaded / event.total) * (chunkEnd - chunkStart)
         onProgress?.(Math.round((uploadedBytes + chunkUploaded) / file.size * 95))
       }
       xhr.onload = () => {
@@ -160,7 +167,6 @@ async function uploadVideoMultipart(
       }
       xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber} via ${transport}`))
       xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber} via ${transport}`))
-      // Five minutes gives slow mobile data enough time for a 5 MB chunk before retrying.
       xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
       if (transport === 'raw') {
         xhr.send(chunk)
@@ -175,40 +181,49 @@ async function uploadVideoMultipart(
     })
   }
 
-  for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE
-    const end = Math.min(start + CHUNK_SIZE, file.size)
-    const chunk = file.slice(start, end)
-    const partNumber = i + 1
+  async function chunkWorker(): Promise<void> {
+    while (!abortTriggered && chunkCursor < totalChunks) {
+      const myIdx = chunkCursor++
+      const chunkStart = myIdx * CHUNK_SIZE
+      const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, file.size)
+      const chunk = file.slice(chunkStart, chunkEnd)
+      const partNumber = myIdx + 1
 
-    let part: { partNumber: number; etag: string } | null = null
-    let lastErr: Error | null = null
-    const primaryTransport: ChunkTransport = prefersRawChunkUpload() ? 'raw' : 'form'
-    const fallbackTransport: ChunkTransport = primaryTransport === 'raw' ? 'form' : 'raw'
-    // Long mobile uploads can hit transient R2/edge 503s, so retry with backoff.
-    for (let attempt = 1; attempt <= 8; attempt++) {
-      const transport = attempt % 2 === 1 ? primaryTransport : fallbackTransport
-      try {
-        part = await uploadChunkOnce(partNumber, chunk, end, start, transport)
-        break
-      } catch (e) {
-        lastErr = e instanceof Error ? e : new Error(String(e))
-        if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))
+      let part: { partNumber: number; etag: string } | null = null
+      let lastErr: Error | null = null
+      for (let attempt = 1; attempt <= 8; attempt++) {
+        if (abortTriggered) break
+        const transport = attempt % 2 === 1 ? primaryTransport : fallbackTransport
+        try {
+          part = await uploadChunkOnce(partNumber, chunk, chunkStart, chunkEnd, transport)
+          break
+        } catch (e) {
+          lastErr = e instanceof Error ? e : new Error(String(e))
+          if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))
+        }
       }
-    }
-    if (!part) {
-      fetch('/api/upload/r2/multipart?action=abort', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uploadId, key }),
-      }).catch(() => {})
-      throw lastErr ?? new Error(`Chunk ${partNumber} failed`)
-    }
 
-    parts.push(part)
-    uploadedBytes += end - start
-    onProgress?.(Math.round(uploadedBytes / file.size * 95))
+      if (!part) {
+        if (!abortTriggered) {
+          abortTriggered = true
+          fetch('/api/upload/r2/multipart?action=abort', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uploadId, key }),
+          }).catch(() => {})
+        }
+        throw lastErr ?? new Error(`Chunk ${partNumber} failed`)
+      }
+
+      partResults[myIdx] = part
+      uploadedBytes += chunkEnd - chunkStart
+      onProgress?.(Math.round(uploadedBytes / file.size * 95))
+    }
   }
+
+  await Promise.all(Array.from({ length: Math.min(chunkConcurrency, totalChunks) }, () => chunkWorker()))
+
+  const parts = partResults.filter((p): p is { partNumber: number; etag: string } => p !== null)
 
   // Step 3: complete
   const completeRes = await fetch('/api/upload/r2/multipart?action=complete', {
@@ -280,7 +295,7 @@ async function uploadVideoToStream(
   let offset = 0
   while (offset < file.size) {
     const start = offset
-    const end = Math.min(start + STREAM_CHUNK_SIZE, file.size)
+    const end = Math.min(start + STREAM_CHUNK_SIZE_BYTES, file.size)
     const chunk = file.slice(start, end)
 
     let lastErr: Error | null = null
@@ -825,6 +840,13 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
     if (item.kind === 'image') {
       const path = `${album.id}/${filename}`
+
+      // Start thumbnail generation before the upload begins. Generation is CPU-bound
+      // (createImageBitmap + canvas drawImage) while the upload is I/O-bound, so both
+      // make progress in parallel. By the time the upload finishes the thumbnail is
+      // usually ready, eliminating the sequential wait.
+      const thumbPromise = generateImageThumbnail(uploadFile).catch(() => null)
+
       let originalUploaded = false
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         const { error } = await supabase.storage
@@ -846,7 +868,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
       let thumbPath: string | null = null
       let thumbUrl: string | null = null
       try {
-        const thumb = await generateImageThumbnail(uploadFile)
+        const thumb = await thumbPromise
         if (thumb) {
           const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
           const { error: tErr } = await supabase.storage

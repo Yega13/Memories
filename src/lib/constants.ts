@@ -55,3 +55,17 @@ export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 300_000
 // Coarse-pointer (mobile) gets fewer to avoid saturating carrier connections.
 export const UPLOAD_CONCURRENCY_MOBILE = 3
 export const UPLOAD_CONCURRENCY_DESKTOP = 5
+
+// Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency
+// above — these run inside a single video's uploadVideoMultipart call.
+// Desktop: 4 parallel chunks saturates a typical broadband connection without hammering R2.
+// Mobile: 2 keeps carrier connections stable while still halving sequential upload time.
+export const R2_MULTIPART_CONCURRENCY_MOBILE = 2
+export const R2_MULTIPART_CONCURRENCY_DESKTOP = 4
+
+// TUS chunk size for Cloudflare Stream uploads (PATCH requests sent directly to Stream).
+// Stream supports up to 200 MB per chunk. 20 MB is safe at 1.5 Mbps (≈107 s < 300 s timeout)
+// and cuts round trips 4× vs the previous 5 MB. TUS byte-level resumption means a mid-chunk
+// drop only retransmits from the server's last confirmed offset, so larger chunks don't hurt
+// resilience.
+export const STREAM_CHUNK_SIZE_BYTES = 20 * 1024 * 1024
