@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { supabase, type Album } from '@/lib/supabase'
+import { supabase, supabaseUrl, supabaseAnonKey, type Album } from '@/lib/supabase'
 import {
   detectKind,
   extensionFor,
@@ -731,6 +731,67 @@ async function convertHeicToJpeg(file: File): Promise<File> {
   }
 }
 
+// ─── XHR-based Supabase Storage upload ───────────────────────────────────────
+// The Supabase JS SDK uses plain fetch() with no timeout. Under concurrent uploads
+// (3–5 workers) a single hanging request occupies a browser connection slot
+// indefinitely — when all 6 HTTP/1.1 slots to supabase.co fill up, subsequent
+// requests fail immediately with "Failed to fetch" even on a solid connection.
+// Replacing SDK calls with XHR gives us an explicit timeout (R2_SINGLE_UPLOAD_TIMEOUT_MS)
+// and a proper error/retry surface matching the R2 upload path.
+
+function uploadToSupabaseOnce(
+  file: File | Blob,
+  path: string,
+  token: string,
+  contentType: string | undefined,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${supabaseUrl}/storage/v1/object/Photos/${path}`)
+    xhr.timeout = R2_SINGLE_UPLOAD_TIMEOUT_MS
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('x-upsert', 'false')
+    xhr.setRequestHeader('cache-control', 'max-age=604800')
+    if (contentType) xhr.setRequestHeader('Content-Type', contentType)
+    xhr.onload = () => {
+      if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 409) { resolve(); return }
+      let body: { error?: string; message?: string } = {}
+      try { body = JSON.parse(xhr.responseText || '{}') } catch {}
+      reject(new Error(body.error || body.message || `Storage upload failed: ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('Failed to fetch'))
+    xhr.ontimeout = () => reject(new Error('Storage upload timed out'))
+    xhr.send(file)
+  })
+}
+
+async function uploadToSupabaseStorage(
+  file: File | Blob,
+  path: string,
+  contentType: string | undefined,
+): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token ?? supabaseAnonKey
+  let lastError: Error = new Error('Upload failed')
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await uploadToSupabaseOnce(file, path, token, contentType)
+      return
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e))
+      // 409 "already exists" is a success — another worker or a duplicate filename resolved it.
+      if (isExistingObjectError(lastError.message)) return
+      // Only retry on transient/network errors and 5xx server responses. 4xx (auth, bad request)
+      // won't be fixed by retrying — surface them immediately.
+      const retriable = isRetriableStorageError(lastError.message)
+        || /storage upload failed: [5]\d{2}/.test(lastError.message.toLowerCase())
+      if (!retriable) throw lastError
+      if (attempt < 5) await wait(500 * attempt)
+    }
+  }
+  throw lastError
+}
+
 export default function UploadZone({ album, onPhotoAdded }: Props) {
   const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
@@ -840,19 +901,7 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
 
     if (item.kind === 'image') {
       const path = `${album.id}/${filename}`
-      let originalUploaded = false
-      for (let attempt = 1; attempt <= 5; attempt += 1) {
-        const { error } = await supabase.storage
-          .from('Photos')
-          .upload(path, uploadFile, { contentType: uploadFile.type || undefined, cacheControl: '604800' })
-        if (!error || isExistingObjectError(error.message)) {
-          originalUploaded = true
-          break
-        }
-        if (!isRetriableStorageError(error.message) || attempt === 5) throw new Error(error.message)
-        await wait(500 * attempt) // 500, 1000, 1500, 2000ms
-      }
-      if (!originalUploaded) throw new Error('Upload failed')
+      await uploadToSupabaseStorage(uploadFile, path, uploadFile.type || undefined)
 
       // Best-effort grid thumbnail. Generated locally so the original keeps its full quality,
       // then uploaded to a sibling path under the album. Any failure (decode, encode, upload)
@@ -864,13 +913,9 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         const thumb = await generateImageThumbnail(uploadFile)
         if (thumb) {
           const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
-          const { error: tErr } = await supabase.storage
-            .from('Photos')
-            .upload(tPath, thumb.blob, { contentType: thumb.blob.type || undefined, cacheControl: '604800' })
-          if (!tErr || isExistingObjectError(tErr.message)) {
-            thumbPath = tPath
-            thumbUrl = supabase.storage.from('Photos').getPublicUrl(tPath).data.publicUrl
-          }
+          await uploadToSupabaseStorage(thumb.blob, tPath, thumb.blob.type || undefined)
+          thumbPath = tPath
+          thumbUrl = supabase.storage.from('Photos').getPublicUrl(tPath).data.publicUrl
         }
       } catch {
         // silent — thumbnail is best-effort
