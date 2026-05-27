@@ -117,6 +117,14 @@
 
 ---
 
+## #12 — Face Finder has no rate limiting on the search endpoint
+**Status:** OPEN (deferred)  
+**Area:** API — `/api/album/face-search`
+
+**Problem:** Any guest can POST to `/api/album/face-search` in a tight loop with no throttle. Each request triggers an AWS Rekognition `SearchFacesByImage` call, which is billed per API call. A single motivated user could run up significant AWS costs on any indexed album with no friction.
+
+---
+
 ## Future / Version 2 items
 
 - Competitor analysis & feature gap list

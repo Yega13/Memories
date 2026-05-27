@@ -12,7 +12,9 @@
       "Bash(Sort-Object)",
       "Bash(xargs grep -l \"reveal_at\\\\|password_protected\\\\|password_hash\\\\|face_finder\")",
       "Bash(python3 -c ' *)",
-      "Bash(xargs grep -l \"face_finder_enabled\\\\|FaceFinder\")"
+      "Bash(xargs grep -l \"face_finder_enabled\\\\|FaceFinder\")",
+      "WebFetch(domain:www.kululu.com)",
+      "WebFetch(domain:guestcam.co)"
     ]
   }
 }

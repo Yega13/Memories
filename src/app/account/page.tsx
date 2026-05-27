@@ -9,6 +9,7 @@ import { isAccountAdmin } from '@/lib/auth'
 import { getActiveSubscription } from '@/lib/subscriptions'
 import { formatDate } from '@/lib/utils'
 import CollectionActions from './CollectionActions'
+import CreateCollectionButton from './CreateCollectionButton'
 import DeleteAlbumButton from './DeleteAlbumButton'
 import RenameAlbumButton from './RenameAlbumButton'
 import SignOutButton from './SignOutButton'
@@ -359,16 +360,19 @@ export default async function AccountPage({ searchParams }: Props) {
               className="rounded-2xl p-6"
               style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', boxShadow: '0 4px 32px rgba(37,79,34,0.08)' }}
             >
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F4E' }}>Collections</p>
                   <h2 className="text-xl font-semibold" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>
                     Studio pages
                   </h2>
                 </div>
-                <span className="text-xs rounded-full px-3 py-1" style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #E8E0D2' }}>
-                  {collectionsWithCounts.length} total
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs rounded-full px-3 py-1" style={{ background: '#F5F0E8', color: '#7C5C3E', border: '1px solid #E8E0D2' }}>
+                    {collectionsWithCounts.length} total
+                  </span>
+                  {isStudio && <CreateCollectionButton />}
+                </div>
               </div>
 
               <div className="space-y-3">
@@ -405,15 +409,8 @@ export default async function AccountPage({ searchParams }: Props) {
                   <div className="rounded-xl px-4 py-6 text-center" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
                     <p className="font-semibold" style={{ color: '#254F22' }}>No collections yet</p>
                     <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>
-                      Open an album you own, go to Settings, and create a Studio collection from there.
+                      Create your first collection above, then add albums to it from each album&apos;s Settings page.
                     </p>
-                    <Link
-                      href="/"
-                      className="mt-4 inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-semibold transition hover:opacity-90"
-                      style={{ background: '#254F22', color: '#FDFAF5' }}
-                    >
-                      Create an album
-                    </Link>
                   </div>
                 )}
               </div>

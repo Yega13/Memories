@@ -92,12 +92,20 @@ export async function POST(req: Request) {
   const name = String(body.name ?? '').trim().slice(0, 80)
   const description = String(body.description ?? '').trim().slice(0, 240)
   const rawCollectionSlug = String(body.collection_slug ?? slugFromName(name)).trim()
-  if (!albumSlug || !token || (!collectionId && !name)) {
+
+  const hasAlbum = !!albumSlug && !!token
+  const isCreatingNew = !collectionId
+
+  // Creating a new collection requires a name; adding to an existing one requires an album.
+  if (isCreatingNew && !name) {
+    return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
+  }
+  if (!isCreatingNew && !hasAlbum) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
 
   let normalizedCollectionSlug = ''
-  if (!collectionId) {
+  if (isCreatingNew) {
     const validation = validateCustomSlug(rawCollectionSlug)
     if (!validation.ok) return NextResponse.json({ error: validation.reason }, { status: 400, headers: NO_STORE })
     normalizedCollectionSlug = validation.slug
@@ -114,9 +122,13 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const verified = await verifyOwnedAlbum(admin, albumSlug, token)
-  if ('error' in verified) return verified.error
-  const { album } = verified
+
+  let album: AlbumForCollection | null = null
+  if (hasAlbum) {
+    const verified = await verifyOwnedAlbum(admin, albumSlug, token)
+    if ('error' in verified) return verified.error
+    album = verified.album
+  }
 
   const collection = collectionId
     ? await getExistingCollection(admin, collectionId, user.id)
@@ -124,18 +136,20 @@ export async function POST(req: Request) {
 
   if ('error' in collection) return collection.error
 
-  await admin.from('albums').update({ user_id: user.id }).eq('id', album.id).is('user_id', null)
+  if (album) {
+    await admin.from('albums').update({ user_id: user.id }).eq('id', album.id).is('user_id', null)
 
-  const { error: linkError } = await admin
-    .from('collection_albums')
-    .upsert(
-      { collection_id: collection.collection.id, album_id: album.id, sort_order: 0 },
-      { onConflict: 'collection_id,album_id' },
-    )
+    const { error: linkError } = await admin
+      .from('collection_albums')
+      .upsert(
+        { collection_id: collection.collection.id, album_id: album.id, sort_order: 0 },
+        { onConflict: 'collection_id,album_id' },
+      )
 
-  if (linkError) {
-    console.error('[collections] link failed:', linkError.message)
-    return NextResponse.json({ error: 'Album could not be added to the collection' }, { status: 500, headers: NO_STORE })
+    if (linkError) {
+      console.error('[collections] link failed:', linkError.message)
+      return NextResponse.json({ error: 'Album could not be added to the collection' }, { status: 500, headers: NO_STORE })
+    }
   }
 
   return NextResponse.json({ ok: true, collection: collection.collection }, { headers: NO_STORE })
