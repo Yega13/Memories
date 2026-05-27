@@ -23,6 +23,7 @@ type PhotoMeta = {
 }
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
+const BRAND_OG_IMAGE = `${SITE_URL}/logo/logo-1-primary.png`
 
 function photoOgUrl(photo: PhotoMeta): string | null {
   if (photo.media_type === 'video') {
@@ -88,6 +89,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Don't expose the cover image before a reveal-time album unlocks.
   const isRevealed = !album.reveal_at || new Date(album.reveal_at) <= new Date()
   const coverUrl = isRevealed ? await fetchCoverUrl(album) : null
+  const ogImage = coverUrl ?? BRAND_OG_IMAGE
+  const hasPhoto = !!coverUrl
 
   return {
     title,
@@ -99,13 +102,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title,
       description,
       siteName: 'Hushare',
-      ...(coverUrl && { images: [{ url: coverUrl, alt: title }] }),
+      images: [{ url: ogImage, alt: hasPhoto ? title : 'Hushare' }],
     },
     twitter: {
-      card: coverUrl ? 'summary_large_image' : 'summary',
+      card: hasPhoto ? 'summary_large_image' : 'summary',
       title,
       description,
-      ...(coverUrl && { images: [coverUrl] }),
+      images: [ogImage],
     },
   }
 }

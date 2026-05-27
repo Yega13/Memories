@@ -12,7 +12,6 @@ import RevealDatePicker from '@/components/RevealDatePicker'
 import ShareMenu from '@/components/owner-toolbar/ShareMenu'
 import {
   addAlbumToCollectionRequest,
-  createCollectionRequest,
   deleteAlbumRequest,
   fetchCollections,
   saveBackgroundRequest,
@@ -82,9 +81,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [passwordError, setPasswordError] = useState('')
   const [passwordSaved, setPasswordSaved] = useState(false)
 
-  const [collectionName, setCollectionName] = useState('')
-  const [collectionDescription, setCollectionDescription] = useState('')
-  const [collectionSlug, setCollectionSlug] = useState('')
   const [collectionSaving, setCollectionSaving] = useState(false)
   const [collectionError, setCollectionError] = useState('')
   const [collectionUrl, setCollectionUrl] = useState('')
@@ -449,38 +445,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     } finally {
       setBackgroundSaving(false)
       if (backgroundInputRef.current) backgroundInputRef.current.value = ''
-    }
-  }
-
-  async function createCollection() {
-    setCollectionSaving(true)
-    setCollectionError('')
-    setCollectionUrl('')
-    try {
-      const result = await createCollectionRequest({
-        slug: album.slug,
-        ownerToken,
-        name: collectionName,
-        description: collectionDescription,
-        collectionSlug,
-      })
-      if (!result.ok) {
-        setCollectionError(result.error)
-        showAppToast(result.error, 'error')
-        return
-      }
-      setCollectionUrl(`${window.location.origin}/c/${result.slug}`)
-      setCollectionName('')
-      setCollectionDescription('')
-      setCollectionSlug('')
-      await loadCollections()
-      showAppToast('Collection created.')
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Network error'
-      setCollectionError(message)
-      showAppToast(message, 'error')
-    } finally {
-      setCollectionSaving(false)
     }
   }
 
@@ -1259,7 +1223,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                 {openSection === 'collection' && (
                   <div className="px-4 pb-4">
                     <p className="text-xs mb-3" style={{ color: '#7C5C3E' }}>
-                      Create a grouped /c/... page, or add this album to one you already use.
+                      Add this album to a collection. Create new collections in your account.
                     </p>
 
                     {canUseCollections && (
@@ -1290,59 +1254,18 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                             </button>
                           ))}
                           {!collectionsLoading && collections.length === 0 && (
-                            <p className="text-xs" style={{ color: '#8B6F4E' }}>No collections yet. Create the first one below.</p>
+                            <p className="text-xs" style={{ color: '#8B6F4E' }}>No collections yet. Create one in your account.</p>
                           )}
                         </div>
                       </div>
                     )}
 
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] mb-2" style={{ color: '#8B6F4E' }}>
-                      New collection
-                    </p>
-                    <input
-                      type="text"
-                      value={collectionName}
-                      onChange={(e) => setCollectionName(e.target.value)}
-                      placeholder="Wedding season 2026"
-                      maxLength={80}
-                      disabled={!canUseCollections}
-                      className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none mb-2 disabled:cursor-not-allowed disabled:opacity-60"
-                      style={inputStyle}
-                    />
-                    <textarea
-                      value={collectionDescription}
-                      onChange={(e) => setCollectionDescription(e.target.value)}
-                      placeholder="Short description for the public collection page"
-                      maxLength={240}
-                      disabled={!canUseCollections}
-                      rows={3}
-                      className="w-full resize-none rounded-lg px-3 py-2 text-sm focus:outline-none mb-2 disabled:cursor-not-allowed disabled:opacity-60"
-                      style={inputStyle}
-                    />
-                    <input
-                      type="text"
-                      value={collectionSlug}
-                      onChange={(e) => setCollectionSlug(e.target.value)}
-                      placeholder="collection-url"
-                      maxLength={40}
-                      disabled={!canUseCollections}
-                      className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                      style={inputStyle}
-                    />
                     {collectionError && <p className="text-xs mt-2" style={{ color: '#C0392B' }}>{collectionError}</p>}
                     {collectionUrl && (
                       <p className="text-xs mt-2 break-all" style={{ color: '#254F22' }}>
-                        Created: <a href={collectionUrl} className="underline">{collectionUrl}</a>
+                        Added: <a href={collectionUrl} className="underline">{collectionUrl}</a>
                       </p>
                     )}
-                    <button
-                      onClick={createCollection}
-                      disabled={!canUseCollections || collectionSaving || !collectionName.trim()}
-                      className="hush-press mt-3 w-full text-sm font-semibold rounded-lg py-2 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                      style={{ background: '#254F22', color: '#FDFAF5' }}
-                    >
-                      {collectionSaving ? 'Creating...' : 'Create collection'}
-                    </button>
                   </div>
                 )}
               </section>
