@@ -162,7 +162,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setPasswordSaved(false)
       setPasswordInput('')
       setCollectionError('')
-      setCollectionDescription('')
       setMediaRadius(album.media_radius ?? 12)
       setMediaRadiusDraft(String(album.media_radius ?? 12))
       setMediaRadiusEditing(false)
