@@ -119,21 +119,40 @@ async function uploadVideoMultipart(
   let chunkCursor = 0
   let abortTriggered = false
 
-  function uploadChunkOnce(
+  async function uploadChunkOnce(
     partNumber: number,
     chunk: Blob,
     chunkStart: number,
     chunkEnd: number,
-  ) {
-    const params = new URLSearchParams({
-      action: 'chunk',
-      uploadId: uploadId!,
-      key: key!,
-      partNumber: String(partNumber),
-    })
+  ): Promise<{ partNumber: number; etag: string }> {
+    // Try presigned URL first — browser PUTs directly to R2, Worker not in data path.
+    // 501 = credentials not configured → fall through to Worker-proxied path silently.
+    let presignedUrl: string | null = null
+    try {
+      const presignRes = await fetch('/api/upload/r2/multipart?action=presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, uploadId, partNumber }),
+      })
+      if (presignRes.ok) {
+        const data = await presignRes.json() as { url?: string }
+        presignedUrl = data.url ?? null
+      }
+      // 501 = not configured; any other non-ok status → fall through to Worker proxy
+    } catch { /* network error getting presigned URL → fall through */ }
+
     return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest()
-      xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
+
+      if (presignedUrl) {
+        // Direct path: browser → R2 (Worker not buffering the bytes)
+        xhr.open('PUT', presignedUrl)
+      } else {
+        // Fallback path: browser → Worker → R2
+        const params = new URLSearchParams({ action: 'chunk', uploadId: uploadId!, key: key!, partNumber: String(partNumber) })
+        xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
+      }
+
       xhr.setRequestHeader('Content-Type', 'application/octet-stream')
       xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
       xhr.upload.onprogress = (event) => {
@@ -142,12 +161,23 @@ async function uploadVideoMultipart(
         onProgress?.(Math.round((uploadedBytes + chunkUploaded) / file.size * 95))
       }
       xhr.onload = () => {
-        let body: { error?: string; partNumber?: number; etag?: string } = {}
-        try { body = JSON.parse(xhr.responseText || '{}') } catch {}
-        if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
-          resolve({ partNumber: body.partNumber, etag: body.etag })
+        if (presignedUrl) {
+          // R2 S3 API returns ETag in response header, no JSON body
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const etag = (xhr.getResponseHeader('ETag') ?? '').replace(/"/g, '')
+            if (etag) { resolve({ partNumber, etag }); return }
+            reject(new Error(`No ETag for chunk ${partNumber}`))
+          } else {
+            reject(new Error(`Chunk ${partNumber} failed: ${xhr.status}`))
+          }
         } else {
-          reject(new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`))
+          let body: { error?: string; partNumber?: number; etag?: string } = {}
+          try { body = JSON.parse(xhr.responseText || '{}') } catch {}
+          if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
+            resolve({ partNumber: body.partNumber, etag: body.etag })
+          } else {
+            reject(new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`))
+          }
         }
       }
       xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))

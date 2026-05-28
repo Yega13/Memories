@@ -76,14 +76,22 @@
 
 2. **R2 multipart chunks route through the Worker.** When Stream isn't available, 5 MB chunks are POSTed browser → Worker → R2. If the total round-trip exceeds ~30–60 s (slow mobile, large file), the carrier proxy or Cloudflare drops the connection mid-transfer and the browser sees `xhr.onerror` → "network error on chunk N". Since R2 enforces a 5 MiB minimum per part, we cannot reduce chunk size to sidestep the timeout.
 
-**Fix (applied 2026-05-28):**
-- `r2/multipart/route.ts`: fixed bug where `req.body ?? await req.arrayBuffer()` ran outside the try/catch, risking an unhandled exception that caused the Worker to return no HTTP response (browser sees `onerror`). Now reads body with `req.arrayBuffer()` safely inside a try/catch.
-- `constants.ts`: reduced `STREAM_CHUNK_SIZE_BYTES` from 5 MiB to 1 MiB. Cloudflare Stream TUS has no enforced minimum; 1 MiB keeps each direct-to-Stream transfer under ~10 s even on a 100 KB/s connection.
+**Fixes applied (2026-05-28):**
+- `r2/multipart/route.ts`: body reading moved inside try/catch; used `req.arrayBuffer()` safely.
+- `constants.ts`: `STREAM_CHUNK_SIZE_BYTES` 5 MiB → 1 MiB. TUS has no minimum; 1 MiB = ~12 s at 100 KB/s, well under any carrier timeout.
+- `next.config.ts`: added `upload.cloudflarestream.com` and `*.cloudflarestream.com` to `connect-src`. This was the blocking bug — CSP silently refused every TUS PATCH, forcing all videos to the slow R2 fallback. Confirmed by browser console: "Refused to connect because it violates Content Security Policy."
+- `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_STREAM_TOKEN` set as Cloudflare secrets.
+- `photo/mirror/route.ts`: after R2 mirror succeeds, Stream video is deleted automatically (Stream-as-relay pattern). Prevents quota buildup at scale.
+- `LightboxOverlay.tsx`: when `mirror_url` is set, video plays from R2 directly instead of Stream iframe. Stream iframe only used while mirror is still in progress.
+- `constants.ts`: `UPLOAD_CONCURRENCY_MOBILE` 3 → 2. Mobile cellular drops burst connections when 3+ concurrent XHRs hit the same host.
 
-**Remaining action required:**
-Set `CLOUDFLARE_STREAM_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as Cloudflare secrets in the dashboard. Once Stream is live, the video bytes travel browser → Cloudflare Stream directly — no Worker in the data path, no timeout risk. The R2 multipart path then becomes a fallback only for edge cases (Stream API outage, very small files already below `MULTIPART_THRESHOLD`).
+**Remaining — R2 presigned URLs for fallback path (not yet built):**
+When Stream is unavailable, the fallback is still Worker-proxied R2 multipart (5 MiB chunks, Worker buffers in RAM). Two problems remain: (1) Worker holds the connection idle after the browser finishes uploading, while it waits for the R2 binding call to complete — this idle gap is when carriers kill the connection, not the upload itself; (2) Worker RAM pressure under concurrent load. Fix: generate a presigned S3 PUT URL per chunk in the Worker, return it to the browser, browser PUTs directly to R2. The signing code is already written for Rekognition in `src/lib/rekognition.ts`. Needs: R2 Access Key ID + Secret as Cloudflare secrets.
 
-**Files changed:** `src/app/api/upload/r2/multipart/route.ts`, `src/lib/constants.ts`
+**Stream quota monitoring (operational risk):**
+Free tier = 1,000 minutes stored. With Stream-as-relay, videos live in Stream only until the mirror job completes (seconds to minutes). Steady-state storage ≈ 0. Risk: at a large concurrent event (200+ simultaneous uploads of 2-min clips), transient storage could approach 400 minutes. Monitor via Cloudflare Stream Analytics. If sustained burst load becomes common, upgrade to the paid tier ($0.50/1,000 minutes) or implement server-side mirror triggering (Worker fetches and mirrors to R2 after Stream processing, so the browser tab doesn't need to stay open).
+
+**Files changed:** `src/app/api/upload/r2/multipart/route.ts`, `src/lib/constants.ts`, `next.config.ts`, `src/app/api/album/photo/mirror/route.ts`, `src/components/photo-grid/LightboxOverlay.tsx`
 
 ---
 
@@ -520,8 +528,8 @@ R2 enforces a 5 MiB minimum per multipart part. Presigned URLs do not change thi
 
 | Path | Data path | Min chunk | 60s carrier risk |
 |---|---|---|---|
-| Current R2 fallback | Browser → Worker → R2 | 5 MB | High — Worker buffering adds idle time |
-| R2 presigned URLs | Browser → R2 directly | 5 MB (R2 constraint) | Lower — R2 acks immediately, less idle |
+| Current R2 fallback | Browser → Worker → R2 | 5 MB | High — 5 MB at 0.67 Mbps = 60 s, right at carrier kill threshold |
+| R2 presigned URLs | Browser → R2 directly | 5 MB (R2 constraint) | Same — chunk duration is identical; benefit is Worker RAM, not timing |
 | Stream (primary, deployed) | Browser → Stream directly | 1 MB | None — 1 MB at 0.67 Mbps = 12 s |
 
 Stream with 1 MB TUS chunks is architecturally superior for mobile. The correct priority is: **stabilise Stream first, then improve the R2 fallback.**
@@ -545,7 +553,7 @@ Generates presigned S3 PUT and UploadPart URLs against `https://{account-id}.r2.
 3. Browser `PUT` each part directly to its presigned URL — Worker sees no video bytes.
 4. Browser sends `parts[]` to Worker → Worker calls `CompleteMultipartUpload`.
 
-Note: minimum part size is still 5 MiB (R2 constraint). This improves the data path, not the chunk size. Mobile improvement comes from eliminating Worker buffering latency, not from smaller chunks. Smaller chunks on mobile require Stream.
+Note: minimum part size is still 5 MiB (R2 constraint). The Worker→R2 internal binding takes ~100ms — it does not add meaningful idle time to the browser's connection. The 60s carrier kill problem is caused by 5 MB taking 60s to upload at 0.67 Mbps, full stop. Presigned R2 does not change the chunk duration and does not fix the carrier problem. The real benefits are: no Worker RAM buffering (10 MB per concurrent user disappears), and a cleaner data path for reliability under load. Smaller chunks on mobile require Stream.
 
 ### Implementation order
 1. Confirm Stream is stable on mobile (test with weak 3G conditions).

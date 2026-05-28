@@ -5,6 +5,7 @@ import { getUserTierById } from '@/lib/subscriptions'
 import { uploadCapsForTier } from '@/lib/media'
 import type { R2Env, R2UploadPart } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { presignR2UploadPart } from '@/lib/r2-presign'
 
 export const runtime = 'nodejs'
 // Long videos on slow mobile data: a single chunk PUT can take a couple of minutes. Give the
@@ -77,9 +78,44 @@ export async function POST(req: Request) {
     }
   }
 
+  // ── presign ───────────────────────────────────────────────────────────────
+  // Returns a presigned PUT URL for one multipart part so the browser can upload
+  // the chunk bytes directly to R2 — the Worker never sees or buffers the data.
+  // Falls back gracefully: if R2 S3 credentials aren't configured, returns 501
+  // and the client falls back to the Worker-proxied chunk path.
+  if (action === 'presign') {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID ?? ''
+    const accessKeyId = process.env.R2_ACCESS_KEY_ID ?? ''
+    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY ?? ''
+    if (!accountId || !accessKeyId || !secretAccessKey) {
+      return NextResponse.json({ error: 'R2 presigned URLs not configured' }, { status: 501, headers: NO_STORE })
+    }
+
+    let body: { key?: string; uploadId?: string; partNumber?: number }
+    try { body = await req.json() } catch { return NextResponse.json({ error: 'Invalid body' }, { status: 400, headers: NO_STORE }) }
+
+    const key = String(body.key ?? '').trim()
+    const uploadId = String(body.uploadId ?? '').trim()
+    const partNumber = Number(body.partNumber)
+
+    if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
+    if (!UPLOAD_ID_RE.test(uploadId)) return NextResponse.json({ error: 'Invalid uploadId' }, { status: 400, headers: NO_STORE })
+    if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return NextResponse.json({ error: 'Invalid partNumber' }, { status: 400, headers: NO_STORE })
+
+    try {
+      const url = await presignR2UploadPart({ accountId, accessKeyId, secretAccessKey, bucket: 'hushare-videos', key, uploadId, partNumber })
+      return NextResponse.json({ url }, { headers: NO_STORE })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[r2/multipart] presign failed:', msg)
+      return NextResponse.json({ error: `Presign failed: ${msg}` }, { status: 500, headers: NO_STORE })
+    }
+  }
+
   // ── chunk ─────────────────────────────────────────────────────────────────
   // Chunks are sent as raw binary (Content-Type: application/octet-stream).
   // Parameters are passed via query string so the full POST body is the chunk bytes.
+  // This is the fallback path when presigned URLs are not configured.
   if (action === 'chunk') {
     const url = new URL(req.url)
     const uploadId = String(url.searchParams.get('uploadId') ?? '').trim()
