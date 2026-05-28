@@ -1,6 +1,6 @@
-import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
+import CardEditorWrapper from './CardEditorWrapper'
 
 export const runtime = 'nodejs'
 
@@ -9,12 +9,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 }
 
-const CardEditorClient = dynamic(() => import('./CardEditorClient'), { ssr: false })
-
 export default function CardEditorPage() {
   return (
     <Suspense>
-      <CardEditorClient />
+      <CardEditorWrapper />
     </Suspense>
   )
 }
