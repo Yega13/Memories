@@ -78,10 +78,8 @@ export async function POST(req: Request) {
   }
 
   // ── chunk ─────────────────────────────────────────────────────────────────
-  // Chunks are always sent as raw binary (Content-Type: application/octet-stream).
-  // FormData was removed: it added multipart-boundary parsing overhead and forced the Worker
-  // to buffer the full chunk in heap before forwarding to R2. Raw binary lets us pipe
-  // req.body directly to uploadPart — bytes flow browser → Worker → R2 with no copy.
+  // Chunks are sent as raw binary (Content-Type: application/octet-stream).
+  // Parameters are passed via query string so the full POST body is the chunk bytes.
   if (action === 'chunk') {
     const url = new URL(req.url)
     const uploadId = String(url.searchParams.get('uploadId') ?? '').trim()
@@ -92,20 +90,19 @@ export async function POST(req: Request) {
     if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
     if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return NextResponse.json({ error: 'Invalid partNumber' }, { status: 400, headers: NO_STORE })
 
-    const contentLengthHeader = req.headers.get('content-length')
-    const declaredSize = contentLengthHeader ? Number(contentLengthHeader) : NaN
-    if (Number.isFinite(declaredSize) && (declaredSize <= 0 || declaredSize > CHUNK_MAX)) {
+    let chunk: ArrayBuffer
+    try {
+      chunk = await req.arrayBuffer()
+    } catch {
+      return NextResponse.json({ error: 'Failed to read chunk body' }, { status: 400, headers: NO_STORE })
+    }
+    if (chunk.byteLength === 0 || chunk.byteLength > CHUNK_MAX) {
       return NextResponse.json({ error: 'Invalid chunk size' }, { status: 413, headers: NO_STORE })
     }
 
-    // Pipe the request body stream directly to R2 — no buffering in Worker heap.
-    // req.body is a ReadableStream; uploadPart accepts it natively in the R2 Workers binding.
-    // If the stream is unavailable (edge case in some runtimes), fall back to arrayBuffer.
-    const body: ReadableStream | ArrayBuffer = req.body ?? await req.arrayBuffer()
-
     try {
       const upload = bucket.resumeMultipartUpload(key, uploadId)
-      const part = await upload.uploadPart(partNumber, body)
+      const part = await upload.uploadPart(partNumber, chunk)
       return NextResponse.json({ partNumber: part.partNumber, etag: part.etag }, { headers: NO_STORE })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)

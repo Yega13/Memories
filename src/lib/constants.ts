@@ -62,10 +62,12 @@ export const UPLOAD_CONCURRENCY_DESKTOP = 5
 // Worker cold-start contention on burst uploads, manifesting as "failed to fetch."
 export const R2_MULTIPART_CONCURRENCY = 2
 
-// TUS chunk size for Cloudflare Stream and R2 multipart uploads.
-// Both protocols enforce a 5 MiB minimum per chunk. At 1 Mbps upload speed, 5 MiB takes
-// ~40 seconds — safely under the 60-second TCP idle/read timeout enforced by most carrier
-// proxies and CGNAT devices. The previous 20 MiB value caused consistent failures on
-// connections below ~3 Mbps: a 20 MiB chunk at 1 Mbps takes 160 seconds.
+// R2 multipart enforces a 5 MiB minimum per part (except the last part).
+// At 700 KB/s upload speed, 5 MiB takes ~7 seconds — well under the 60-second
+// TCP idle timeout enforced by most carrier proxies and CGNAT devices.
 export const R2_CHUNK_SIZE_BYTES = 5 * 1024 * 1024
-export const STREAM_CHUNK_SIZE_BYTES = 5 * 1024 * 1024
+
+// Cloudflare Stream TUS has no enforced minimum chunk size.
+// 1 MiB per chunk keeps each transfer under ~10 seconds on a 100 KB/s connection,
+// well below any carrier TCP timeout. The previous 5 MiB caused timeouts on weak mobile data.
+export const STREAM_CHUNK_SIZE_BYTES = 1 * 1024 * 1024

@@ -66,11 +66,24 @@
 
 ---
 
-## #4 — Video chunk errors on long uploads (>1 min transfer time)
-**Status:** OPEN  
-**Area:** Upload — `uploadVideoMultipart` / `uploadVideoToStream`
+## #4 — Video chunk upload fails — "network error on chunk N"
+**Status:** PARTIALLY FIXED — root cause identified  
+**Area:** Upload — `uploadVideoMultipart`, `uploadVideoToStream`, `r2/multipart/route.ts`
 
-**Problem:** Long videos (3:48+ duration, large file size) fail with "network error on chunk 1 via form" after approximately 1 minute of uploading. Stream TUS path also fails and falls back to R2 multipart, which then also drops. Short videos upload successfully. The failure is consistent at the ~1 minute mark, suggesting a Cloudflare Worker execution time limit or a carrier proxy dropping idle-but-active connections after 60s.
+**Root cause:** Two separate problems converging:
+
+1. **Stream not configured.** `wrangler.toml` has no `CLOUDFLARE_STREAM_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secret. Every `POST /api/upload/stream/tus` returns 503 → client immediately falls back to R2 multipart. For Stream, the video bytes go directly from browser to Cloudflare's servers (the Worker only negotiates the upload URL), bypassing any Worker/carrier timeout entirely. Since Stream is misconfigured, this fast path is never used.
+
+2. **R2 multipart chunks route through the Worker.** When Stream isn't available, 5 MB chunks are POSTed browser → Worker → R2. If the total round-trip exceeds ~30–60 s (slow mobile, large file), the carrier proxy or Cloudflare drops the connection mid-transfer and the browser sees `xhr.onerror` → "network error on chunk N". Since R2 enforces a 5 MiB minimum per part, we cannot reduce chunk size to sidestep the timeout.
+
+**Fix (applied 2026-05-28):**
+- `r2/multipart/route.ts`: fixed bug where `req.body ?? await req.arrayBuffer()` ran outside the try/catch, risking an unhandled exception that caused the Worker to return no HTTP response (browser sees `onerror`). Now reads body with `req.arrayBuffer()` safely inside a try/catch.
+- `constants.ts`: reduced `STREAM_CHUNK_SIZE_BYTES` from 5 MiB to 1 MiB. Cloudflare Stream TUS has no enforced minimum; 1 MiB keeps each direct-to-Stream transfer under ~10 s even on a 100 KB/s connection.
+
+**Remaining action required:**
+Set `CLOUDFLARE_STREAM_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as Cloudflare secrets in the dashboard. Once Stream is live, the video bytes travel browser → Cloudflare Stream directly — no Worker in the data path, no timeout risk. The R2 multipart path then becomes a fallback only for edge cases (Stream API outage, very small files already below `MULTIPART_THRESHOLD`).
+
+**Files changed:** `src/app/api/upload/r2/multipart/route.ts`, `src/lib/constants.ts`
 
 ---
 
