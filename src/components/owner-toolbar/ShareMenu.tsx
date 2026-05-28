@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import Image from 'next/image'
-import { Check, Copy, Download, QrCode, Share2, X } from 'lucide-react'
+import { Check, Copy, Download, QrCode, Share2, SquareMenu, X } from 'lucide-react'
+import TableCardModal from './TableCardModal'
 
 type Props = {
   copied: 'share' | 'owner' | null
@@ -24,6 +26,7 @@ async function downloadQr(shareUrl: string, albumTitle: string) {
 }
 
 export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitle, onClose, onCopy }: Props) {
+  const [showTableCard, setShowTableCard] = useState(false)
   async function handleShare() {
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
@@ -102,17 +105,35 @@ export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitl
               QR code
             </p>
             <p className="text-xs leading-relaxed" style={{ color: '#7C5C3E' }}>Guests scan this to open the album.</p>
-            <button
-              className="mt-2 flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2.5 py-1.5 transition hover:opacity-80"
-              style={{ background: '#254F22', color: '#FDFAF5' }}
-              onClick={() => downloadQr(shareUrl, albumTitle)}
-            >
-              <Download className="w-3 h-3" />
-              Download PNG
-            </button>
+            <div className="mt-2 flex gap-2 flex-wrap">
+              <button
+                className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2.5 py-1.5 transition hover:opacity-80"
+                style={{ background: '#254F22', color: '#FDFAF5' }}
+                onClick={() => downloadQr(shareUrl, albumTitle)}
+              >
+                <Download className="w-3 h-3" />
+                Download PNG
+              </button>
+              <button
+                className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2.5 py-1.5 transition hover:opacity-80"
+                style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}
+                onClick={() => setShowTableCard(true)}
+              >
+                <SquareMenu className="w-3 h-3" />
+                Table card
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      {showTableCard && (
+        <TableCardModal
+          shareUrl={shareUrl}
+          albumTitle={albumTitle}
+          onClose={() => setShowTableCard(false)}
+        />
+      )}
     </div>
   )
 }
