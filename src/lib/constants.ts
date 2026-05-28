@@ -52,8 +52,9 @@ export const R2_SINGLE_UPLOAD_TIMEOUT_MS = 120_000
 export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 300_000
 
 // Maximum concurrent upload worker slots by device input class.
-// Coarse-pointer (mobile) gets fewer to avoid saturating carrier connections.
-export const UPLOAD_CONCURRENCY_MOBILE = 3
+// Mobile gets 2 — cellular carriers drop burst connections when 3+ simultaneous
+// XHRs hit the same host, causing fast "failed to fetch" failures on mobile.
+export const UPLOAD_CONCURRENCY_MOBILE = 2
 export const UPLOAD_CONCURRENCY_DESKTOP = 5
 
 // Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency
