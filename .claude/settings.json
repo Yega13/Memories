@@ -14,7 +14,15 @@
       "Bash(python3 -c ' *)",
       "Bash(xargs grep -l \"face_finder_enabled\\\\|FaceFinder\")",
       "WebFetch(domain:www.kululu.com)",
-      "WebFetch(domain:guestcam.co)"
+      "WebFetch(domain:guestcam.co)",
+      "PowerShell(cmd /c \"dir /AL C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack 2>&1\")",
+      "PowerShell(cmd /c \"dir C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\" 2>&1)",
+      "PowerShell(takeown /F \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\" /R /D Y 2>&1 | Select-Object -Last 3; icacls \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\" /grant \"$env:USERNAME:\\(F\\)\" /T 2>&1 | Select-Object -Last 3; cmd /c \"rd /s /q \"\"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"\"\"; Write-Host \"Exit: $LASTEXITCODE\")",
+      "PowerShell(cmd /c \"dir /s /b /a \"\"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"\"\" 2>&1)",
+      "PowerShell($path = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"; $empty = \"C:\\\\Temp\\\\empty_dir\"; New-Item -ItemType Directory -Force $empty | Out-Null; robocopy $empty $path /MIR /NFL /NDL /NJH /NJS 2>&1; cmd /c \"rd \"\"$path\"\"\"; Write-Host \"Exit: $LASTEXITCODE\")",
+      "PowerShell($path = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\"; $items = Get-ChildItem $path -Recurse -Force -ErrorAction SilentlyContinue; Write-Host \"Item count: $\\($items.Count\\)\"; Get-ChildItem \"$path\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\" -Force 2>&1)",
+      "PowerShell($p = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"; cmd /c \"rmdir \"\"$p\"\"\"; Write-Host \"rmdir exit: $LASTEXITCODE\"; Test-Path $p)",
+      "PowerShell($p = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"; [System.IO.Directory]::Delete\\($p\\); Write-Host \"Deleted: $?\"; Test-Path $p)"
     ]
   }
 }
