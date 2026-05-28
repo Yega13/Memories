@@ -233,7 +233,7 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
 
   function openEditor() {
     const p = new URLSearchParams({ url: shareUrl, title: albumTitle || '' })
-    window.open(`/card-editor?${p}`, '_blank')
+    window.location.href = `/card-editor?${p}`
   }
 
   return (

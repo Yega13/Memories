@@ -423,7 +423,7 @@ export default function CardEditorClient() {
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-3 sticky top-0 z-10"
         style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E5E5' }}>
-        <button onClick={() => window.close()} className="text-sm font-medium" style={{ color: '#555' }}>← Close</button>
+        <button onClick={() => window.history.back()} className="text-sm font-medium" style={{ color: '#555' }}>← Back</button>
         <span className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Card Editor</span>
         <div className="flex gap-2">
           <button onClick={resetLayout} title="Reset to default"
