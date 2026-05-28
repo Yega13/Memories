@@ -6,11 +6,35 @@ export const runtime = 'nodejs'
 export const maxDuration = 30
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-const MAX_SELFIE_BYTES = 5 * 1024 * 1024 // 5MB — Rekognition limit
+const MAX_SELFIE_BYTES = 5 * 1024 * 1024
 
-// Same injection guard as face-index: bare interpolation into .or() is unsafe.
 const SLUG_RE = /^[a-zA-Z0-9._-]{1,200}$/
 function isValidSlug(s: string): boolean { return SLUG_RE.test(s) }
+
+// In-memory rate limiter — 10 searches per IP per 60 seconds.
+// Per-isolate, not globally consistent, but Cloudflare's consistent-hash routing sends
+// a single IP to the same isolate repeatedly, making this effective against looping abuse.
+const RL_MAX = 10
+const RL_WINDOW_MS = 60_000
+const rlMap = new Map<string, { count: number; windowStart: number }>()
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const entry = rlMap.get(ip)
+  if (!entry || now - entry.windowStart > RL_WINDOW_MS) {
+    rlMap.set(ip, { count: 1, windowStart: now })
+    // Prune stale entries occasionally to avoid unbounded map growth.
+    if (rlMap.size > 5000) {
+      for (const [k, v] of rlMap) {
+        if (now - v.windowStart > RL_WINDOW_MS * 2) rlMap.delete(k)
+      }
+    }
+    return false
+  }
+  if (entry.count >= RL_MAX) return true
+  entry.count++
+  return false
+}
 
 export async function POST(req: Request) {
   try {
@@ -31,6 +55,14 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
+  const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for') ?? 'unknown'
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { error: 'Too many searches. Please wait a minute and try again.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': '60' } },
+    )
+  }
+
   let slug: string
   let selfieBytes: Uint8Array
 

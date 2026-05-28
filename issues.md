@@ -104,18 +104,18 @@ Free tier = 1,000 minutes stored. With Stream-as-relay, videos live in Stream on
 ---
 
 ## #6 — Album share link has no OG thumbnail
-**Status:** OPEN  
-**Area:** SEO / `[slug]/page.tsx` — Open Graph meta
+**Status:** FIXED  
+**Area:** SEO / `src/app/[slug]/page.tsx`
 
-**Problem:** When a Hushare album link is pasted into iMessage, WhatsApp, Slack, etc., there is no preview image. Needs `og:image` set to either the album's cover photo or the first photo in the album. Also needs a custom OG image when the album has a cover set.
+Uses cover photo if set, falls back to first photo in album, falls back to brand OG image. Reveal-time albums don't expose the cover before unlock.
 
 ---
 
 ## #7 — No way to create a second collection from the website
-**Status:** OPEN  
-**Area:** Account page / OwnerToolbar
+**Status:** FIXED  
+**Area:** `src/app/account/CreateCollectionButton.tsx`, `src/app/account/page.tsx`
 
-**Problem:** The only path to create a collection is through an album's owner toolbar → Settings → "Add to collection". Once one collection exists there is no standalone "Create collection" button anywhere on the site or account dashboard. Users with multiple albums who already have one collection are stuck.
+"New collection" button added to the account dashboard, visible to Studio tier users.
 
 ---
 
@@ -128,10 +128,10 @@ Free tier = 1,000 minutes stored. With Stream-as-relay, videos live in Stream on
 ---
 
 ## #9 — Face Finder has no rate limiting on the search endpoint
-**Status:** OPEN (deferred)  
+**Status:** FIXED  
 **Area:** API — `/api/album/face-search`
 
-**Problem:** Any guest can POST to `/api/album/face-search` in a tight loop with no throttle. Each request triggers an AWS Rekognition `SearchFacesByImage` call, which is billed per API call. A single motivated user could run up significant AWS costs on any indexed album with no friction.
+**Fix:** In-memory per-isolate rate limiter — 10 searches per IP per 60 seconds. Returns 429 with `Retry-After: 60` when exceeded. Map is pruned when it exceeds 5,000 entries to prevent unbounded growth. Cloudflare's consistent-hash routing means a single abusing IP hits the same isolate repeatedly, making per-isolate limits effective against looping abuse.
 
 ---
 
@@ -179,14 +179,6 @@ Face Finder is the strongest technical differentiator in the market. Currently g
 **Area:** New feature
 
 GuestCam's single biggest differentiator. Guests record a short voice message via browser (WebRTC) — no app, no phone number needed. Stored alongside photos. Hosts get an emotional keepsake a photo grid alone can't replace. This is the one feature that makes GuestCam feel irreplaceable at weddings. Removing that advantage closes the main competitive gap.
-
----
-
-### S5 — Guest reactions (emoji) on photos
-**Priority: Medium**  
-**Area:** New feature / `src/components/photo-grid/`
-
-Guests upload a photo and it disappears into the grid with zero feedback. No like, no heart — nothing. This kills repeat engagement. Reactions are a small build (new `photo_reactions` table, Realtime subscription, single emoji picker on each tile) but meaningfully increase how long guests stay on the album and how often they return.
 
 ---
 
@@ -590,3 +582,11 @@ Images upload directly from the browser to Supabase Storage via XHR — the Clou
 4. Cross-check Supabase project dashboard for storage error logs.
 
 Once the specific failure mode is identified, update this issue with the root cause and fix.
+
+# GITHUB REPO'S
+
+CYBERSECURITY -mukul975/Anthropic-Cybersecurity-Skills
+
+
+
+
