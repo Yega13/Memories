@@ -2,282 +2,128 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Download, ImagePlus } from 'lucide-react'
+import { Stage, Layer, Text, Line, Image as KonvaImage, Rect, Transformer } from 'react-konva'
+import type Konva from 'konva'
+import type { KonvaEventObject } from 'konva/lib/Node'
+import { Download, ImagePlus, RotateCcw, Trash2, Type } from 'lucide-react'
 import QRCode from 'qrcode'
 
-type FontChoice = 'playfair' | 'sans' | 'hand'
-type QRPos = 'bottom' | 'center'
-type BorderStyle = 'none' | 'thin' | 'double'
-type QRSize = 'sm' | 'md' | 'lg'
+// ─── Dimensions ───────────────────────────────────────────────────────────────
 
-type Config = {
-  heading: string
-  body: string
-  bgColor: string
-  accentColor: string
-  textColor: string
-  bodyColor: string
-  qrColor: string
-  font: FontChoice
-  qrPos: QRPos
-  qrSize: QRSize
-  border: BorderStyle
-  showFooter: boolean
-  logoDataUrl: string | null
+const STAGE_W = 480
+const STAGE_H = Math.round(STAGE_W * 1700 / 1200) // 680
+const DL_RATIO = 1200 / STAGE_W                   // ≈ 2.5 → 1200×1700 export
+
+// ─── Element types ────────────────────────────────────────────────────────────
+
+type TextEl = {
+  id: string; kind: 'text'
+  x: number; y: number; rotation: number
+  text: string; fontSize: number; fontFamily: string
+  fontStyle: string; fill: string
+  align: 'left' | 'center' | 'right'; width: number
+}
+type LineEl = {
+  id: string; kind: 'line'
+  x: number; y: number; rotation: number
+  length: number; stroke: string; strokeWidth: number
+}
+type ImgEl = {
+  id: string; kind: 'image'
+  x: number; y: number; rotation: number
+  src: string; w: number; h: number
+}
+type El = TextEl | LineEl | ImgEl
+
+function uid() { return Math.random().toString(36).slice(2) }
+
+function defaultElements(title: string, qrDataUrl: string): El[] {
+  const cx = STAGE_W / 2
+  return [
+    {
+      id: 'heading', kind: 'text',
+      x: cx, y: 72, rotation: 0,
+      text: title || 'CAPTURE THE MOMENT',
+      fontSize: 32, fontFamily: "'Playfair Display', Georgia, serif",
+      fontStyle: 'bold', fill: '#111111', align: 'center', width: 400,
+    },
+    {
+      id: 'sep', kind: 'line',
+      x: cx - 70, y: 152, rotation: 0,
+      length: 140, stroke: '#254F22', strokeWidth: 2,
+    },
+    {
+      id: 'body', kind: 'text',
+      x: cx, y: 168, rotation: 0,
+      text: 'Scan the QR code with your camera to upload your photos and videos.',
+      fontSize: 14, fontFamily: "'Playfair Display', Georgia, serif",
+      fontStyle: 'normal', fill: '#555555', align: 'center', width: 320,
+    },
+    {
+      id: 'qr', kind: 'image',
+      x: cx - 90, y: 255, rotation: 0,
+      src: qrDataUrl, w: 180, h: 180,
+    },
+    {
+      id: 'footer', kind: 'text',
+      x: cx, y: STAGE_H - 38, rotation: 0,
+      text: 'hushare.space',
+      fontSize: 11, fontFamily: "'Playfair Display', Georgia, serif",
+      fontStyle: 'italic', fill: '#AAAAAA', align: 'center', width: 180,
+    },
+  ]
 }
 
-const DEFAULTS: Config = {
-  heading: '',
-  body: 'Scan the QR code with your camera to upload your photos and videos.',
-  bgColor: '#FFFFFF',
-  accentColor: '#254F22',
-  textColor: '#111111',
-  bodyColor: '#555555',
-  qrColor: '#111111',
-  font: 'playfair',
-  qrPos: 'bottom',
-  qrSize: 'md',
-  border: 'none',
-  showFooter: true,
-  logoDataUrl: null,
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function useLoadedImage(src: string | null): HTMLImageElement | undefined {
+  const [img, setImg] = useState<HTMLImageElement>()
+  useEffect(() => {
+    if (!src) { setImg(undefined); return }
+    const i = new Image()
+    i.onload = () => setImg(i)
+    i.src = src
+  }, [src])
+  return img
 }
 
-const QR_PX: Record<QRSize, number> = { sm: 300, md: 420, lg: 540 }
+// A thin wrapper so each ImgEl can use a hook (rules of hooks: only at top level)
+// We pre-load all image srcs into a Map via a single effect instead.
 
-function fontStack(f: FontChoice, size: number, bold = false, italic = false) {
-  const w = bold ? 'bold ' : ''
-  const i = italic ? 'italic ' : ''
-  if (f === 'playfair') return `${w}${i}${size}px 'Playfair Display', Georgia, serif`
-  if (f === 'hand') return `${w}${i}${size}px 'Playwrite GB J', cursive`
-  return `${w}${i}${size}px 'Geist', system-ui, -apple-system, sans-serif`
-}
+// ─── Sidebar sub-components ───────────────────────────────────────────────────
 
-async function ensureFonts(font: FontChoice) {
-  if (typeof document === 'undefined' || !document.fonts) return
-  const names: Record<FontChoice, string> = {
-    playfair: "'Playfair Display'",
-    hand: "'Playwrite GB J'",
-    sans: "'Geist'",
-  }
-  const n = names[font]
-  try { await Promise.all([document.fonts.load(`bold 72px ${n}`), document.fonts.load(`400 72px ${n}`)]) }
-  catch { /* ignore */ }
-}
-
-function loadImg(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    img.onload = () => resolve(img)
-    img.onerror = () => reject(new Error('img load failed'))
-    img.src = src
-  })
-}
-
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let line = ''
-  for (const w of words) {
-    const test = line ? `${line} ${w}` : w
-    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w }
-    else line = test
-  }
-  if (line) lines.push(line)
-  return lines
-}
-
-function drawBorderStyle(ctx: CanvasRenderingContext2D, style: BorderStyle, W: number, H: number, color: string, s: number) {
-  if (style === 'none') return
-  ctx.strokeStyle = color
-
-  if (style === 'thin') {
-    const p = Math.round(22 * s)
-    ctx.lineWidth = Math.round(2 * s)
-    ctx.strokeRect(p, p, W - p * 2, H - p * 2)
-    return
-  }
-
-  if (style === 'double') {
-    const p1 = Math.round(22 * s)
-    ctx.lineWidth = Math.round(3 * s)
-    ctx.strokeRect(p1, p1, W - p1 * 2, H - p1 * 2)
-    const p2 = p1 + Math.round(11 * s)
-    ctx.lineWidth = Math.round(1 * s)
-    ctx.strokeRect(p2, p2, W - p2 * 2, H - p2 * 2)
-    // corner brackets
-    const arm = Math.round(44 * s)
-    ctx.lineWidth = Math.round(2 * s)
-    ctx.beginPath()
-    ctx.moveTo(p2, p2 + arm); ctx.lineTo(p2, p2); ctx.lineTo(p2 + arm, p2)
-    ctx.moveTo(W - p2 - arm, p2); ctx.lineTo(W - p2, p2); ctx.lineTo(W - p2, p2 + arm)
-    ctx.moveTo(W - p2, H - p2 - arm); ctx.lineTo(W - p2, H - p2); ctx.lineTo(W - p2 - arm, H - p2)
-    ctx.moveTo(p2 + arm, H - p2); ctx.lineTo(p2, H - p2); ctx.lineTo(p2, H - p2 - arm)
-    ctx.stroke()
-  }
-}
-
-export async function renderCustomCard(canvas: HTMLCanvasElement, cfg: Config, shareUrl: string, W: number) {
-  const H = Math.round(W * (1700 / 1200))
-  canvas.width = W; canvas.height = H
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  const s = W / 1200
-
-  await ensureFonts(cfg.font)
-
-  ctx.fillStyle = cfg.bgColor
-  ctx.fillRect(0, 0, W, H)
-
-  drawBorderStyle(ctx, cfg.border, W, H, cfg.textColor, s)
-
-  const insetPad = cfg.border === 'none' ? 0 : Math.round(50 * s)
-  let y = insetPad + Math.round(80 * s)
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top'
-
-  // Logo
-  if (cfg.logoDataUrl) {
-    try {
-      const logo = await loadImg(cfg.logoDataUrl)
-      const maxH = Math.round(140 * s), maxW = W - insetPad * 2 - Math.round(80 * s)
-      const sc = Math.min(maxH / logo.naturalHeight, maxW / logo.naturalWidth)
-      const lw = logo.naturalWidth * sc, lh = logo.naturalHeight * sc
-      ctx.drawImage(logo, (W - lw) / 2, y, lw, lh)
-      y += Math.round(lh + 44 * s)
-    } catch { /* skip */ }
-  }
-
-  const qrMaxPx = QR_PX[cfg.qrSize]
-  const footerH = cfg.showFooter ? Math.round(100 * s) : Math.round(40 * s)
-
-  if (cfg.qrPos === 'bottom') {
-    // Heading
-    const hsz = Math.round(80 * s)
-    ctx.font = fontStack(cfg.font, hsz, true)
-    ctx.fillStyle = cfg.textColor
-    const maxW = W - insetPad * 2 - Math.round(60 * s)
-    for (const l of wrap(ctx, cfg.heading || 'Capture the Moment', maxW * 0.9)) {
-      ctx.fillText(l, W / 2, y); y += Math.round(hsz * 1.24)
-    }
-    y += Math.round(26 * s)
-
-    // Accent line
-    ctx.strokeStyle = cfg.accentColor; ctx.lineWidth = Math.round(3 * s)
-    const rw = Math.round(240 * s)
-    ctx.beginPath(); ctx.moveTo((W - rw) / 2, y); ctx.lineTo((W + rw) / 2, y); ctx.stroke()
-    y += Math.round(38 * s)
-
-    // Body
-    const bsz = Math.round(40 * s)
-    ctx.font = fontStack(cfg.font, bsz)
-    ctx.fillStyle = cfg.bodyColor
-    for (const l of wrap(ctx, cfg.body, maxW * 0.78)) { ctx.fillText(l, W / 2, y); y += Math.round(bsz * 1.68) }
-    y += Math.round(46 * s)
-
-    // QR
-    const qrSz = Math.min(Math.round(qrMaxPx * s), H - y - footerH - insetPad)
-    if (qrSz > 30) {
-      const du = await QRCode.toDataURL(shareUrl, { width: qrSz, margin: 1, color: { dark: cfg.qrColor, light: cfg.bgColor } })
-      ctx.drawImage(await loadImg(du), (W - qrSz) / 2, y, qrSz, qrSz)
-    }
-  } else {
-    // Heading (smaller to leave room for QR)
-    const hsz = Math.round(68 * s)
-    ctx.font = fontStack(cfg.font, hsz, true)
-    ctx.fillStyle = cfg.textColor
-    const maxW = W - insetPad * 2 - Math.round(60 * s)
-    for (const l of wrap(ctx, cfg.heading || 'Capture the Moment', maxW * 0.9)) {
-      ctx.fillText(l, W / 2, y); y += Math.round(hsz * 1.24)
-    }
-    y += Math.round(22 * s)
-
-    ctx.strokeStyle = cfg.accentColor; ctx.lineWidth = Math.round(3 * s)
-    const rw = Math.round(240 * s)
-    ctx.beginPath(); ctx.moveTo((W - rw) / 2, y); ctx.lineTo((W + rw) / 2, y); ctx.stroke()
-    y += Math.round(34 * s)
-
-    // Large QR in center
-    const bodyReserve = Math.round(240 * s)
-    const qrSz = Math.min(Math.round(qrMaxPx * s), H - y - bodyReserve - footerH - insetPad)
-    if (qrSz > 30) {
-      const du = await QRCode.toDataURL(shareUrl, { width: qrSz, margin: 1, color: { dark: cfg.qrColor, light: cfg.bgColor } })
-      ctx.drawImage(await loadImg(du), (W - qrSz) / 2, y, qrSz, qrSz)
-      y += Math.round(qrSz + 40 * s)
-    }
-
-    // Body below QR
-    const bsz = Math.round(40 * s)
-    ctx.font = fontStack(cfg.font, bsz)
-    ctx.fillStyle = cfg.bodyColor
-    for (const l of wrap(ctx, cfg.body, maxW * 0.78)) { ctx.fillText(l, W / 2, y); y += Math.round(bsz * 1.68) }
-  }
-
-  if (cfg.showFooter) {
-    ctx.font = fontStack(cfg.font, Math.round(30 * s))
-    ctx.fillStyle = cfg.bodyColor + '80'
-    ctx.textBaseline = 'alphabetic'
-    ctx.fillText('hushare.space', W / 2, H - insetPad - Math.round(40 * s))
-  }
-}
-
-// ─── Color picker with hex input ────────────────────────────────────────────
-
-function ColorPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+function ColorInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   const [hex, setHex] = useState(value)
-  useEffect(() => { setHex(value) }, [value])
-
-  function handleHex(raw: string) {
+  useEffect(() => setHex(value), [value])
+  function handle(raw: string) {
     const v = raw.startsWith('#') ? raw : '#' + raw
     setHex(v)
     if (/^#[0-9A-Fa-f]{6}$/.test(v)) onChange(v)
   }
-
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-xs shrink-0" style={{ color: '#555' }}>{label}</span>
-      <div className="flex items-center gap-1.5">
-        <input
-          type="text"
-          value={hex}
-          onChange={(e) => handleHex(e.target.value)}
-          maxLength={7}
-          className="rounded border px-1.5 py-1 text-xs font-mono"
-          style={{ width: 72, background: '#FAFAFA', borderColor: '#E0E0E0', color: '#1A1A1A' }}
-        />
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => { setHex(e.target.value); onChange(e.target.value) }}
-          className="cursor-pointer rounded"
-          style={{ width: 32, height: 28, border: '1px solid #E0E0E0', padding: 2, background: 'none' }}
-        />
+      <span className="text-xs text-gray-500 shrink-0">{label}</span>
+      <div className="flex items-center gap-1">
+        <input type="text" value={hex} onChange={e => handle(e.target.value)} maxLength={7}
+          className="w-20 rounded border px-1.5 py-0.5 text-xs font-mono" style={{ borderColor: '#E0E0E0' }} />
+        <input type="color" value={value} onChange={e => { setHex(e.target.value); onChange(e.target.value) }}
+          className="rounded cursor-pointer" style={{ width: 28, height: 24, border: '1px solid #E0E0E0', padding: 2 }} />
       </div>
     </div>
   )
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs font-semibold mb-1.5" style={{ color: '#555' }}>{children}</p>
-}
-
-function ChipGroup<T extends string>({
-  options, value, onChange,
-}: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+function Slider({ label, value, min, max, step = 1, onChange }: {
+  label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void
+}) {
   return (
-    <div className="flex gap-1.5 flex-wrap">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          onClick={() => onChange(o.value)}
-          className="text-xs font-semibold rounded-lg px-3 py-1.5 transition"
-          style={{
-            background: value === o.value ? '#254F22' : '#F5F0E8',
-            color: value === o.value ? '#FDFAF5' : '#5C3D2E',
-            border: '1px solid ' + (value === o.value ? '#254F22' : '#DDD5C5'),
-          }}
-        >
-          {o.label}
-        </button>
-      ))}
+    <div>
+      <div className="flex justify-between mb-1">
+        <span className="text-xs text-gray-500">{label}</span>
+        <span className="text-xs font-mono text-gray-400">{Math.round(value)}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))} className="w-full" />
     </div>
   )
 }
@@ -289,221 +135,468 @@ export default function CardEditorClient() {
   const shareUrl = params.get('url') ?? ''
   const initialTitle = params.get('title') ?? ''
 
-  const [cfg, setCfg] = useState<Config>({ ...DEFAULTS, heading: initialTitle })
+  const [bgColor, setBgColor] = useState('#FFFFFF')
+  const [elements, setElements] = useState<El[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string>('')
+  const [loadedImgs, setLoadedImgs] = useState<Record<string, HTMLImageElement>>({})
   const [downloading, setDownloading] = useState(false)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [fontsReady, setFontsReady] = useState(false)
 
-  const set = useCallback(<K extends keyof Config>(key: K, val: Config[K]) => {
-    setCfg((prev) => ({ ...prev, [key]: val }))
+  const stageRef = useRef<Konva.Stage>(null)
+  const transformerRef = useRef<Konva.Transformer>(null)
+  const shapeRefs = useRef<Record<string, Konva.Node>>({})
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
+  // Load fonts
+  useEffect(() => {
+    document.fonts.ready.then(() => {
+      Promise.all([
+        document.fonts.load("bold 32px 'Playfair Display'"),
+        document.fonts.load("italic 16px 'Playfair Display'"),
+        document.fonts.load("400 16px 'Playfair Display'"),
+      ]).finally(() => setFontsReady(true))
+    })
   }, [])
 
+  // Generate QR and init elements
   useEffect(() => {
-    const c = canvasRef.current
-    if (!c || !shareUrl) return
-    renderCustomCard(c, cfg, shareUrl, 260)
-  }, [cfg, shareUrl])
+    if (!shareUrl) return
+    QRCode.toDataURL(shareUrl, { width: 400, margin: 1, color: { dark: '#111111', light: '#FFFFFF' } })
+      .then(url => {
+        setQrDataUrl(url)
+        setElements(defaultElements(initialTitle, url))
+      })
+  }, [shareUrl, initialTitle])
+
+  // Load images referenced by elements
+  useEffect(() => {
+    const srcs = elements.filter((e): e is ImgEl => e.kind === 'image').map(e => e.src)
+    const missing = srcs.filter(s => !loadedImgs[s])
+    if (missing.length === 0) return
+    missing.forEach(src => {
+      const img = new Image()
+      img.onload = () => setLoadedImgs(prev => ({ ...prev, [src]: img }))
+      img.src = src
+    })
+  }, [elements, loadedImgs])
+
+  // Sync transformer to selected node
+  useEffect(() => {
+    const tr = transformerRef.current
+    if (!tr) return
+    const node = selectedId ? shapeRefs.current[selectedId] : null
+    tr.nodes(node ? [node] : [])
+    tr.getLayer()?.batchDraw()
+  }, [selectedId, elements])
+
+  // Delete key
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') &&
+        selectedId &&
+        !(e.target instanceof HTMLInputElement) &&
+        !(e.target instanceof HTMLTextAreaElement)) {
+        deleteSelected()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  const deleteSelected = useCallback(() => {
+    if (!selectedId) return
+    setElements(prev => prev.filter(e => e.id !== selectedId))
+    setSelectedId(null)
+  }, [selectedId])
+
+  function updateEl<T extends El>(id: string, patch: Partial<T>) {
+    setElements(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
+  }
+
+  function handleDragEnd(id: string, e: KonvaEventObject<DragEvent>) {
+    updateEl(id, { x: e.target.x(), y: e.target.y() })
+  }
+
+  function handleTransformEnd(id: string, e: KonvaEventObject<Event>) {
+    const node = e.target
+    const el = elements.find(e => e.id === id)
+    if (!el) return
+    const sx = node.scaleX(), sy = node.scaleY()
+    if (el.kind === 'text') {
+      updateEl<TextEl>(id, {
+        x: node.x(), y: node.y(), rotation: node.rotation(),
+        fontSize: Math.max(6, Math.round(el.fontSize * sy)),
+        width: Math.max(40, Math.round(el.width * sx)),
+      })
+    } else if (el.kind === 'line') {
+      updateEl<LineEl>(id, {
+        x: node.x(), y: node.y(), rotation: node.rotation(),
+        length: Math.max(10, Math.round(el.length * sx)),
+        strokeWidth: Math.max(0.5, el.strokeWidth * sy),
+      })
+    } else if (el.kind === 'image') {
+      updateEl<ImgEl>(id, {
+        x: node.x(), y: node.y(), rotation: node.rotation(),
+        w: Math.max(20, Math.round(el.w * sx)),
+        h: Math.max(20, Math.round(el.h * sy)),
+      })
+    }
+    node.scaleX(1); node.scaleY(1)
+  }
+
+  function addText() {
+    const el: TextEl = {
+      id: uid(), kind: 'text',
+      x: STAGE_W / 2, y: 80, rotation: 0,
+      text: 'New text', fontSize: 20,
+      fontFamily: "'Playfair Display', Georgia, serif",
+      fontStyle: 'normal', fill: '#111111', align: 'center', width: 300,
+    }
+    setElements(prev => [...prev, el])
+    setSelectedId(el.id)
+  }
+
+  function addLine() {
+    const el: LineEl = {
+      id: uid(), kind: 'line',
+      x: STAGE_W / 2 - 80, y: 200, rotation: 0,
+      length: 160, stroke: '#254F22', strokeWidth: 2,
+    }
+    setElements(prev => [...prev, el])
+    setSelectedId(el.id)
+  }
+
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const src = ev.target?.result as string
+      const el: ImgEl = {
+        id: uid(), kind: 'image',
+        x: STAGE_W / 2 - 80, y: 100, rotation: 0,
+        src, w: 160, h: 160,
+      }
+      setElements(prev => [...prev, el])
+      setSelectedId(el.id)
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  function replaceQR(newQrDataUrl: string) {
+    setElements(prev => prev.map(e =>
+      e.kind === 'image' && e.id === selectedId
+        ? { ...e, src: newQrDataUrl }
+        : e
+    ))
+  }
 
   async function handleDownload() {
-    if (!shareUrl) return
+    if (!stageRef.current) return
+    setSelectedId(null)
     setDownloading(true)
+    // Wait a frame so transformer hides
+    await new Promise(r => setTimeout(r, 60))
     try {
-      const off = document.createElement('canvas')
-      await renderCustomCard(off, cfg, shareUrl, 1200)
+      const dataUrl = stageRef.current.toDataURL({ pixelRatio: DL_RATIO, mimeType: 'image/png' })
       const link = document.createElement('a')
-      link.download = `${(cfg.heading || 'card').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-table-card.png`
-      link.href = off.toDataURL('image/png')
+      link.download = `${(initialTitle || 'card').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-table-card.png`
+      link.href = dataUrl
       link.click()
     } finally {
       setDownloading(false)
     }
   }
 
-  function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => set('logoDataUrl', (ev.target?.result as string) ?? null)
-    reader.readAsDataURL(file)
+  function resetLayout() {
+    if (qrDataUrl) setElements(defaultElements(initialTitle, qrDataUrl))
+    setSelectedId(null)
   }
 
-  const previewH = Math.round(260 * 1700 / 1200)
+  const selected = elements.find(e => e.id === selectedId)
 
-  return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#F5F5F5', fontFamily: 'system-ui, sans-serif' }}>
-      {/* Top bar */}
-      <div
-        className="flex items-center justify-between px-5 py-3 sticky top-0 z-10"
-        style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E5E5' }}
-      >
-        <button
-          onClick={() => window.close()}
-          className="text-sm font-medium"
-          style={{ color: '#555' }}
-        >
-          ← Close
-        </button>
-        <span className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Card Editor</span>
-        <button
-          onClick={handleDownload}
-          disabled={downloading || !shareUrl}
-          className="flex items-center gap-1.5 text-sm font-semibold rounded-xl px-4 py-2 transition hover:opacity-90 disabled:opacity-40"
-          style={{ background: '#254F22', color: '#FDFAF5' }}
-        >
-          <Download className="w-4 h-4" />
-          {downloading ? 'Generating…' : 'Download PNG'}
-        </button>
-      </div>
+  // ─── Sidebar panel for selected element ──────────────────────────────────────
 
-      <div className="flex flex-col lg:flex-row gap-5 p-5 flex-1">
-        {/* Controls */}
-        <div
-          className="rounded-2xl p-5 space-y-5 lg:w-80 shrink-0 overflow-y-auto"
-          style={{ background: '#FFFFFF', border: '1px solid #E5E5E5', maxHeight: 'calc(100vh - 80px)' }}
-        >
-          {/* Text */}
-          <div className="space-y-3">
-            <Label>Heading</Label>
-            <input
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              style={{ background: '#FAFAFA', borderColor: '#E0E0E0', color: '#1A1A1A' }}
-              value={cfg.heading}
-              onChange={(e) => set('heading', e.target.value)}
-              maxLength={70}
-              placeholder="Capture the Moment"
-            />
-            <Label>Description</Label>
-            <textarea
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none"
-              style={{ background: '#FAFAFA', borderColor: '#E0E0E0', color: '#1A1A1A', resize: 'vertical', minHeight: 72 }}
-              value={cfg.body}
-              onChange={(e) => set('body', e.target.value)}
-              maxLength={220}
-            />
-          </div>
-
-          <hr style={{ borderColor: '#F0F0F0' }} />
-
-          {/* Font */}
-          <div>
-            <Label>Font</Label>
-            <ChipGroup
-              value={cfg.font}
-              onChange={(v) => set('font', v)}
-              options={[
-                { value: 'playfair', label: 'Serif' },
-                { value: 'sans', label: 'Sans' },
-                { value: 'hand', label: 'Script' },
-              ]}
-            />
-          </div>
-
-          {/* Colors */}
-          <div className="space-y-2.5">
-            <Label>Colors</Label>
-            <ColorPicker label="Background" value={cfg.bgColor} onChange={(v) => set('bgColor', v)} />
-            <ColorPicker label="Heading" value={cfg.textColor} onChange={(v) => set('textColor', v)} />
-            <ColorPicker label="Body text" value={cfg.bodyColor} onChange={(v) => set('bodyColor', v)} />
-            <ColorPicker label="Accent line" value={cfg.accentColor} onChange={(v) => set('accentColor', v)} />
-            <ColorPicker label="QR code" value={cfg.qrColor} onChange={(v) => set('qrColor', v)} />
-          </div>
-
-          <hr style={{ borderColor: '#F0F0F0' }} />
-
-          {/* QR options */}
-          <div className="space-y-3">
-            <div>
-              <Label>QR position</Label>
-              <ChipGroup
-                value={cfg.qrPos}
-                onChange={(v) => set('qrPos', v)}
-                options={[
-                  { value: 'bottom', label: 'QR bottom' },
-                  { value: 'center', label: 'QR center' },
-                ]}
-              />
-            </div>
-            <div>
-              <Label>QR size</Label>
-              <ChipGroup
-                value={cfg.qrSize}
-                onChange={(v) => set('qrSize', v)}
-                options={[
-                  { value: 'sm', label: 'Small' },
-                  { value: 'md', label: 'Medium' },
-                  { value: 'lg', label: 'Large' },
-                ]}
-              />
-            </div>
-          </div>
-
-          <hr style={{ borderColor: '#F0F0F0' }} />
-
-          {/* Border */}
-          <div>
-            <Label>Border</Label>
-            <ChipGroup
-              value={cfg.border}
-              onChange={(v) => set('border', v)}
-              options={[
-                { value: 'none', label: 'None' },
-                { value: 'thin', label: 'Thin' },
-                { value: 'double', label: 'Double' },
-              ]}
-            />
-          </div>
-
-          <hr style={{ borderColor: '#F0F0F0' }} />
-
-          {/* Logo upload */}
-          <div>
-            <Label>Logo / image (optional)</Label>
-            <label
-              className="flex items-center justify-center gap-2 w-full rounded-xl py-2.5 text-xs font-semibold cursor-pointer transition hover:opacity-80"
-              style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px dashed #DDD5C5' }}
-            >
-              <ImagePlus className="w-3.5 h-3.5" />
-              {cfg.logoDataUrl ? 'Change image' : 'Upload PNG / JPG'}
-              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-            </label>
-            {cfg.logoDataUrl && (
-              <button
-                onClick={() => set('logoDataUrl', null)}
-                className="mt-1.5 text-xs w-full text-center"
-                style={{ color: '#A89880' }}
-              >
-                Remove image
-              </button>
-            )}
-          </div>
-
-          {/* Footer toggle */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={cfg.showFooter}
-              onChange={(e) => set('showFooter', e.target.checked)}
-              className="rounded"
-            />
-            <span className="text-xs" style={{ color: '#555' }}>Show &quot;hushare.space&quot; footer</span>
-          </label>
+  function renderSelectedProps() {
+    if (!selected) return null
+    return (
+      <div className="space-y-3 pt-3 border-t" style={{ borderColor: '#F0F0F0' }}>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold" style={{ color: '#254F22' }}>
+            {selected.kind === 'text' ? 'Text' : selected.kind === 'line' ? 'Line' : 'Image'} selected
+          </span>
+          <button onClick={deleteSelected} className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 transition hover:opacity-80"
+            style={{ background: '#FFF0F0', color: '#C0392B', border: '1px solid #FFCCCC' }}>
+            <Trash2 className="w-3 h-3" /> Delete
+          </button>
         </div>
 
-        {/* Canvas preview */}
-        <div className="flex-1 flex flex-col items-center gap-3 pt-2">
-          <p className="text-xs font-semibold" style={{ color: '#888' }}>Live preview</p>
-          <canvas
-            ref={canvasRef}
-            style={{
-              width: 260,
-              height: previewH,
-              borderRadius: 12,
-              border: '1px solid #E0E0E0',
-              boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
-            }}
-          />
-          <p className="text-xs" style={{ color: '#AAAAAA' }}>
-            Download renders at 1200×1700 px — A5 / 5×7&quot; print-ready
-          </p>
+        {selected.kind === 'text' && (
+          <>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Text</label>
+              <textarea
+                value={selected.text}
+                onChange={e => updateEl<TextEl>(selected.id, { text: e.target.value })}
+                className="w-full rounded-lg border px-2 py-1.5 text-sm"
+                style={{ borderColor: '#E0E0E0', resize: 'vertical', minHeight: 60 }}
+              />
+            </div>
+            <Slider label="Font size" value={selected.fontSize} min={8} max={80} onChange={v => updateEl<TextEl>(selected.id, { fontSize: v })} />
+            <Slider label="Width" value={selected.width} min={60} max={STAGE_W - 20} onChange={v => updateEl<TextEl>(selected.id, { width: v })} />
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Font</label>
+              <select value={selected.fontFamily}
+                onChange={e => updateEl<TextEl>(selected.id, { fontFamily: e.target.value })}
+                className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: '#E0E0E0' }}>
+                <option value="'Playfair Display', Georgia, serif">Playfair Display (Serif)</option>
+                <option value="'Geist', system-ui, sans-serif">Geist (Sans)</option>
+                <option value="'Playwrite GB J', cursive">Playwrite (Script)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Style</label>
+              <div className="flex gap-1">
+                {(['normal', 'bold', 'italic', 'bold italic'] as const).map(s => (
+                  <button key={s} onClick={() => updateEl<TextEl>(selected.id, { fontStyle: s })}
+                    className="flex-1 text-xs rounded py-1 transition"
+                    style={{
+                      background: selected.fontStyle === s ? '#254F22' : '#F5F0E8',
+                      color: selected.fontStyle === s ? '#FDFAF5' : '#5C3D2E',
+                      border: '1px solid ' + (selected.fontStyle === s ? '#254F22' : '#DDD5C5'),
+                      fontWeight: s.includes('bold') ? 700 : 400,
+                      fontStyle: s.includes('italic') ? 'italic' : 'normal',
+                    }}>
+                    {s === 'normal' ? 'Aa' : s === 'bold' ? 'B' : s === 'italic' ? 'I' : 'BI'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">Align</label>
+              <div className="flex gap-1">
+                {(['left', 'center', 'right'] as const).map(a => (
+                  <button key={a} onClick={() => updateEl<TextEl>(selected.id, { align: a })}
+                    className="flex-1 text-xs rounded py-1 transition"
+                    style={{
+                      background: selected.align === a ? '#254F22' : '#F5F0E8',
+                      color: selected.align === a ? '#FDFAF5' : '#5C3D2E',
+                      border: '1px solid ' + (selected.align === a ? '#254F22' : '#DDD5C5'),
+                    }}>
+                    {a === 'left' ? '⬤·' : a === 'center' ? '·⬤·' : '·⬤'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <ColorInput label="Color" value={selected.fill} onChange={v => updateEl<TextEl>(selected.id, { fill: v })} />
+          </>
+        )}
+
+        {selected.kind === 'line' && (
+          <>
+            <Slider label="Length" value={selected.length} min={20} max={STAGE_W - 40} onChange={v => updateEl<LineEl>(selected.id, { length: v })} />
+            <Slider label="Thickness" value={selected.strokeWidth} min={0.5} max={12} step={0.5} onChange={v => updateEl<LineEl>(selected.id, { strokeWidth: v })} />
+            <ColorInput label="Color" value={selected.stroke} onChange={v => updateEl<LineEl>(selected.id, { stroke: v })} />
+          </>
+        )}
+
+        {selected.kind === 'image' && (
+          <>
+            <Slider label="Width" value={selected.w} min={40} max={STAGE_W - 20} onChange={v => updateEl<ImgEl>(selected.id, { w: v, h: Math.round(v * selected.h / selected.w) })} />
+            <label className="flex items-center justify-center gap-2 w-full rounded-xl py-2 text-xs font-semibold cursor-pointer transition hover:opacity-80"
+              style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px dashed #DDD5C5' }}>
+              <ImagePlus className="w-3 h-3" /> Replace image
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            </label>
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // ─── Canvas render ────────────────────────────────────────────────────────────
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: '#EBEBEB', fontFamily: 'system-ui, sans-serif' }}>
+      {/* Top bar */}
+      <div className="flex items-center justify-between px-5 py-3 sticky top-0 z-10"
+        style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E5E5' }}>
+        <button onClick={() => window.close()} className="text-sm font-medium" style={{ color: '#555' }}>← Close</button>
+        <span className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Card Editor</span>
+        <div className="flex gap-2">
+          <button onClick={resetLayout} title="Reset to default"
+            className="flex items-center gap-1.5 text-xs font-medium rounded-lg px-3 py-2 transition hover:opacity-80"
+            style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
+            <RotateCcw className="w-3.5 h-3.5" /> Reset
+          </button>
+          <button onClick={handleDownload} disabled={downloading || !shareUrl}
+            className="flex items-center gap-1.5 text-sm font-semibold rounded-xl px-4 py-2 transition hover:opacity-90 disabled:opacity-40"
+            style={{ background: '#254F22', color: '#FDFAF5' }}>
+            <Download className="w-4 h-4" />
+            {downloading ? 'Generating…' : 'Download PNG'}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col lg:flex-row gap-0 flex-1">
+        {/* Sidebar */}
+        <div className="lg:w-72 shrink-0 overflow-y-auto p-4 space-y-4"
+          style={{ background: '#FFFFFF', borderRight: '1px solid #E5E5E5', maxHeight: 'calc(100vh - 57px)' }}>
+
+          {/* Background */}
+          <div>
+            <p className="text-xs font-semibold mb-2" style={{ color: '#555' }}>Background</p>
+            <ColorInput label="Color" value={bgColor} onChange={setBgColor} />
+          </div>
+
+          <div className="border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
+            <p className="text-xs font-semibold mb-2" style={{ color: '#555' }}>Add element</p>
+            <div className="flex gap-1.5 flex-wrap">
+              <button onClick={addText}
+                className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80"
+                style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
+                <Type className="w-3 h-3" /> Text
+              </button>
+              <button onClick={addLine}
+                className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80"
+                style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
+                ─ Line
+              </button>
+              <label className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80 cursor-pointer"
+                style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
+                <ImagePlus className="w-3 h-3" /> Image
+                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              </label>
+            </div>
+          </div>
+
+          {/* Selected element props */}
+          {renderSelectedProps()}
+
+          {!selected && (
+            <div className="pt-2">
+              <p className="text-xs" style={{ color: '#AAAAAA' }}>
+                Click any element on the canvas to select it. Drag to move, use handles to resize or rotate.
+              </p>
+            </div>
+          )}
+
+          <div className="pt-2 border-t" style={{ borderColor: '#F0F0F0' }}>
+            <p className="text-xs" style={{ color: '#AAAAAA' }}>
+              1200×1700 px download — A5 / 5×7&quot; print-ready
+            </p>
+          </div>
+        </div>
+
+        {/* Canvas area */}
+        <div className="flex-1 flex items-start justify-center p-6 overflow-auto">
+          <div style={{ position: 'relative' }}>
+            {!fontsReady && (
+              <div className="absolute inset-0 flex items-center justify-center z-10 rounded-xl"
+                style={{ background: 'rgba(255,255,255,0.7)', fontSize: 13, color: '#888' }}>
+                Loading fonts…
+              </div>
+            )}
+            <Stage
+              ref={stageRef}
+              width={STAGE_W}
+              height={STAGE_H}
+              style={{ borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', cursor: 'default' }}
+              onMouseDown={e => { if (e.target === e.target.getStage()) setSelectedId(null) }}
+            >
+              <Layer>
+                {/* Background */}
+                <Rect x={0} y={0} width={STAGE_W} height={STAGE_H} fill={bgColor} />
+
+                {/* Elements */}
+                {elements.map(el => {
+                  const isSelected = el.id === selectedId
+                  const commonProps = {
+                    draggable: true,
+                    onClick: () => setSelectedId(el.id),
+                    onTap: () => setSelectedId(el.id),
+                    onDragEnd: (e: KonvaEventObject<DragEvent>) => handleDragEnd(el.id, e),
+                    onTransformEnd: (e: KonvaEventObject<Event>) => handleTransformEnd(el.id, e),
+                    ref: (node: Konva.Node | null) => {
+                      if (node) shapeRefs.current[el.id] = node
+                      else delete shapeRefs.current[el.id]
+                    },
+                  }
+
+                  if (el.kind === 'text') {
+                    return (
+                      <Text
+                        key={el.id}
+                        {...commonProps}
+                        x={el.x}
+                        y={el.y}
+                        offsetX={el.align === 'center' ? el.width / 2 : 0}
+                        rotation={el.rotation}
+                        text={el.text}
+                        fontSize={el.fontSize}
+                        fontFamily={el.fontFamily}
+                        fontStyle={el.fontStyle}
+                        fill={el.fill}
+                        align={el.align}
+                        width={el.width}
+                        lineHeight={1.35}
+                        wrap="word"
+                      />
+                    )
+                  }
+
+                  if (el.kind === 'line') {
+                    return (
+                      <Line
+                        key={el.id}
+                        {...commonProps}
+                        x={el.x}
+                        y={el.y}
+                        rotation={el.rotation}
+                        points={[0, 0, el.length, 0]}
+                        stroke={el.stroke}
+                        strokeWidth={el.strokeWidth}
+                        hitStrokeWidth={12}
+                      />
+                    )
+                  }
+
+                  if (el.kind === 'image') {
+                    const img = loadedImgs[el.src]
+                    if (!img) return null
+                    return (
+                      <KonvaImage
+                        key={el.id}
+                        {...commonProps}
+                        x={el.x}
+                        y={el.y}
+                        rotation={el.rotation}
+                        image={img}
+                        width={el.w}
+                        height={el.h}
+                      />
+                    )
+                  }
+
+                  return null
+                })}
+
+                <Transformer
+                  ref={transformerRef}
+                  rotateEnabled={true}
+                  boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
+                  anchorSize={9}
+                  anchorCornerRadius={3}
+                  borderStroke="#254F22"
+                  anchorStroke="#254F22"
+                  anchorFill="#FFFFFF"
+                  rotateAnchorOffset={20}
+                />
+              </Layer>
+            </Stage>
+          </div>
         </div>
       </div>
     </div>
