@@ -488,3 +488,86 @@ Three variables declared, assigned null, and immediately used as null in the ret
 
 **Fix:** Add `.next-*/` to `.gitignore` to prevent future build artifacts from being committed. Delete the existing committed artifacts (`git rm -r .next-broken-20260505-002059`). Remove `shared-album.jpg` from root. Evaluate whether the PDF in `public/collabs/` should be public.  
 **Files:** `.gitignore`, repo root cleanup
+
+---
+
+## #25 — Upload architecture: all bytes proxied through Cloudflare Worker — root cause of video failures and image slowness
+**Status:** OPEN  
+**Priority: CRITICAL — Performance / Reliability**  
+**Area:** `src/app/api/upload/r2/route.ts`, `src/app/api/upload/r2/multipart/route.ts`, `src/components/UploadZone.tsx`
+
+### The Problem
+
+Every video byte and every image byte currently flows through a Cloudflare Worker:
+
+```
+Browser ──chunk──► Worker (buffers in RAM) ──chunk──► R2 / Supabase
+```
+
+The multipart chunk route calls `req.arrayBuffer()` to fully buffer each 5 MB chunk in Worker memory before forwarding it to R2. Workers are edge logic processors — they are not file transfer proxies. This proxied architecture is the root cause of every upload reliability issue:
+
+- **Videos time out on slow connections.** The chunk occupies a Worker connection slot for the entire buffer→forward→ack cycle. Poor mobile data (~1–2 Mbps) makes a 5 MB chunk take 20–40 s; carrier proxies drop the connection before it finishes, regardless of `maxDuration=300`.
+- **Success rate drops under concurrent load.** Two chunk workers × 5 MB = 10 MB buffered in Worker RAM simultaneously per user. Under burst load, Workers exceed memory budget and get killed mid-upload.
+- **Images fail in groups.** Same issue — even with XHR + retry, the Worker is the bottleneck. Six browser HTTP/1.1 connection slots fill up with stalled Worker-proxied requests, and subsequent uploads fail immediately with "Failed to fetch".
+
+### What competitors do
+
+Every serious upload service (Google Drive, Dropbox, WeTransfer, Kululu/Firebase Storage, all S3-based apps) uses the same pattern: **the server issues a signed URL, the browser uploads directly to storage, the server never handles file bytes at all.**
+
+```
+Browser ──1 KB JSON──► Worker  →  returns presigned URL
+Browser ──100 MB file─────────────────────────► R2 directly (no Worker involved)
+Browser ──1 KB JSON──► Worker  →  DB write to confirm
+```
+
+### The Fix — Part 1: Images via Supabase signed upload URL
+
+Supabase Storage v3 already ships `createSignedUploadUrl`. Change the image upload flow:
+
+1. Browser calls `POST /api/upload/sign` with `{ albumId, filename, contentType }`.
+2. Worker validates, calls `supabase.storage.from('Photos').createSignedUploadUrl(path)`, returns `{ signedUrl, path }`.
+3. Browser `PUT` directly to `signedUrl` — Worker is not involved in data transfer.
+4. Browser calls `POST /api/album/photos/create` to confirm (no change needed here).
+
+The existing XHR retry logic in `UploadZone` can be reused — just swap the upload target URL to the signed URL.
+
+### The Fix — Part 2: Videos via R2 presigned URLs
+
+Cloudflare R2 exposes an S3-compatible API at `https://{account-id}.r2.cloudflarestorage.com`. The AWS Signature V4 signing code already exists in `src/lib/rekognition.ts` — the exact same approach generates R2 presigned URLs.
+
+**For files under ~200 MB (single-shot):**
+1. Worker generates a presigned `PUT` URL for `https://{account}.r2.cloudflarestorage.com/{bucket}/{key}` with a 1-hour TTL.
+2. Browser `PUT` directly to R2 — one request, no multipart, no chunks.
+3. Browser confirms to Worker → DB write.
+
+**For files over 200 MB (presigned multipart):**
+1. Worker calls R2 S3 API `CreateMultipartUpload` → gets `uploadId`.
+2. Worker generates a presigned `UploadPart` URL for each part (can batch-generate all URLs upfront).
+3. Browser `PUT` each part directly to its presigned URL — Worker not in the data path.
+4. Browser sends all `{ partNumber, etag }` to Worker → Worker calls `CompleteMultipartUpload`.
+
+**New lib needed:** `src/lib/r2-presign.ts` — generates R2 presigned PUT and UploadPart URLs using the same Signature V4 helper from `rekognition.ts`. Needs R2 account ID, bucket name, and an R2 API token (not the Worker binding) as env vars.
+
+**New API routes:**
+- `POST /api/upload/sign/image` — returns Supabase signed upload URL
+- `POST /api/upload/sign/video` — returns R2 presigned PUT URL (small) or `{ uploadId, partUrls[] }` (large)
+- `POST /api/upload/sign/video/complete` — calls R2 CompleteMultipartUpload, returns `{ storage_path, url }`
+
+**Changes to `UploadZone.tsx`:**
+- `uploadToSupabaseStorage` → call sign endpoint, then PUT to signed URL
+- `uploadToR2` → call sign endpoint, then PUT directly to R2
+- `uploadVideoMultipart` → call sign endpoint for all part URLs upfront, then PUT each part directly to R2
+
+### Expected outcome
+
+- Video upload speed: 2–4× faster (no double-hop through Worker)
+- Video success rate: near 100% on any connection (R2 handles resumption natively via S3 multipart; no Worker timeout in the data path)
+- Image burst uploads: no more "Failed to fetch" under concurrent load (Supabase receives directly, not through Worker connection slots)
+- Worker load: drops to ~0 during uploads (only auth + DB calls, no data bytes)
+
+### Implementation order
+1. `src/lib/r2-presign.ts` — V4 signing helper for R2
+2. `POST /api/upload/sign/image` — Supabase signed URL
+3. `POST /api/upload/sign/video` — R2 presigned URL (single-shot first, multipart second)
+4. Update `UploadZone.tsx` upload paths
+5. Remove the old proxied routes once confirmed working (`/api/upload/r2`, `/api/upload/r2/multipart`)
