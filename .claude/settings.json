@@ -26,7 +26,10 @@
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(cat tailwind.config.ts)",
+      "Bash(cat tailwind.config.js)",
+      "Bash(grep -o \"hush-home-visuals[^}]*}\\\\|hush-home-mobile[^}]*}\\\\|lg\\\\\\\\\\\\\\\\:hidden[^}]*}\\\\|@media[^{]*1024[^}]*{[^}]*hush-home\" .next/static/css/d271dbeb35d87262.css)"
     ]
   }
 }
