@@ -45,7 +45,6 @@ type Props = {
 
   // Zoom state
   zoomPan: { x: number; y: number }
-  zoomScale: number
 
   // Computed style / display functions
   previewRadiusFor: (photo: Photo) => number
@@ -107,7 +106,6 @@ export default function LightboxOverlay({
   deleting,
   videoAutoplay,
   zoomPan,
-  zoomScale,
   previewRadiusFor,
   mediaZoomStyle,
   onSwipeStart,

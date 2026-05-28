@@ -246,7 +246,7 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
             </button>
 
             <p className="text-xs text-center" style={{ color: '#A89880' }}>
-              1200 × 1700 px — works for A5 / 5×7" table cards
+              1200 × 1700 px — works for A5 / 5×7&quot; table cards
             </p>
           </div>
 

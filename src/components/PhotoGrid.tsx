@@ -104,7 +104,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
     settingsSaving, settingsError,
     setSettingsPhoto, setSettingsRadius, setSettingsFilter, setSettingsCaption, setSettingsAuthor,
     openSettings, previewRadiusFor, previewFilterFor, radiusMaxFor,
-    applySettingsRadius, savePhotoSettings, closeSettings,
+    applySettingsRadius, closeSettings,
   } = usePhotoSettings({
     album,
     slug,
@@ -118,7 +118,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
 
   const {
     zoomScale, zoomPan, lightboxFlipped, setLightboxFlipped,
-    resetZoom, toggleZoom, mediaZoomStyle,
+    toggleZoom, mediaZoomStyle,
     handleMediaTouchStart, handleMediaTouchMove, handleMediaTouchEnd,
     handleMediaMouseDown, handleMediaMouseMove, handleMediaMouseUp,
   } = useLightboxZoom({
@@ -481,7 +481,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
           deleting={deleting}
           videoAutoplay={!!album.video_autoplay}
           zoomPan={zoomPan}
-          zoomScale={zoomScale}
           previewRadiusFor={previewRadiusFor}
           mediaZoomStyle={mediaZoomStyle}
           onSwipeStart={handleSwipeStart}
