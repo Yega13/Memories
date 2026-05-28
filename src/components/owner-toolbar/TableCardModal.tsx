@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Download, X } from 'lucide-react'
+import { Download, Palette, X } from 'lucide-react'
 import QRCode from 'qrcode'
 
-type CardStyle = 'branded' | 'minimal'
+type CardStyle = 'branded' | 'bw'
 
 type Props = {
   shareUrl: string
@@ -12,163 +12,228 @@ type Props = {
   onClose: () => void
 }
 
-const DEFAULT_TITLE = 'CAPTURE THE MOMENT'
-const DEFAULT_BODY = 'Scan the QR code with your camera to upload your photos and videos.'
+const BODY_TEXT = 'Scan the QR code with your camera to upload your photos and videos.'
+const RED = '#C41E3A'
 
-function wrapTextLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+async function ensureFonts() {
+  if (typeof document === 'undefined' || !document.fonts) return
+  try {
+    await Promise.all([
+      document.fonts.load("bold 72px 'Playfair Display'"),
+      document.fonts.load("bold italic 72px 'Playfair Display'"),
+      document.fonts.load("400 72px 'Playfair Display'"),
+      document.fonts.load("italic 72px 'Playfair Display'"),
+    ])
+  } catch { /* fonts already loaded or unavailable */ }
+}
+
+function loadImg(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('load failed'))
+    img.src = src
+  })
+}
+
+function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const words = text.split(' ')
   const lines: string[] = []
   let line = ''
-  for (const word of words) {
-    const test = line ? `${line} ${word}` : word
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line)
-      line = word
-    } else {
-      line = test
-    }
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w }
+    else line = test
   }
   if (line) lines.push(line)
   return lines
 }
 
-async function renderTableCard(
-  canvas: HTMLCanvasElement,
-  title: string,
-  body: string,
-  style: CardStyle,
-  shareUrl: string,
-  width: number,
-): Promise<void> {
-  const W = width
+function drawCorners(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, arm: number) {
+  ctx.beginPath()
+  ctx.moveTo(x, y + arm); ctx.lineTo(x, y); ctx.lineTo(x + arm, y)
+  ctx.moveTo(x + w - arm, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + arm)
+  ctx.moveTo(x + w, y + h - arm); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - arm, y + h)
+  ctx.moveTo(x + arm, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - arm)
+  ctx.stroke()
+}
+
+function pf(size: number, bold = false, italic = false) {
+  return `${bold ? 'bold ' : ''}${italic ? 'italic ' : ''}${size}px 'Playfair Display', Georgia, serif`
+}
+
+export async function renderBrandedCard(canvas: HTMLCanvasElement, title: string, shareUrl: string, W: number) {
   const H = Math.round(W * (1700 / 1200))
-  canvas.width = W
-  canvas.height = H
+  canvas.width = W; canvas.height = H
   const ctx = canvas.getContext('2d')
   if (!ctx) return
-
   const s = W / 1200
-  const BRANDED = style === 'branded'
 
-  ctx.fillStyle = BRANDED ? '#FDFAF5' : '#FFFFFF'
+  await ensureFonts()
+
+  ctx.fillStyle = '#FAFAFA'
   ctx.fillRect(0, 0, W, H)
 
-  let yPos = 0
+  // Red header
+  const hdrH = Math.round(250 * s)
+  ctx.fillStyle = RED
+  ctx.fillRect(0, 0, W, hdrH)
 
-  if (BRANDED) {
-    const headerH = Math.round(220 * s)
-    ctx.fillStyle = '#254F22'
-    ctx.fillRect(0, 0, W, headerH)
-    ctx.fillStyle = '#FDFAF5'
-    ctx.font = `bold ${Math.round(80 * s)}px Georgia, "Times New Roman", serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText('HUSHARE', W / 2, headerH / 2)
-    yPos = headerH + Math.round(70 * s)
-  } else {
-    yPos = Math.round(110 * s)
+  // Logo
+  try {
+    const logo = await loadImg('/logo/logo-light-transparent.png')
+    const mh = Math.round(118 * s), mw = Math.round(520 * s)
+    const sc = Math.min(mh / logo.naturalHeight, mw / logo.naturalWidth)
+    const lw = logo.naturalWidth * sc, lh = logo.naturalHeight * sc
+    ctx.drawImage(logo, (W - lw) / 2, (hdrH - lh) / 2, lw, lh)
+  } catch {
+    ctx.fillStyle = '#FFFFFF'
+    ctx.font = pf(Math.round(90 * s), true)
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('HUSHARE', W / 2, hdrH / 2)
   }
 
-  // Title
-  ctx.textBaseline = 'top'
-  const titleSize = Math.round(84 * s)
-  ctx.font = `bold ${titleSize}px Georgia, "Times New Roman", serif`
-  ctx.fillStyle = BRANDED ? '#254F22' : '#111111'
-  ctx.textAlign = 'center'
-  const titleLines = wrapTextLines(ctx, (title || DEFAULT_TITLE).toUpperCase(), W * 0.80)
-  const titleLineH = Math.round(titleSize * 1.22)
-  for (const line of titleLines) {
-    ctx.fillText(line, W / 2, yPos)
-    yPos += titleLineH
+  // Shadow strip under header
+  ctx.fillStyle = '#9B1727'
+  ctx.fillRect(0, hdrH, W, Math.round(5 * s))
+
+  let y = hdrH + Math.round(76 * s)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+
+  // Heading
+  const hsz = Math.round(76 * s)
+  ctx.font = pf(hsz, true)
+  ctx.fillStyle = '#1A1A1A'
+  for (const l of wrap(ctx, (title || 'CAPTURE THE MOMENT').toUpperCase(), W * 0.80)) {
+    ctx.fillText(l, W / 2, y); y += Math.round(hsz * 1.24)
   }
-  yPos += Math.round(32 * s)
+  y += Math.round(32 * s)
 
-  // Decorative line
-  ctx.strokeStyle = BRANDED ? '#C5A882' : '#CCCCCC'
-  ctx.lineWidth = Math.round(2 * s)
-  const lineW = Math.round(380 * s)
-  ctx.beginPath()
-  ctx.moveTo((W - lineW) / 2, yPos)
-  ctx.lineTo((W + lineW) / 2, yPos)
-  ctx.stroke()
-  yPos += Math.round(44 * s)
+  // Red rule
+  ctx.strokeStyle = RED; ctx.lineWidth = Math.round(3 * s)
+  const rw = Math.round(260 * s)
+  ctx.beginPath(); ctx.moveTo((W - rw) / 2, y); ctx.lineTo((W + rw) / 2, y); ctx.stroke()
+  y += Math.round(42 * s)
 
-  // Body text
-  const bodySize = Math.round(43 * s)
-  ctx.font = `${bodySize}px Georgia, "Times New Roman", serif`
-  ctx.fillStyle = BRANDED ? '#5C3D2E' : '#555555'
-  const bodyLines = wrapTextLines(ctx, body || DEFAULT_BODY, W * 0.72)
-  const bodyLineH = Math.round(bodySize * 1.6)
-  for (const line of bodyLines) {
-    ctx.fillText(line, W / 2, yPos)
-    yPos += bodyLineH
-  }
-  yPos += Math.round(55 * s)
+  // Body
+  const bsz = Math.round(39 * s)
+  ctx.font = pf(bsz)
+  ctx.fillStyle = '#555555'
+  for (const l of wrap(ctx, BODY_TEXT, W * 0.70)) { ctx.fillText(l, W / 2, y); y += Math.round(bsz * 1.68) }
+  y += Math.round(46 * s)
 
-  // QR code — fills remaining space above footer
-  const footerReserve = Math.round(130 * s)
-  const maxQr = Math.round(420 * s)
-  const qrSize = Math.min(maxQr, H - yPos - footerReserve)
-  if (qrSize > 40) {
-    const qrDataUrl = await QRCode.toDataURL(shareUrl, {
-      width: qrSize,
-      margin: 1,
-      color: { dark: BRANDED ? '#254F22' : '#000000', light: '#FFFFFF' },
-    })
-    const qrImg = new Image()
-    await new Promise<void>((resolve, reject) => {
-      qrImg.onload = () => resolve()
-      qrImg.onerror = () => reject(new Error('QR render failed'))
-      qrImg.src = qrDataUrl
-    })
-    ctx.drawImage(qrImg, (W - qrSize) / 2, yPos, qrSize, qrSize)
+  // QR
+  const qrSz = Math.min(Math.round(430 * s), H - y - Math.round(100 * s))
+  if (qrSz > 30) {
+    const du = await QRCode.toDataURL(shareUrl, { width: qrSz, margin: 1, color: { dark: RED, light: '#FAFAFA' } })
+    ctx.drawImage(await loadImg(du), (W - qrSz) / 2, y, qrSz, qrSz)
   }
 
-  // Footer
-  ctx.font = `${Math.round(34 * s)}px Georgia, "Times New Roman", serif`
-  ctx.fillStyle = BRANDED ? '#8B6F4E' : '#999999'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'alphabetic'
-  ctx.fillText('hushare.space', W / 2, H - Math.round(55 * s))
+  ctx.font = pf(Math.round(30 * s))
+  ctx.fillStyle = '#BBBBBB'; ctx.textBaseline = 'alphabetic'
+  ctx.fillText('hushare.space', W / 2, H - Math.round(46 * s))
+}
+
+export async function renderBWCard(canvas: HTMLCanvasElement, title: string, shareUrl: string, W: number) {
+  const H = Math.round(W * (1700 / 1200))
+  canvas.width = W; canvas.height = H
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const s = W / 1200
+
+  await ensureFonts()
+
+  ctx.fillStyle = '#FFFFFF'
+  ctx.fillRect(0, 0, W, H)
+
+  // Double border
+  const p1 = Math.round(26 * s)
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = Math.round(3 * s)
+  ctx.strokeRect(p1, p1, W - p1 * 2, H - p1 * 2)
+  const p2 = p1 + Math.round(13 * s)
+  ctx.lineWidth = Math.round(1 * s)
+  ctx.strokeRect(p2, p2, W - p2 * 2, H - p2 * 2)
+
+  // Corner brackets
+  ctx.lineWidth = Math.round(2.5 * s)
+  drawCorners(ctx, p2, p2, W - p2 * 2, H - p2 * 2, Math.round(52 * s))
+
+  let y = p2 + Math.round(80 * s)
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top'
+
+  // HUSHARE with letter-spacing
+  const brsz = Math.round(54 * s)
+  ;(ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = `${Math.round(13 * s)}px`
+  ctx.font = pf(brsz, true)
+  ctx.fillStyle = '#111111'
+  ctx.fillText('HUSHARE', W / 2, y)
+  ;(ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = '0px'
+  y += Math.round(brsz * 1.2 + 24 * s)
+
+  // Thin rule
+  ctx.strokeStyle = '#111111'; ctx.lineWidth = Math.round(1.5 * s)
+  const rl = Math.round(220 * s)
+  ctx.beginPath(); ctx.moveTo((W - rl) / 2, y); ctx.lineTo((W + rl) / 2, y); ctx.stroke()
+  y += Math.round(52 * s)
+
+  // Heading (bold italic)
+  const hsz = Math.round(72 * s)
+  ctx.font = pf(hsz, true, true)
+  ctx.fillStyle = '#111111'
+  for (const l of wrap(ctx, title || 'Capture the Moment', W * 0.76)) {
+    ctx.fillText(l, W / 2, y); y += Math.round(hsz * 1.25)
+  }
+  y += Math.round(34 * s)
+
+  // Body
+  const bsz = Math.round(37 * s)
+  ctx.font = pf(bsz)
+  ctx.fillStyle = '#555555'
+  for (const l of wrap(ctx, BODY_TEXT, W * 0.66)) { ctx.fillText(l, W / 2, y); y += Math.round(bsz * 1.72) }
+  y += Math.round(48 * s)
+
+  // QR
+  const qrSz = Math.min(Math.round(410 * s), H - y - Math.round(130 * s))
+  if (qrSz > 30) {
+    const du = await QRCode.toDataURL(shareUrl, { width: qrSz, margin: 1, color: { dark: '#111111', light: '#FFFFFF' } })
+    ctx.drawImage(await loadImg(du), (W - qrSz) / 2, y, qrSz, qrSz)
+  }
+
+  ctx.font = pf(Math.round(30 * s), false, true)
+  ctx.fillStyle = '#AAAAAA'; ctx.textBaseline = 'alphabetic'
+  ctx.fillText('hushare.space', W / 2, H - p2 - Math.round(36 * s))
 }
 
 export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props) {
-  const [title, setTitle] = useState(DEFAULT_TITLE)
-  const [body, setBody] = useState(DEFAULT_BODY)
   const [style, setStyle] = useState<CardStyle>('branded')
   const [downloading, setDownloading] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  const heading = albumTitle || 'Capture the Moment'
+
   useEffect(() => {
-    if (canvasRef.current) {
-      renderTableCard(canvasRef.current, title, body, style, shareUrl, 280)
-    }
-  }, [title, body, style, shareUrl])
+    const c = canvasRef.current
+    if (!c) return
+    ;(style === 'branded' ? renderBrandedCard : renderBWCard)(c, heading, shareUrl, 260)
+  }, [style, heading, shareUrl])
 
   async function handleDownload() {
     setDownloading(true)
     try {
-      const offscreen = document.createElement('canvas')
-      await renderTableCard(offscreen, title, body, style, shareUrl, 1200)
+      const off = document.createElement('canvas')
+      await (style === 'branded' ? renderBrandedCard : renderBWCard)(off, heading, shareUrl, 1200)
       const link = document.createElement('a')
       link.download = `${(albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-table-card.png`
-      link.href = offscreen.toDataURL('image/png')
+      link.href = off.toDataURL('image/png')
       link.click()
     } finally {
       setDownloading(false)
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '8px 12px',
-    borderRadius: 10,
-    border: '1px solid #DDD5C5',
-    background: '#FDFAF5',
-    color: '#254F22',
-    fontSize: 13,
-    outline: 'none',
-    boxSizing: 'border-box',
+  function openEditor() {
+    const p = new URLSearchParams({ url: shareUrl, title: albumTitle || '' })
+    window.open(`/card-editor?${p}`, '_blank')
   }
 
   return (
@@ -179,7 +244,7 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
     >
       <div
         className="relative rounded-2xl shadow-2xl overflow-y-auto"
-        style={{ background: '#FFFFFF', width: '100%', maxWidth: 640, maxHeight: '95dvh', padding: 20 }}
+        style={{ background: '#FFFFFF', width: '100%', maxWidth: 520, maxHeight: '95dvh', padding: 20 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
@@ -187,76 +252,64 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
           <button onClick={onClose} style={{ color: '#A89880' }}><X className="w-4 h-4" /></button>
         </div>
 
-        <div className="flex gap-4 flex-col sm:flex-row">
-          {/* Controls */}
-          <div className="flex-1 space-y-3">
-            {/* Style selector */}
-            <div>
-              <p className="text-xs font-semibold mb-1.5" style={{ color: '#7C5C3E' }}>Style</p>
-              <div className="flex gap-2">
-                {(['branded', 'minimal'] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStyle(s)}
-                    className="flex-1 text-xs font-semibold rounded-lg py-2 transition"
-                    style={{
-                      background: style === s ? '#254F22' : '#F5F0E8',
-                      color: style === s ? '#FDFAF5' : '#5C3D2E',
-                      border: '1px solid ' + (style === s ? '#254F22' : '#DDD5C5'),
-                    }}
-                  >
-                    {s === 'branded' ? 'Hushare branded' : 'Minimal (B&W)'}
-                  </button>
-                ))}
-              </div>
-            </div>
+        {/* Style selector */}
+        <div className="flex gap-2 mb-5">
+          {(['branded', 'bw'] as CardStyle[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setStyle(s)}
+              className="flex-1 py-2.5 text-xs font-semibold rounded-xl transition"
+              style={{
+                background: style === s ? '#254F22' : '#F5F0E8',
+                color: style === s ? '#FDFAF5' : '#5C3D2E',
+                border: '1px solid ' + (style === s ? '#254F22' : '#DDD5C5'),
+              }}
+            >
+              {s === 'branded' ? 'Hushare Branded' : 'B&W'}
+            </button>
+          ))}
+          <button
+            onClick={openEditor}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold rounded-xl transition hover:opacity-80"
+            style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}
+          >
+            <Palette className="w-3 h-3" />
+            Custom
+          </button>
+        </div>
 
-            {/* Title */}
-            <div>
-              <p className="text-xs font-semibold mb-1.5" style={{ color: '#7C5C3E' }}>Heading</p>
-              <input
-                style={inputStyle}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={60}
-                placeholder={DEFAULT_TITLE}
-              />
-            </div>
-
-            {/* Body */}
-            <div>
-              <p className="text-xs font-semibold mb-1.5" style={{ color: '#7C5C3E' }}>Description</p>
-              <textarea
-                style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }}
-                value={body}
-                onChange={(e) => setBody(e.target.value)}
-                maxLength={200}
-                placeholder={DEFAULT_BODY}
-              />
-            </div>
-
+        {/* Preview + download */}
+        <div className="flex gap-5 items-start">
+          <canvas
+            ref={canvasRef}
+            style={{
+              width: 152,
+              height: Math.round(152 * 1700 / 1200),
+              flexShrink: 0,
+              borderRadius: 10,
+              border: '1px solid #E5E5E5',
+              boxShadow: '0 2px 14px rgba(0,0,0,0.10)',
+            }}
+          />
+          <div className="flex-1 space-y-3 pt-1">
+            <p className="text-xs leading-relaxed" style={{ color: '#7C5C3E' }}>
+              {style === 'branded'
+                ? 'Hushare red & white with logo — Playfair Display.'
+                : 'Elegant B&W, double border, corner brackets — Playfair Display.'}
+              {' '}1200×1700 px, print-ready.
+            </p>
             <button
               onClick={handleDownload}
               disabled={downloading}
-              className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50 text-sm"
               style={{ background: '#254F22', color: '#FDFAF5' }}
             >
               <Download className="w-4 h-4" />
-              {downloading ? 'Generating…' : 'Download PNG (print-ready)'}
+              {downloading ? 'Generating…' : 'Download PNG'}
             </button>
-
-            <p className="text-xs text-center" style={{ color: '#A89880' }}>
-              1200 × 1700 px — works for A5 / 5×7&quot; table cards
+            <p className="text-xs" style={{ color: '#A89880' }}>
+              A5 / 5×7&quot; — table cards, tent cards, signage
             </p>
-          </div>
-
-          {/* Preview */}
-          <div className="flex-none flex flex-col items-center">
-            <p className="text-xs font-semibold mb-1.5" style={{ color: '#7C5C3E' }}>Preview</p>
-            <canvas
-              ref={canvasRef}
-              style={{ width: 180, height: Math.round(180 * 1700 / 1200), borderRadius: 8, border: '1px solid #DDD5C5' }}
-            />
           </div>
         </div>
       </div>
