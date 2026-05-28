@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { Check, Copy, QrCode, Share2, X } from 'lucide-react'
+import { Check, Copy, Download, QrCode, Share2, X } from 'lucide-react'
 
 type Props = {
   copied: 'share' | 'owner' | null
@@ -11,6 +11,16 @@ type Props = {
   albumTitle: string
   onClose: () => void
   onCopy: (type: 'share' | 'owner') => void
+}
+
+async function downloadQr(shareUrl: string, albumTitle: string) {
+  const QRCode = (await import('qrcode')).default
+  const canvas = document.createElement('canvas')
+  await QRCode.toCanvas(canvas, shareUrl, { width: 600, margin: 2, color: { dark: '#254F22', light: '#FFFFFF' } })
+  const link = document.createElement('a')
+  link.download = `${(albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-qr.png`
+  link.href = canvas.toDataURL('image/png')
+  link.click()
 }
 
 export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitle, onClose, onCopy }: Props) {
@@ -86,12 +96,20 @@ export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitl
       <div className="mt-3 rounded-xl p-3" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
         <div className="flex items-center gap-3">
           <Image src={qrUrl} alt="QR Code" width={92} height={92} unoptimized />
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold flex items-center gap-2" style={{ color: '#254F22' }}>
               <QrCode className="w-4 h-4" />
               QR code
             </p>
             <p className="text-xs leading-relaxed" style={{ color: '#7C5C3E' }}>Guests scan this to open the album.</p>
+            <button
+              className="mt-2 flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2.5 py-1.5 transition hover:opacity-80"
+              style={{ background: '#254F22', color: '#FDFAF5' }}
+              onClick={() => downloadQr(shareUrl, albumTitle)}
+            >
+              <Download className="w-3 h-3" />
+              Download PNG
+            </button>
           </div>
         </div>
       </div>

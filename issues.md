@@ -183,10 +183,10 @@ GuestCam's single biggest differentiator. Guests record a short voice message vi
 ---
 
 ### S6 — QR code download in owner toolbar
-**Priority: Medium**  
-**Area:** `src/components/OwnerToolbar.tsx`
+**Status: FIXED**  
+**Area:** `src/components/owner-toolbar/ShareMenu.tsx`, `src/components/GuestShareButton.tsx`
 
-Every competitor generates a downloadable QR code for the album. Right now hosts have to use a third-party site to get a QR code for their table cards. This should be a one-click download in the owner toolbar — generate a PNG of the album URL as a QR code using a client-side library (e.g. `qrcode`). No backend needed.
+"Download PNG" button added to the QR code section in both the owner share menu and the guest share button. Generated client-side with the `qrcode` library (600×600px, brand green on white). Dynamic import keeps the library out of the initial bundle.
 
 ---
 
