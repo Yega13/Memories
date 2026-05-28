@@ -78,43 +78,34 @@ export async function POST(req: Request) {
   }
 
   // ── chunk ─────────────────────────────────────────────────────────────────
+  // Chunks are always sent as raw binary (Content-Type: application/octet-stream).
+  // FormData was removed: it added multipart-boundary parsing overhead and forced the Worker
+  // to buffer the full chunk in heap before forwarding to R2. Raw binary lets us pipe
+  // req.body directly to uploadPart — bytes flow browser → Worker → R2 with no copy.
   if (action === 'chunk') {
-    const contentType = req.headers.get('content-type') ?? ''
-    let uploadId = ''
-    let key = ''
-    let partNumber = 0
-    let chunk: Blob | ArrayBuffer
-
-    if (contentType.includes('multipart/form-data')) {
-      let form: FormData
-      try { form = await req.formData() } catch { return NextResponse.json({ error: 'Invalid form data' }, { status: 400, headers: NO_STORE }) }
-      uploadId = String(form.get('uploadId') ?? '').trim()
-      key = String(form.get('key') ?? '').trim()
-      partNumber = Number(form.get('partNumber'))
-      const formChunk = form.get('chunk')
-      if (!(formChunk instanceof Blob)) return NextResponse.json({ error: 'Missing chunk' }, { status: 400, headers: NO_STORE })
-      chunk = formChunk
-    } else {
-      const url = new URL(req.url)
-      uploadId = String(url.searchParams.get('uploadId') ?? '').trim()
-      key = String(url.searchParams.get('key') ?? '').trim()
-      partNumber = Number(url.searchParams.get('partNumber'))
-      const contentLengthHeader = req.headers.get('content-length')
-      const declaredSize = contentLengthHeader ? Number(contentLengthHeader) : NaN
-      if (Number.isFinite(declaredSize) && declaredSize > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
-      try { chunk = await req.arrayBuffer() } catch { return NextResponse.json({ error: 'Invalid chunk body' }, { status: 400, headers: NO_STORE }) }
-    }
+    const url = new URL(req.url)
+    const uploadId = String(url.searchParams.get('uploadId') ?? '').trim()
+    const key = String(url.searchParams.get('key') ?? '').trim()
+    const partNumber = Number(url.searchParams.get('partNumber'))
 
     if (!UPLOAD_ID_RE.test(uploadId)) return NextResponse.json({ error: 'Invalid uploadId' }, { status: 400, headers: NO_STORE })
     if (!KEY_RE.test(key)) return NextResponse.json({ error: 'Invalid key' }, { status: 400, headers: NO_STORE })
     if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return NextResponse.json({ error: 'Invalid partNumber' }, { status: 400, headers: NO_STORE })
-    const chunkSize = chunk instanceof Blob ? chunk.size : chunk.byteLength
-    if (chunkSize <= 0) return NextResponse.json({ error: 'Missing chunk' }, { status: 400, headers: NO_STORE })
-    if (chunkSize > CHUNK_MAX) return NextResponse.json({ error: 'Chunk too large' }, { status: 413, headers: NO_STORE })
+
+    const contentLengthHeader = req.headers.get('content-length')
+    const declaredSize = contentLengthHeader ? Number(contentLengthHeader) : NaN
+    if (Number.isFinite(declaredSize) && (declaredSize <= 0 || declaredSize > CHUNK_MAX)) {
+      return NextResponse.json({ error: 'Invalid chunk size' }, { status: 413, headers: NO_STORE })
+    }
+
+    // Pipe the request body stream directly to R2 — no buffering in Worker heap.
+    // req.body is a ReadableStream; uploadPart accepts it natively in the R2 Workers binding.
+    // If the stream is unavailable (edge case in some runtimes), fall back to arrayBuffer.
+    const body: ReadableStream | ArrayBuffer = req.body ?? await req.arrayBuffer()
 
     try {
       const upload = bucket.resumeMultipartUpload(key, uploadId)
-      const part = await upload.uploadPart(partNumber, chunk)
+      const part = await upload.uploadPart(partNumber, body)
       return NextResponse.json({ partNumber: part.partNumber, etag: part.etag }, { headers: NO_STORE })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)

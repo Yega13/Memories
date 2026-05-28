@@ -12,7 +12,7 @@ import {
 } from '@/lib/media'
 import { formatFileSize } from '@/lib/utils'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
-import { R2_SINGLE_UPLOAD_TIMEOUT_MS, R2_CHUNK_UPLOAD_TIMEOUT_MS, UPLOAD_CONCURRENCY_MOBILE, UPLOAD_CONCURRENCY_DESKTOP, R2_MULTIPART_CONCURRENCY_MOBILE, R2_MULTIPART_CONCURRENCY_DESKTOP, STREAM_CHUNK_SIZE_BYTES } from '@/lib/constants'
+import { R2_SINGLE_UPLOAD_TIMEOUT_MS, R2_CHUNK_UPLOAD_TIMEOUT_MS, UPLOAD_CONCURRENCY_MOBILE, UPLOAD_CONCURRENCY_DESKTOP, R2_MULTIPART_CONCURRENCY, R2_CHUNK_SIZE_BYTES, STREAM_CHUNK_SIZE_BYTES } from '@/lib/constants'
 import { showAppToast } from '@/components/AppToast'
 import { Upload, X, Film, ImageIcon } from 'lucide-react'
 
@@ -85,17 +85,12 @@ async function uploadToR2(
   throw lastError
 }
 
-// Large video upload via R2 multipart — splits the file into chunks each sent through the Worker.
-// Down to 5 MB after 10-min videos still failed on chunk 1 with network errors at 10 MB. Smaller
-// chunks = each connection holds open for less time, halving exposure to mid-flight drops by
-// carrier proxies or Cloudflare's edge. More chunks per video but the retry path is cheap.
-const CHUNK_SIZE = 5 * 1024 * 1024
-type ChunkTransport = 'form' | 'raw'
-
-function prefersRawChunkUpload(): boolean {
-  return typeof window !== 'undefined'
-    && window.matchMedia('(hover: none), (pointer: coarse)').matches
-}
+// Large video upload via R2 multipart — splits the file into chunks, each sent as raw binary
+// through the Worker, which pipes req.body directly to R2 with no Worker-side buffering.
+// R2 enforces a 5 MiB minimum per part. At 1 Mbps that's ~40 s per chunk — safely under
+// the 60-second carrier-proxy TCP timeout. FormData was removed: it added boundary-parsing
+// overhead and forced full chunk buffering in Worker heap before the R2 call.
+const CHUNK_SIZE = R2_CHUNK_SIZE_BYTES
 
 async function uploadVideoMultipart(
   file: File,
@@ -124,33 +119,23 @@ async function uploadVideoMultipart(
   let chunkCursor = 0
   let abortTriggered = false
 
-  const primaryTransport: ChunkTransport = prefersRawChunkUpload() ? 'raw' : 'form'
-  const fallbackTransport: ChunkTransport = primaryTransport === 'raw' ? 'form' : 'raw'
-  const chunkConcurrency = prefersRawChunkUpload()
-    ? R2_MULTIPART_CONCURRENCY_MOBILE
-    : R2_MULTIPART_CONCURRENCY_DESKTOP
-
   function uploadChunkOnce(
     partNumber: number,
     chunk: Blob,
     chunkStart: number,
     chunkEnd: number,
-    transport: ChunkTransport,
   ) {
+    const params = new URLSearchParams({
+      action: 'chunk',
+      uploadId: uploadId!,
+      key: key!,
+      partNumber: String(partNumber),
+    })
     return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest()
-      if (transport === 'raw') {
-        const params = new URLSearchParams({
-          action: 'chunk',
-          uploadId: uploadId!,
-          key: key!,
-          partNumber: String(partNumber),
-        })
-        xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
-        xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-      } else {
-        xhr.open('POST', '/api/upload/r2/multipart?action=chunk')
-      }
+      xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+      xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
       xhr.upload.onprogress = (event) => {
         if (!event.lengthComputable) return
         const chunkUploaded = (event.loaded / event.total) * (chunkEnd - chunkStart)
@@ -162,22 +147,12 @@ async function uploadVideoMultipart(
         if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
           resolve({ partNumber: body.partNumber, etag: body.etag })
         } else {
-          reject(new Error(body.error || `Chunk ${partNumber} failed via ${transport}: ${xhr.status}`))
+          reject(new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`))
         }
       }
-      xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber} via ${transport}`))
-      xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber} via ${transport}`))
-      xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
-      if (transport === 'raw') {
-        xhr.send(chunk)
-      } else {
-        const form = new FormData()
-        form.append('uploadId', uploadId!)
-        form.append('key', key!)
-        form.append('partNumber', String(partNumber))
-        form.append('chunk', chunk)
-        xhr.send(form)
-      }
+      xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
+      xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
+      xhr.send(chunk)
     })
   }
 
@@ -193,9 +168,8 @@ async function uploadVideoMultipart(
       let lastErr: Error | null = null
       for (let attempt = 1; attempt <= 8; attempt++) {
         if (abortTriggered) break
-        const transport = attempt % 2 === 1 ? primaryTransport : fallbackTransport
         try {
-          part = await uploadChunkOnce(partNumber, chunk, chunkStart, chunkEnd, transport)
+          part = await uploadChunkOnce(partNumber, chunk, chunkStart, chunkEnd)
           break
         } catch (e) {
           lastErr = e instanceof Error ? e : new Error(String(e))
@@ -221,7 +195,7 @@ async function uploadVideoMultipart(
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(chunkConcurrency, totalChunks) }, () => chunkWorker()))
+  await Promise.all(Array.from({ length: Math.min(R2_MULTIPART_CONCURRENCY, totalChunks) }, () => chunkWorker()))
 
   const parts = partResults.filter((p): p is { partNumber: number; etag: string } => p !== null)
 
