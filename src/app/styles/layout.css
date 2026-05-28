@@ -425,6 +425,19 @@
     min-height: calc(100svh - 73px) !important;
   }
 
+  /* Explicit show/hide rules — belt-and-suspenders alongside Tailwind lg: utilities */
+  .hush-home-visuals {
+    display: flex !important;
+  }
+
+  .hush-home-desktop-bg {
+    display: block !important;
+  }
+
+  .hush-home-mobile-bg {
+    display: none !important;
+  }
+
   .hush-home-grid {
     grid-template-columns: minmax(0, 0.98fr) minmax(420px, 1.02fr) !important;
     min-height: calc(100svh - 73px) !important;

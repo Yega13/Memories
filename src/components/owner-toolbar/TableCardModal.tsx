@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Download, Palette, X } from 'lucide-react'
+import { Download, X } from 'lucide-react'
 import QRCode from 'qrcode'
 
 type CardStyle = 'branded' | 'bw'
@@ -13,7 +13,7 @@ type Props = {
 }
 
 const BODY_TEXT = 'Scan the QR code with your camera to upload your photos and videos.'
-const RED = '#C41E3A'
+const RED = '#630826'
 
 async function ensureFonts() {
   if (typeof document === 'undefined' || !document.fonts) return
@@ -270,10 +270,9 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
           ))}
           <button
             onClick={openEditor}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold rounded-xl transition hover:opacity-80"
+            className="flex-1 py-2.5 text-xs font-semibold rounded-xl transition hover:opacity-80"
             style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}
           >
-            <Palette className="w-3 h-3" />
             Custom
           </button>
         </div>

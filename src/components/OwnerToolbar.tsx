@@ -154,6 +154,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   }, [showShare, showSettings])
 
   useEffect(() => {
+    document.body.style.overflow = showShare ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [showShare])
+
+  useEffect(() => {
     if (!showSettings) {
       setCustomUrlInput(album.custom_slug ?? '')
       setCustomUrlError('')
