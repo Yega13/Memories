@@ -491,83 +491,94 @@ Three variables declared, assigned null, and immediately used as null in the ret
 
 ---
 
-## #25 — Upload architecture: all bytes proxied through Cloudflare Worker — root cause of video failures and image slowness
-**Status:** OPEN  
-**Priority: CRITICAL — Performance / Reliability**  
+## #25 — Video R2 fallback: Worker is in the data path + 5 MiB chunk size kills mobile
+**Status:** OPEN — blocked on Stream stabilisation first  
+**Priority: High — Performance / Reliability**  
 **Area:** `src/app/api/upload/r2/route.ts`, `src/app/api/upload/r2/multipart/route.ts`, `src/components/UploadZone.tsx`
 
-### The Problem
+### Context and scope
 
-Every video byte and every image byte currently flows through a Cloudflare Worker:
+This issue is specifically about the **R2 fallback path** (when Cloudflare Stream fails). The primary video path is Stream with 1 MB TUS chunks — that path is already architecturally sound and is being tested in the current deploy. This issue is about making the fallback path not terrible.
 
-```
-Browser ──chunk──► Worker (buffers in RAM) ──chunk──► R2 / Supabase
-```
+Images upload directly to Supabase (`https://zleajzevvhugkwlqlolt.supabase.co/storage/v1/object/...`) — the Worker is not in the image data path. Image failures have a separate cause tracked in #26.
 
-The multipart chunk route calls `req.arrayBuffer()` to fully buffer each 5 MB chunk in Worker memory before forwarding it to R2. Workers are edge logic processors — they are not file transfer proxies. This proxied architecture is the root cause of every upload reliability issue:
+### The two problems with the R2 fallback
 
-- **Videos time out on slow connections.** The chunk occupies a Worker connection slot for the entire buffer→forward→ack cycle. Poor mobile data (~1–2 Mbps) makes a 5 MB chunk take 20–40 s; carrier proxies drop the connection before it finishes, regardless of `maxDuration=300`.
-- **Success rate drops under concurrent load.** Two chunk workers × 5 MB = 10 MB buffered in Worker RAM simultaneously per user. Under burst load, Workers exceed memory budget and get killed mid-upload.
-- **Images fail in groups.** Same issue — even with XHR + retry, the Worker is the bottleneck. Six browser HTTP/1.1 connection slots fill up with stalled Worker-proxied requests, and subsequent uploads fail immediately with "Failed to fetch".
-
-### What competitors do
-
-Every serious upload service (Google Drive, Dropbox, WeTransfer, Kululu/Firebase Storage, all S3-based apps) uses the same pattern: **the server issues a signed URL, the browser uploads directly to storage, the server never handles file bytes at all.**
+**Problem 1 — Worker is in the data path.**  
+The multipart chunk route at `/api/upload/r2/multipart` calls `req.arrayBuffer()`, fully buffering each 5 MB chunk in Worker RAM before forwarding to R2. Every video byte is proxied:
 
 ```
-Browser ──1 KB JSON──► Worker  →  returns presigned URL
-Browser ──100 MB file─────────────────────────► R2 directly (no Worker involved)
-Browser ──1 KB JSON──► Worker  →  DB write to confirm
+Browser ──5 MB chunk──► Worker (buffers in RAM) ──5 MB chunk──► R2
 ```
 
-### The Fix — Part 1: Images via Supabase signed upload URL
+The Worker adds latency (buffer-then-forward instead of streaming), memory pressure (10 MB RAM per user with 2 concurrent chunk workers), and an extra round-trip hop through Cloudflare's internal network.
 
-Supabase Storage v3 already ships `createSignedUploadUrl`. Change the image upload flow:
+**Problem 2 — 5 MiB minimum chunk size is an R2 constraint, not a Worker constraint.**  
+R2 enforces a 5 MiB minimum per multipart part. Presigned URLs do not change this — it is a hard R2 requirement. At 0.67 Mbps (weak mobile), 5 MB = ~60 seconds per chunk. Most carriers kill TCP connections idle for >60 s. This is the real reason chunks fail on mobile, regardless of whether the Worker is in the path.
 
-1. Browser calls `POST /api/upload/sign` with `{ albumId, filename, contentType }`.
-2. Worker validates, calls `supabase.storage.from('Photos').createSignedUploadUrl(path)`, returns `{ signedUrl, path }`.
-3. Browser `PUT` directly to `signedUrl` — Worker is not involved in data transfer.
-4. Browser calls `POST /api/album/photos/create` to confirm (no change needed here).
+### The comparison
 
-The existing XHR retry logic in `UploadZone` can be reused — just swap the upload target URL to the signed URL.
+| Path | Data path | Min chunk | 60s carrier risk |
+|---|---|---|---|
+| Current R2 fallback | Browser → Worker → R2 | 5 MB | High — Worker buffering adds idle time |
+| R2 presigned URLs | Browser → R2 directly | 5 MB (R2 constraint) | Lower — R2 acks immediately, less idle |
+| Stream (primary, deployed) | Browser → Stream directly | 1 MB | None — 1 MB at 0.67 Mbps = 12 s |
 
-### The Fix — Part 2: Videos via R2 presigned URLs
+Stream with 1 MB TUS chunks is architecturally superior for mobile. The correct priority is: **stabilise Stream first, then improve the R2 fallback.**
 
-Cloudflare R2 exposes an S3-compatible API at `https://{account-id}.r2.cloudflarestorage.com`. The AWS Signature V4 signing code already exists in `src/lib/rekognition.ts` — the exact same approach generates R2 presigned URLs.
+### The fix (implement after Stream is stable)
 
-**For files under ~200 MB (single-shot):**
-1. Worker generates a presigned `PUT` URL for `https://{account}.r2.cloudflarestorage.com/{bucket}/{key}` with a 1-hour TTL.
-2. Browser `PUT` directly to R2 — one request, no multipart, no chunks.
-3. Browser confirms to Worker → DB write.
+Use R2 presigned URLs via the S3-compatible API so the Worker is no longer in the video data path.
 
-**For files over 200 MB (presigned multipart):**
-1. Worker calls R2 S3 API `CreateMultipartUpload` → gets `uploadId`.
-2. Worker generates a presigned `UploadPart` URL for each part (can batch-generate all URLs upfront).
-3. Browser `PUT` each part directly to its presigned URL — Worker not in the data path.
-4. Browser sends all `{ partNumber, etag }` to Worker → Worker calls `CompleteMultipartUpload`.
+**New lib: `src/lib/r2-presign.ts`**  
+Generates presigned S3 PUT and UploadPart URLs against `https://{account-id}.r2.cloudflarestorage.com/{bucket}`. Reuses the AWS Signature V4 signing approach from `src/lib/rekognition.ts` — change service name from `rekognition` to `s3`, change the host. Requires R2 API token credentials as env vars (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`) — separate from the Worker R2 binding.
 
-**New lib needed:** `src/lib/r2-presign.ts` — generates R2 presigned PUT and UploadPart URLs using the same Signature V4 helper from `rekognition.ts`. Needs R2 account ID, bucket name, and an R2 API token (not the Worker binding) as env vars.
+**New flow for small videos (under Worker body limit):**
+1. Browser calls `POST /api/upload/sign/video` with `{ albumId, filename, contentType, totalSize }`.
+2. Worker validates tier cap, generates a presigned `PUT` URL for the full file, returns it.
+3. Browser `PUT` directly to R2 — Worker not involved in data transfer.
+4. Browser calls `POST /api/album/photos/create` to confirm.
 
-**New API routes:**
-- `POST /api/upload/sign/image` — returns Supabase signed upload URL
-- `POST /api/upload/sign/video` — returns R2 presigned PUT URL (small) or `{ uploadId, partUrls[] }` (large)
-- `POST /api/upload/sign/video/complete` — calls R2 CompleteMultipartUpload, returns `{ storage_path, url }`
+**New flow for large videos (multipart):**
+1. Browser calls `POST /api/upload/sign/video` — Worker calls R2 `CreateMultipartUpload`, returns `{ uploadId, key }`.
+2. Browser requests batches of presigned `UploadPart` URLs as needed.
+3. Browser `PUT` each part directly to its presigned URL — Worker sees no video bytes.
+4. Browser sends `parts[]` to Worker → Worker calls `CompleteMultipartUpload`.
 
-**Changes to `UploadZone.tsx`:**
-- `uploadToSupabaseStorage` → call sign endpoint, then PUT to signed URL
-- `uploadToR2` → call sign endpoint, then PUT directly to R2
-- `uploadVideoMultipart` → call sign endpoint for all part URLs upfront, then PUT each part directly to R2
-
-### Expected outcome
-
-- Video upload speed: 2–4× faster (no double-hop through Worker)
-- Video success rate: near 100% on any connection (R2 handles resumption natively via S3 multipart; no Worker timeout in the data path)
-- Image burst uploads: no more "Failed to fetch" under concurrent load (Supabase receives directly, not through Worker connection slots)
-- Worker load: drops to ~0 during uploads (only auth + DB calls, no data bytes)
+Note: minimum part size is still 5 MiB (R2 constraint). This improves the data path, not the chunk size. Mobile improvement comes from eliminating Worker buffering latency, not from smaller chunks. Smaller chunks on mobile require Stream.
 
 ### Implementation order
-1. `src/lib/r2-presign.ts` — V4 signing helper for R2
-2. `POST /api/upload/sign/image` — Supabase signed URL
-3. `POST /api/upload/sign/video` — R2 presigned URL (single-shot first, multipart second)
-4. Update `UploadZone.tsx` upload paths
-5. Remove the old proxied routes once confirmed working (`/api/upload/r2`, `/api/upload/r2/multipart`)
+1. Confirm Stream is stable on mobile (test with weak 3G conditions).
+2. Add `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID` to Cloudflare secrets.
+3. Write `src/lib/r2-presign.ts` — V4 signing for R2 S3 API.
+4. Add `POST /api/upload/sign/video` and `POST /api/upload/sign/video/complete` routes.
+5. Update `uploadToR2` and `uploadVideoMultipart` in `UploadZone.tsx` to use presigned URLs.
+6. Keep old proxied routes until confirmed working, then remove them.
+
+---
+
+## #26 — Image upload failures: root cause not yet identified
+**Status:** OPEN — needs investigation  
+**Priority: High — Reliability**  
+**Area:** `src/components/UploadZone.tsx` — `uploadToSupabaseStorage`
+
+### What we know
+
+Images upload directly from the browser to Supabase Storage via XHR — the Cloudflare Worker is **not** in the image data path. The URL is `https://zleajzevvhugkwlqlolt.supabase.co/storage/v1/object/Photos/{path}` sent directly from the browser. Previous failures (issue #3) were traced to missing `apikey` header and no XHR timeout — those are fixed. Despite this, image upload failures still occur in some conditions.
+
+### Possible causes to investigate
+
+- **Supabase Storage RLS / bucket policy.** The anon key is used for guest uploads. If RLS on the `Photos` bucket has a policy that rejects inserts in certain conditions (e.g. path already exists and `x-upsert: false`), uploads silently fail. The current code treats 409 as success — but other policy rejections (403, 401) may not be retried correctly.
+- **Supabase Storage rate limits.** Supabase imposes per-project upload rate limits on the free/pro tier. Burst uploads of 50+ images from multiple users simultaneously may hit these. Unlike the old SDK path, XHR errors from rate limiting might not be retried if the status isn't in `isRetriableResponseStatus`.
+- **CORS on Supabase Storage.** If the allowed origins list on the Supabase Storage bucket doesn't include `hushare.space` and `www.hushare.space`, browsers will block the XHR with a CORS preflight failure (manifests as "Failed to fetch", not a 4xx).
+- **Thumbnail upload race.** After the main image uploads, a thumbnail is uploaded to `{albumId}/thumbs/{baseId}.ext` — same bucket, concurrent XHR. If both the original and thumbnail hit Supabase simultaneously and one stalls, the retry logic for each is independent and the "already exists" 409 handling might interact badly.
+- **File size vs Supabase plan limits.** Supabase Storage has a per-file size limit that depends on the project plan. If the free plan cap is lower than the 25 MB image cap advertised to users, large JPEGs will hit a 413 from Supabase, not from the Worker.
+
+### How to diagnose
+
+1. Open the browser Network tab during a failing batch upload.
+2. Find the failing XHR to `supabase.co/storage/v1/object/Photos/...`.
+3. Check the exact HTTP status and response body — this pinpoints which of the causes above is responsible.
+4. Cross-check Supabase project dashboard for storage error logs.
+
+Once the specific failure mode is identified, update this issue with the root cause and fix.

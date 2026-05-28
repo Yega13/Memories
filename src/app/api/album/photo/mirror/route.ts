@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { deleteStreamVideo } from '@/lib/cloudflare-stream'
 import type { R2Env } from '@/lib/r2'
 
 export const runtime = 'nodejs'
@@ -82,6 +83,19 @@ export async function POST(req: Request) {
     }
     console.error('[photo/mirror] update failed:', message)
     return NextResponse.json({ error: 'Could not attach mirror' }, { status: 500, headers: NO_STORE })
+  }
+
+  // Delete from Cloudflare Stream now that R2 has the permanent copy.
+  // Stream is used only as an upload relay — R2 is the authoritative store.
+  // storage_path format for stream videos: "{albumId}/{streamUid}.stream"
+  const streamFilename = storagePath.split('/').pop() ?? ''
+  const streamUid = streamFilename.endsWith('.stream')
+    ? streamFilename.slice(0, -7)
+    : ''
+  if (streamUid) {
+    deleteStreamVideo(streamUid).catch((e) =>
+      console.error('[photo/mirror] Stream delete failed (non-fatal):', streamUid, e instanceof Error ? e.message : e),
+    )
   }
 
   return NextResponse.json({ ok: true, mirrored: true }, { headers: NO_STORE })

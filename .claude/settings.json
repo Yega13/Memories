@@ -22,7 +22,11 @@
       "PowerShell($path = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"; $empty = \"C:\\\\Temp\\\\empty_dir\"; New-Item -ItemType Directory -Force $empty | Out-Null; robocopy $empty $path /MIR /NFL /NDL /NJH /NJS 2>&1; cmd /c \"rd \"\"$path\"\"\"; Write-Host \"Exit: $LASTEXITCODE\")",
       "PowerShell($path = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\"; $items = Get-ChildItem $path -Recurse -Force -ErrorAction SilentlyContinue; Write-Host \"Item count: $\\($items.Count\\)\"; Get-ChildItem \"$path\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\" -Force 2>&1)",
       "PowerShell($p = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"; cmd /c \"rmdir \"\"$p\"\"\"; Write-Host \"rmdir exit: $LASTEXITCODE\"; Test-Path $p)",
-      "PowerShell($p = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"; [System.IO.Directory]::Delete\\($p\\); Write-Host \"Deleted: $?\"; Test-Path $p)"
+      "PowerShell($p = \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\node_modules\\\\next\\\\dist\\\\build\\\\webpack\\\\config\"; [System.IO.Directory]::Delete\\($p\\); Write-Host \"Deleted: $?\"; Test-Path $p)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(git commit *)"
     ]
   }
 }

@@ -233,7 +233,7 @@ export default function LightboxOverlay({
             <p className="font-semibold" style={{ color: '#254F22' }}>This file is unavailable</p>
             <p className="mt-2 text-sm" style={{ color: '#7C5C3E' }}>The album row still exists, but the storage object could not be loaded.</p>
           </div>
-        ) : current.media_type === 'video' && current.stream_uid ? (
+        ) : current.media_type === 'video' && current.stream_uid && !current.mirror_url ? (
           <div className={`hush-photo-flip relative w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
             <iframe
               src={streamFrameSrc(current, slideshowMode ? !slideshowPaused : videoAutoplay)}
@@ -248,7 +248,7 @@ export default function LightboxOverlay({
         ) : current.media_type === 'video' ? (
           <div className={`hush-photo-flip relative w-[min(92vw,1100px)]${slideshowFrameClass}`} key={current.id} onContextMenu={(e) => e.preventDefault()}>
             <video
-              src={current.url}
+              src={current.mirror_url ?? current.url}
               poster={current.poster_url || undefined}
               controls
               autoPlay={slideshowMode ? !slideshowPaused : videoAutoplay}
