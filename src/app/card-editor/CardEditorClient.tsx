@@ -486,7 +486,7 @@ export default function CardEditorClient() {
             <NumInput label="X" value={s.x} onChange={v => updateEl(s.id, { x: v })} />
             <NumInput label="Y" value={s.y} onChange={v => updateEl(s.id, { y: v })} />
             {'width' in s && <NumInput label="W" value={(s as RectEl).width} min={1} onChange={v => updateEl(s.id, { width: v })} />}
-            {'height' in s && s.kind !== 'line' && <NumInput label="H" value={(s as RectEl).height} min={1} onChange={v => updateEl(s.id, { height: v })} />}
+            {(s.kind === 'rect' || s.kind === 'image') && <NumInput label="H" value={s.height} min={1} onChange={v => updateEl(s.id, { height: v })} />}
             {s.kind === 'line' && <NumInput label="Length" value={s.length} min={1} onChange={v => updateEl(s.id, { length: v })} />}
             {s.kind === 'ellipse' && <NumInput label="Rx" value={s.radiusX} min={1} onChange={v => updateEl(s.id, { radiusX: v })} />}
             {s.kind === 'ellipse' && <NumInput label="Ry" value={s.radiusY} min={1} onChange={v => updateEl(s.id, { radiusY: v })} />}
