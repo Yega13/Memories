@@ -781,7 +781,12 @@ function uploadToSupabaseOnce(
       if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 409) { resolve(); return }
       let body: { error?: string; message?: string } = {}
       try { body = JSON.parse(xhr.responseText || '{}') } catch {}
-      reject(new Error(body.error || body.message || `Storage upload failed: ${xhr.status}`))
+      const err = new Error(body.error || body.message || `Storage upload failed: ${xhr.status}`)
+      if (xhr.status === 429) {
+        const retryAfterSec = Number(xhr.getResponseHeader('Retry-After') ?? 0)
+        ;(err as Error & { retryAfterMs?: number }).retryAfterMs = retryAfterSec > 0 ? retryAfterSec * 1000 : 0
+      }
+      reject(err)
     }
     xhr.onerror = () => reject(new Error('Failed to fetch'))
     xhr.ontimeout = () => reject(new Error('Storage upload timed out'))
@@ -804,12 +809,16 @@ async function uploadToSupabaseStorage(
       lastError = e instanceof Error ? e : new Error(String(e))
       // 409 "already exists" is a success — another worker or a duplicate filename resolved it.
       if (isExistingObjectError(lastError.message)) return
-      // Only retry on transient/network errors and 5xx server responses. 4xx (auth, bad request)
+      // Only retry on transient/network errors, 429, and 5xx. 4xx (auth, bad request)
       // won't be fixed by retrying — surface them immediately.
       const retriable = isRetriableStorageError(lastError.message)
         || /storage upload failed: [5]\d{2}/.test(lastError.message.toLowerCase())
+        || /storage upload failed: 429/.test(lastError.message)
       if (!retriable) throw lastError
-      if (attempt < 5) await wait(500 * attempt)
+      if (attempt < 5) {
+        const retryAfterMs = (lastError as Error & { retryAfterMs?: number }).retryAfterMs
+        await wait(retryAfterMs && retryAfterMs > 0 ? Math.min(retryAfterMs, 30_000) : 500 * attempt)
+      }
     }
   }
   throw lastError
