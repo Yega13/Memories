@@ -14,6 +14,30 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 const SLUG_RE = /^[a-zA-Z0-9._-]{1,200}$/
 function isValidSlug(s: string): boolean { return SLUG_RE.test(s) }
 
+// In-memory rate limiter — 300 index requests per 5 minutes per IP.
+// 5 concurrent FaceFinder workers × ~5s Rekognition latency = ~60 req/min natural max.
+// 300/5min matches that throughput for a 500-photo album while blocking tight loops.
+const RL_MAX = 300
+const RL_WINDOW_MS = 5 * 60_000
+const rlMap = new Map<string, { count: number; windowStart: number }>()
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const entry = rlMap.get(ip)
+  if (!entry || now - entry.windowStart > RL_WINDOW_MS) {
+    rlMap.set(ip, { count: 1, windowStart: now })
+    if (rlMap.size > 5000) {
+      for (const [k, v] of rlMap) {
+        if (now - v.windowStart > RL_WINDOW_MS * 2) rlMap.delete(k)
+      }
+    }
+    return false
+  }
+  if (entry.count >= RL_MAX) return true
+  entry.count++
+  return false
+}
+
 // Rekognition rejects images > 5 MB via the direct-bytes API, and even smaller multi-MB
 // originals burn Cloudflare Worker CPU during fetch + base64 + signing. Convert the standard
 // Supabase public URL into a /render/image/ transform URL so we get a downscaled JPEG instead.
@@ -98,6 +122,14 @@ async function handlePost(req: Request) {
 
   const slug = String(body.slug ?? '').trim()
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
+
+  const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
+  if (isRateLimited(ip)) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a few minutes and try again.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(Math.ceil(RL_WINDOW_MS / 1000)) } },
+    )
+  }
 
   const { admin, album } = await resolveAlbum(slug)
   if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
