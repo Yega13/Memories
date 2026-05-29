@@ -257,7 +257,8 @@ export default function CardEditorClient() {
 
   // ─── Element CRUD ──────────────────────────────────────────────────────────
 
-  function updateEl<T extends El>(id: string, patch: Partial<Omit<T, 'id'|'kind'>>, commit = true) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function updateEl(id: string, patch: Record<string, any>, commit = true) {
     setEls(p => p.map(e => e.id === id ? { ...e, ...patch } : e), commit)
   }
 
@@ -352,11 +353,11 @@ export default function CardEditorClient() {
   function handleTransformEnd(id: string, e: KonvaEventObject<Event>) {
     const node = e.target; const el = liveEls.find(e => e.id === id); if (!el) return
     const sx = node.scaleX(), sy = node.scaleY()
-    if (el.kind === 'text')    updateEl<TextEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: Math.max(6, Math.round(el.fontSize * sy)), width: Math.max(40, Math.round(el.width * sx)) })
-    else if (el.kind === 'rect')    updateEl<RectEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(4, Math.round(el.width * sx)), height: Math.max(4, Math.round(el.height * sy)) })
-    else if (el.kind === 'ellipse') updateEl<EllipseEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), radiusX: Math.max(2, Math.round(el.radiusX * sx)), radiusY: Math.max(2, Math.round(el.radiusY * sy)) })
-    else if (el.kind === 'line')    updateEl<LineEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), length: Math.max(4, Math.round(el.length * sx)) })
-    else if (el.kind === 'image')   updateEl<ImgEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(4, Math.round(el.width * sx)), height: Math.max(4, Math.round(el.height * sy)) })
+    if (el.kind === 'text')    updateEl(id, { x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: Math.max(6, Math.round(el.fontSize * sy)), width: Math.max(40, Math.round(el.width * sx)) })
+    else if (el.kind === 'rect')    updateEl(id, { x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(4, Math.round(el.width * sx)), height: Math.max(4, Math.round(el.height * sy)) })
+    else if (el.kind === 'ellipse') updateEl(id, { x: node.x(), y: node.y(), rotation: node.rotation(), radiusX: Math.max(2, Math.round(el.radiusX * sx)), radiusY: Math.max(2, Math.round(el.radiusY * sy)) })
+    else if (el.kind === 'line')    updateEl(id, { x: node.x(), y: node.y(), rotation: node.rotation(), length: Math.max(4, Math.round(el.length * sx)) })
+    else if (el.kind === 'image')   updateEl(id, { x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(4, Math.round(el.width * sx)), height: Math.max(4, Math.round(el.height * sy)) })
     node.scaleX(1); node.scaleY(1)
   }
 
@@ -486,9 +487,9 @@ export default function CardEditorClient() {
             <NumInput label="Y" value={s.y} onChange={v => updateEl(s.id, { y: v })} />
             {'width' in s && <NumInput label="W" value={(s as RectEl).width} min={1} onChange={v => updateEl(s.id, { width: v })} />}
             {'height' in s && s.kind !== 'line' && <NumInput label="H" value={(s as RectEl).height} min={1} onChange={v => updateEl(s.id, { height: v })} />}
-            {s.kind === 'line' && <NumInput label="Length" value={s.length} min={1} onChange={v => updateEl<LineEl>(s.id, { length: v })} />}
-            {s.kind === 'ellipse' && <NumInput label="Rx" value={s.radiusX} min={1} onChange={v => updateEl<EllipseEl>(s.id, { radiusX: v })} />}
-            {s.kind === 'ellipse' && <NumInput label="Ry" value={s.radiusY} min={1} onChange={v => updateEl<EllipseEl>(s.id, { radiusY: v })} />}
+            {s.kind === 'line' && <NumInput label="Length" value={s.length} min={1} onChange={v => updateEl(s.id, { length: v })} />}
+            {s.kind === 'ellipse' && <NumInput label="Rx" value={s.radiusX} min={1} onChange={v => updateEl(s.id, { radiusX: v })} />}
+            {s.kind === 'ellipse' && <NumInput label="Ry" value={s.radiusY} min={1} onChange={v => updateEl(s.id, { radiusY: v })} />}
           </div>
           <div className="grid grid-cols-2 gap-2 mt-2">
             <NumInput label="Rotation" value={s.rotation} onChange={v => updateEl(s.id, { rotation: v })} unit="°" />
@@ -500,26 +501,26 @@ export default function CardEditorClient() {
         {s.kind === 'text' && (
           <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
             <p className="text-xs font-semibold" style={{ color: '#555' }}>Text</p>
-            <textarea value={s.text} onChange={e => updateEl<TextEl>(s.id, { text: e.target.value })}
+            <textarea value={s.text} onChange={e => updateEl(s.id, { text: e.target.value })}
               className="w-full rounded-lg border px-2 py-1.5 text-sm" style={{ borderColor: '#E0E0E0', resize: 'vertical', minHeight: 56 }} />
             <div className="flex gap-1.5">
               <div className="flex-1">
                 <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>Size</span>
                 <div className="flex items-center gap-1 rounded border px-1.5 py-1 mt-0.5" style={{ borderColor: '#E0E0E0' }}>
-                  <input type="number" value={s.fontSize} min={6} max={200} onChange={e => updateEl<TextEl>(s.id, { fontSize: Number(e.target.value) })} className="w-full text-xs bg-transparent outline-none" />
+                  <input type="number" value={s.fontSize} min={6} max={200} onChange={e => updateEl(s.id, { fontSize: Number(e.target.value) })} className="w-full text-xs bg-transparent outline-none" />
                   <span className="text-xs" style={{ color: '#999' }}>px</span>
                 </div>
               </div>
               <div className="flex-1">
                 <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>Spacing</span>
                 <div className="flex items-center gap-1 rounded border px-1.5 py-1 mt-0.5" style={{ borderColor: '#E0E0E0' }}>
-                  <input type="number" value={s.letterSpacing} step={0.5} onChange={e => updateEl<TextEl>(s.id, { letterSpacing: Number(e.target.value) })} className="w-full text-xs bg-transparent outline-none" />
+                  <input type="number" value={s.letterSpacing} step={0.5} onChange={e => updateEl(s.id, { letterSpacing: Number(e.target.value) })} className="w-full text-xs bg-transparent outline-none" />
                 </div>
               </div>
             </div>
             <div>
               <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>Font</span>
-              <select value={s.fontFamily} onChange={e => updateEl<TextEl>(s.id, { fontFamily: e.target.value })}
+              <select value={s.fontFamily} onChange={e => updateEl(s.id, { fontFamily: e.target.value })}
                 className="w-full mt-0.5 rounded border px-2 py-1 text-xs" style={{ borderColor: '#E0E0E0' }}>
                 <option value="'Playfair Display', Georgia, serif">Playfair Display</option>
                 <option value="'Geist', system-ui, sans-serif">Geist Sans</option>
@@ -531,7 +532,7 @@ export default function CardEditorClient() {
             </div>
             <div className="flex gap-1">
               {(['normal','bold','italic','bold italic'] as const).map(fs => (
-                <button key={fs} onClick={() => updateEl<TextEl>(s.id, { fontStyle: fs })}
+                <button key={fs} onClick={() => updateEl(s.id, { fontStyle: fs })}
                   className="flex-1 text-xs rounded py-1 transition"
                   style={{ background: s.fontStyle === fs ? '#254F22' : '#F5F0E8', color: s.fontStyle === fs ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.fontStyle === fs ? '#254F22' : '#DDD5C5'), fontWeight: fs.includes('bold') ? 700 : 400, fontStyle: fs.includes('italic') ? 'italic' : 'normal' }}>
                   {fs === 'normal' ? 'Aa' : fs === 'bold' ? 'B' : fs === 'italic' ? 'I' : 'BI'}
@@ -540,7 +541,7 @@ export default function CardEditorClient() {
             </div>
             <div className="flex gap-1">
               {(['left','center','right'] as const).map(a => (
-                <button key={a} onClick={() => updateEl<TextEl>(s.id, { align: a })}
+                <button key={a} onClick={() => updateEl(s.id, { align: a })}
                   className="flex-1 py-1.5 rounded transition"
                   style={{ background: s.align === a ? '#254F22' : '#F5F0E8', color: s.align === a ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.align === a ? '#254F22' : '#DDD5C5') }}>
                   {a === 'left' ? <AlignLeft className="w-3.5 h-3.5 mx-auto" /> : a === 'center' ? <AlignCenter className="w-3.5 h-3.5 mx-auto" /> : <AlignRight className="w-3.5 h-3.5 mx-auto" />}
@@ -549,10 +550,10 @@ export default function CardEditorClient() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs" style={{ color: '#666' }}>Color</span>
-              <ColorSwatch value={s.fill} onChange={v => updateEl<TextEl>(s.id, { fill: v })} />
+              <ColorSwatch value={s.fill} onChange={v => updateEl(s.id, { fill: v })} />
             </div>
-            <SliderRow label="Width" value={s.width} min={40} max={LW - 20} onChange={v => updateEl<TextEl>(s.id, { width: v })} />
-            <SliderRow label="Line H" value={s.lineHeight} min={0.8} max={3} step={0.1} onChange={v => updateEl<TextEl>(s.id, { lineHeight: v })} />
+            <SliderRow label="Width" value={s.width} min={40} max={LW - 20} onChange={v => updateEl(s.id, { width: v })} />
+            <SliderRow label="Line H" value={s.lineHeight} min={0.8} max={3} step={0.1} onChange={v => updateEl(s.id, { lineHeight: v })} />
           </div>
         )}
 
@@ -563,7 +564,7 @@ export default function CardEditorClient() {
             <div className="flex items-center gap-2"><span className="text-xs w-10" style={{ color: '#666' }}>Fill</span><ColorSwatch value={s.fill} onChange={v => updateEl(s.id, { fill: v })} /></div>
             <div className="flex items-center gap-2"><span className="text-xs w-10" style={{ color: '#666' }}>Stroke</span><ColorSwatch value={s.stroke} onChange={v => updateEl(s.id, { stroke: v })} /></div>
             <SliderRow label="Stroke W" value={s.strokeWidth} min={0} max={20} onChange={v => updateEl(s.id, { strokeWidth: v })} />
-            {s.kind === 'rect' && <SliderRow label="Radius" value={s.cornerRadius} min={0} max={80} onChange={v => updateEl<RectEl>(s.id, { cornerRadius: v })} />}
+            {s.kind === 'rect' && <SliderRow label="Radius" value={s.cornerRadius} min={0} max={80} onChange={v => updateEl(s.id, { cornerRadius: v })} />}
           </div>
         )}
 
@@ -571,12 +572,12 @@ export default function CardEditorClient() {
         {s.kind === 'line' && (
           <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
             <p className="text-xs font-semibold" style={{ color: '#555' }}>Line</p>
-            <div className="flex items-center gap-2"><span className="text-xs w-10" style={{ color: '#666' }}>Color</span><ColorSwatch value={s.stroke} onChange={v => updateEl<LineEl>(s.id, { stroke: v })} /></div>
-            <SliderRow label="Thickness" value={s.strokeWidth} min={0.5} max={20} step={0.5} onChange={v => updateEl<LineEl>(s.id, { strokeWidth: v })} />
+            <div className="flex items-center gap-2"><span className="text-xs w-10" style={{ color: '#666' }}>Color</span><ColorSwatch value={s.stroke} onChange={v => updateEl(s.id, { stroke: v })} /></div>
+            <SliderRow label="Thickness" value={s.strokeWidth} min={0.5} max={20} step={0.5} onChange={v => updateEl(s.id, { strokeWidth: v })} />
             <div className="flex gap-1">
-              <button onClick={() => updateEl<LineEl>(s.id, { lineCap: 'round' })} className="flex-1 text-xs rounded py-1" style={{ background: s.lineCap === 'round' ? '#254F22' : '#F5F0E8', color: s.lineCap === 'round' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.lineCap === 'round' ? '#254F22' : '#DDD5C5') }}>Rounded</button>
-              <button onClick={() => updateEl<LineEl>(s.id, { lineCap: 'butt' })} className="flex-1 text-xs rounded py-1" style={{ background: s.lineCap === 'butt' ? '#254F22' : '#F5F0E8', color: s.lineCap === 'butt' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.lineCap === 'butt' ? '#254F22' : '#DDD5C5') }}>Square</button>
-              <button onClick={() => updateEl<LineEl>(s.id, { dashed: !s.dashed })} className="flex-1 text-xs rounded py-1" style={{ background: s.dashed ? '#254F22' : '#F5F0E8', color: s.dashed ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.dashed ? '#254F22' : '#DDD5C5') }}>Dashed</button>
+              <button onClick={() => updateEl(s.id, { lineCap: 'round' })} className="flex-1 text-xs rounded py-1" style={{ background: s.lineCap === 'round' ? '#254F22' : '#F5F0E8', color: s.lineCap === 'round' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.lineCap === 'round' ? '#254F22' : '#DDD5C5') }}>Rounded</button>
+              <button onClick={() => updateEl(s.id, { lineCap: 'butt' })} className="flex-1 text-xs rounded py-1" style={{ background: s.lineCap === 'butt' ? '#254F22' : '#F5F0E8', color: s.lineCap === 'butt' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.lineCap === 'butt' ? '#254F22' : '#DDD5C5') }}>Square</button>
+              <button onClick={() => updateEl(s.id, { dashed: !s.dashed })} className="flex-1 text-xs rounded py-1" style={{ background: s.dashed ? '#254F22' : '#F5F0E8', color: s.dashed ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.dashed ? '#254F22' : '#DDD5C5') }}>Dashed</button>
             </div>
           </div>
         )}
