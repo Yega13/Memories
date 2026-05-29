@@ -51,7 +51,7 @@ export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitl
   return (
     <div
       className="hush-menu-pop absolute left-0 top-full mt-2 z-50 rounded-2xl shadow-xl"
-      style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 320, padding: 16 }}
+      style={{ background: '#FFFFFF', border: '1px solid #DDD5C5', width: 320, padding: 16, maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}
     >
       <div className="flex items-center justify-between mb-3">
         <span className="font-semibold text-sm" style={{ color: '#254F22' }}>Send link</span>
