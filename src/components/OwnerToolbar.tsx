@@ -115,7 +115,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const publicSlug = album.custom_slug ?? album.slug
   const shareUrl = `${window.location.origin}/${publicSlug}`
   const ownerUrl = `${window.location.origin}/${album.slug}?owner=${ownerToken}`
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(shareUrl)}`
   const canCustomize = userTier === 'pro' || userTier === 'studio'
   const canUseCollections = userTier === 'studio'
   const bgChoice = album.background_theme ?? DEFAULT_BG
@@ -670,7 +669,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
             <ShareMenu
               copied={copied}
               ownerUrl={ownerUrl}
-              qrUrl={qrUrl}
               shareUrl={shareUrl}
               albumTitle={album.title ?? 'Album'}
               onClose={() => setShowShare(false)}

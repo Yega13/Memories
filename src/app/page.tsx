@@ -339,7 +339,7 @@ export default function Home() {
               caption: '"Name it."',
               label: 'First',
               desc: 'Give your album a name. You get a private link you own - no account, no app.',
-              image: 'https://i.pinimg.com/736x/86/28/a9/8628a90f3228558f5961af600d479b28.jpg',
+              image: '/how-it-works-1.jpg',
               alt: 'Photo card representing a newly named Hushare album',
             },
             {
@@ -361,7 +361,7 @@ export default function Home() {
               caption: '"Keep it."',
               label: 'As long as you want',
               desc: 'Photos flow in from everyone who came. Free albums stay put - untouched for a year, they quietly retire. Active ones live on.',
-              image: 'https://i.pinimg.com/736x/23/97/bc/2397bc85b02c33168976049f3192fe46.jpg',
+              image: '/how-it-works-3.jpg',
               alt: 'Photo card representing a kept Hushare album',
             },
           ].map((step, i) => (

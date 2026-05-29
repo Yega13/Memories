@@ -32,7 +32,9 @@
       "Bash(grep -o \"hush-home-visuals[^}]*}\\\\|hush-home-mobile[^}]*}\\\\|lg\\\\\\\\\\\\\\\\:hidden[^}]*}\\\\|@media[^{]*1024[^}]*{[^}]*hush-home\" .next/static/css/d271dbeb35d87262.css)",
       "Bash(node -e \"const pkg = require\\('./node_modules/uuid/package.json'\\); console.log\\(pkg.version, pkg.name\\)\")",
       "Bash(grep -r \"uuid\" src/ --include=\"*.ts\" --include=\"*.tsx\" -l)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(curl -L -o how-it-works-1.jpg \"https://i.pinimg.com/736x/86/28/a9/8628a90f3228558f5961af600d479b28.jpg\" -w \"status:%{http_code} size:%{size_download}\")",
+      "Bash(curl -L -o how-it-works-3.jpg \"https://i.pinimg.com/736x/23/97/bc/2397bc85b02c33168976049f3192fe46.jpg\" -w \"status:%{http_code} size:%{size_download}\")"
     ]
   }
 }

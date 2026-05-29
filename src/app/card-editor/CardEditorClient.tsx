@@ -98,12 +98,25 @@ function ColorSwatch({ value, onChange }: { value: string; onChange: (v: string)
 }
 
 function NumInput({ label, value, onChange, min, max, step = 1, unit = '' }: { label: string; value: number; min?: number; max?: number; step?: number; unit?: string; onChange: (v: number) => void }) {
+  // Local state so mobile keyboards can type freely without re-render kicking them out
+  const [local, setLocal] = useState(String(Math.round(value * 10) / 10))
+  useEffect(() => { setLocal(String(Math.round(value * 10) / 10)) }, [value])
+  function commit(raw: string) {
+    const n = parseFloat(raw)
+    if (!isNaN(n)) {
+      const clamped = min !== undefined ? Math.max(min, max !== undefined ? Math.min(max, n) : n) : n
+      onChange(clamped)
+    } else { setLocal(String(Math.round(value * 10) / 10)) }
+  }
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>{label}</span>
       <div className="flex items-center gap-1 rounded border px-1.5 py-1" style={{ borderColor: '#E0E0E0' }}>
-        <input type="number" value={Math.round(value * 10) / 10} min={min} max={max} step={step}
-          onChange={e => onChange(Number(e.target.value))}
+        <input
+          type="text" inputMode="decimal" value={local}
+          onChange={e => setLocal(e.target.value)}
+          onBlur={e => commit(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { commit(local); e.currentTarget.blur() } }}
           className="w-full text-xs bg-transparent outline-none" style={{ color: '#1A1A1A' }} />
         {unit && <span className="text-xs shrink-0" style={{ color: '#999' }}>{unit}</span>}
       </div>
@@ -142,6 +155,10 @@ export default function CardEditorClient() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [transforming, setTransforming] = useState(false)
+  const [editingTextId, setEditingTextId] = useState<string | null>(null)
+  const [rotAngle, setRotAngle] = useState<number | null>(null)
+  const [dragLayerId, setDragLayerId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [tool, setTool] = useState<'select'|'text'|'rect'|'ellipse'|'line'|'image'>('select')
   const [guides, setGuides] = useState({ v: false, h: false, vx: CX, hy: CY })
   const [fontsReady, setFontsReady] = useState(false)
@@ -157,6 +174,7 @@ export default function CardEditorClient() {
   const trRef = useRef<Konva.Transformer>(null)
   const shapeRefs = useRef<Record<string, Konva.Node>>({})
   const stageContainer = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const gestureRef = useRef<{ active: boolean; startAngle: number; startRot: number; startDist: number; startScale: number }>({ active: false, startAngle: 0, startRot: 0, startDist: 0, startScale: 1 })
   const isDragging = useRef(false)
 
@@ -428,6 +446,34 @@ export default function CardEditorClient() {
     } finally { setDownloading(false) }
   }
 
+  // ─── Inline text commit ────────────────────────────────────────────────────
+
+  function commitTextEdit() {
+    if (!editingTextId || !textareaRef.current) return
+    const newText = textareaRef.current.value
+    updateEl(editingTextId, { text: newText, name: newText.slice(0, 18) || 'Text' })
+    setEditingTextId(null)
+  }
+
+  // ─── Alignment helpers ─────────────────────────────────────────────────────
+
+  function alignEl(axis: 'cx'|'cy'|'left'|'right'|'top'|'bottom') {
+    if (!selectedId) return
+    const el = liveEls.find(e => e.id === selectedId); if (!el) return
+    let hw = 0, hh = 0
+    if (el.kind === 'text')    { hw = el.width / 2 }
+    if (el.kind === 'rect')    { hw = el.width / 2;  hh = el.height / 2 }
+    if (el.kind === 'ellipse') { hw = el.radiusX;    hh = el.radiusY }
+    if (el.kind === 'line')    { hw = el.length / 2 }
+    if (el.kind === 'image')   { hw = el.width / 2;  hh = el.height / 2 }
+    if (axis === 'cx')     updateEl(el.id, { x: CX - hw })
+    if (axis === 'cy')     updateEl(el.id, { y: CY - hh })
+    if (axis === 'left')   updateEl(el.id, { x: 0 })
+    if (axis === 'right')  updateEl(el.id, { x: LW - hw * 2 })
+    if (axis === 'top')    updateEl(el.id, { y: 0 })
+    if (axis === 'bottom') updateEl(el.id, { y: LH - hh * 2 })
+  }
+
   // ─── Common Konva props ────────────────────────────────────────────────────
 
   function kProps(el: El) {
@@ -438,8 +484,12 @@ export default function CardEditorClient() {
       visible: el.visible,
       onClick:    () => { setSelectedId(el.id); setTransforming(false) },
       onTap:      () => { setSelectedId(el.id); setTransforming(false) },
-      onDblClick: () => { setSelectedId(el.id); setTransforming(true) },
-      onDblTap:   () => { setSelectedId(el.id); setTransforming(true) },
+      onDblClick: () => {
+        setSelectedId(el.id)
+        if (el.kind === 'text') { setEditingTextId(el.id); setTimeout(() => textareaRef.current?.focus(), 20) }
+        else setTransforming(true)
+      },
+      onDblTap: () => { setSelectedId(el.id); setTransforming(true) },
       onDragStart: () => { isDragging.current = true },
       onDragMove: (e: KonvaEventObject<DragEvent>) => handleDragMove(el.id, e),
       onDragEnd:  (e: KonvaEventObject<DragEvent>) => { isDragging.current = false; handleDragEnd(el.id, e) },
@@ -593,21 +643,42 @@ export default function CardEditorClient() {
           </div>
         )}
 
+        {/* Alignment */}
+        <div className="pt-2 border-t" style={{ borderColor: '#F0F0F0' }}>
+          <p className="text-[10px] uppercase tracking-wide mb-1.5" style={{ color: '#999' }}>Align to canvas</p>
+          <div className="grid grid-cols-3 gap-1">
+            {([
+              ['← Left', 'left'], ['— Center H', 'cx'], ['Right →', 'right'],
+              ['↑ Top', 'top'],   ['| Center V', 'cy'], ['↓ Bottom', 'bottom'],
+            ] as const).map(([label, axis]) => (
+              <button key={axis} onClick={() => alignEl(axis)}
+                className="text-[10px] rounded py-1.5 px-1 transition hover:opacity-80"
+                style={{ background: '#F5F5F5', color: '#555', border: '1px solid #E0E0E0' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Actions */}
-        <div className="flex gap-1.5 pt-2 border-t" style={{ borderColor: '#F0F0F0' }}>
+        <div className="flex gap-1.5">
           <button onClick={() => duplicateEl(s.id)} className="flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-2 transition hover:opacity-80"
             style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
             <Copy className="w-3 h-3" /> Copy
           </button>
-          <button onClick={() => moveLayer(s.id, 1)} className="flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-2 transition hover:opacity-80"
+          <button onClick={() => moveLayer(s.id, 1)} className="flex items-center justify-center gap-1 text-xs rounded-lg px-3 py-2 transition hover:opacity-80"
             style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
-            <ChevronUp className="w-3 h-3" /> Up
+            <ChevronUp className="w-3 h-3" />
           </button>
-          <button onClick={() => moveLayer(s.id, -1)} className="flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-2 transition hover:opacity-80"
+          <button onClick={() => moveLayer(s.id, -1)} className="flex items-center justify-center gap-1 text-xs rounded-lg px-3 py-2 transition hover:opacity-80"
             style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
-            <ChevronDown className="w-3 h-3" /> Down
+            <ChevronDown className="w-3 h-3" />
           </button>
-          <button onClick={() => deleteEl(s.id)} className="flex items-center justify-center gap-1 text-xs rounded-lg px-3 py-2"
+          <button onClick={() => updateEl(s.id, { locked: !s.locked })} className="flex items-center justify-center text-xs rounded-lg px-2.5 py-2"
+            style={{ background: s.locked ? '#FFF3E0' : '#F5F5F5', color: s.locked ? '#E65100' : '#888', border: '1px solid ' + (s.locked ? '#FFE0B2' : '#E0E0E0') }}>
+            {s.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+          </button>
+          <button onClick={() => deleteEl(s.id)} className="flex items-center justify-center text-xs rounded-lg px-2.5 py-2"
             style={{ background: '#FFF0F0', color: '#C0392B', border: '1px solid #FFCCCC' }}>
             <Trash2 className="w-3 h-3" />
           </button>
@@ -616,7 +687,7 @@ export default function CardEditorClient() {
         {/* Transform toggle */}
         <button onClick={() => setTransforming(t => !t)} className="w-full text-xs font-semibold rounded-lg py-2 transition"
           style={{ background: transforming ? '#E8F5E9' : '#F5F5F5', color: transforming ? '#254F22' : '#555', border: '1px solid ' + (transforming ? '#C8E6C9' : '#E0E0E0') }}>
-          {transforming ? '✓ Handles on — click to lock' : 'Enable resize / rotate handles'}
+          {transforming ? '✓ Handles on — dbl-click canvas to edit text' : 'Enable resize / rotate handles (dbl-click)'}
         </button>
       </div>
     )
@@ -625,12 +696,35 @@ export default function CardEditorClient() {
   // ─── Layers panel ─────────────────────────────────────────────────────────
 
   function LayersPanel() {
+    function dropLayer(targetId: string) {
+      if (!dragLayerId || dragLayerId === targetId) return
+      setEls(p => {
+        const next = [...p]
+        const fromIdx = next.findIndex(e => e.id === dragLayerId)
+        const toIdx   = next.findIndex(e => e.id === targetId)
+        const [item] = next.splice(fromIdx, 1)
+        next.splice(toIdx, 0, item)
+        return next
+      })
+      setDragLayerId(null); setDragOverId(null)
+    }
     return (
       <div className="space-y-1">
+        <p className="text-[10px] uppercase tracking-wide mb-2" style={{ color: '#999' }}>Drag to reorder — top = front</p>
         {[...liveEls].reverse().map(el => (
-          <div key={el.id} onClick={() => { setSelectedId(el.id); setTransforming(false) }}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-pointer transition"
-            style={{ background: el.id === selectedId ? '#E8F5E9' : 'transparent', border: '1px solid ' + (el.id === selectedId ? '#C8E6C9' : 'transparent') }}>
+          <div key={el.id}
+            draggable
+            onDragStart={() => setDragLayerId(el.id)}
+            onDragOver={e => { e.preventDefault(); setDragOverId(el.id) }}
+            onDrop={() => dropLayer(el.id)}
+            onDragEnd={() => { setDragLayerId(null); setDragOverId(null) }}
+            onClick={() => { setSelectedId(el.id); setTransforming(false) }}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing transition select-none"
+            style={{
+              background: el.id === selectedId ? '#E8F5E9' : el.id === dragOverId ? '#EEF2FF' : 'transparent',
+              border: '1px solid ' + (el.id === selectedId ? '#C8E6C9' : el.id === dragOverId ? '#C7D2FE' : 'transparent'),
+              opacity: el.id === dragLayerId ? 0.4 : 1,
+            }}>
             <span className="text-[10px] w-10 shrink-0 text-center rounded px-1 py-0.5 font-mono uppercase" style={{ background: '#F5F5F5', color: '#888' }}>
               {el.kind.slice(0, 4)}
             </span>
@@ -753,6 +847,57 @@ export default function CardEditorClient() {
               <div className="absolute inset-0 flex items-center justify-center z-10 rounded-xl"
                 style={{ background: 'rgba(255,255,255,0.85)', fontSize: 12, color: '#888' }}>Loading…</div>
             )}
+
+            {/* Rotation angle badge */}
+            {rotAngle !== null && (
+              <div className="absolute top-2 right-2 z-20 rounded-lg px-2.5 py-1 text-xs font-mono font-bold pointer-events-none"
+                style={{ background: 'rgba(0,0,0,0.75)', color: '#FFF', letterSpacing: '0.05em' }}>
+                {rotAngle}° {rotAngle === 0 ? '↔' : rotAngle === 90 ? '↕' : rotAngle === 45 || rotAngle === 135 || rotAngle === 225 || rotAngle === 315 ? '✕' : ''}
+              </div>
+            )}
+
+            {/* Inline text editor overlay (desktop) */}
+            {editingTextId && (() => {
+              const el = liveEls.find(e => e.id === editingTextId)
+              if (!el || el.kind !== 'text') return null
+              return (
+                <textarea
+                  ref={textareaRef}
+                  defaultValue={el.text}
+                  onBlur={commitTextEdit}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setEditingTextId(null) }
+                    if (e.key === 'Enter' && e.metaKey) commitTextEdit()
+                  }}
+                  style={{
+                    position: 'absolute',
+                    left: el.x * scale,
+                    top: el.y * scale,
+                    width: el.width * scale,
+                    minHeight: el.fontSize * scale * 1.5,
+                    fontSize: el.fontSize * scale,
+                    fontFamily: el.fontFamily,
+                    fontStyle: el.fontStyle.includes('italic') ? 'italic' : 'normal',
+                    fontWeight: el.fontStyle.includes('bold') ? 700 : 400,
+                    color: el.fill,
+                    textAlign: el.align,
+                    background: 'rgba(255,255,255,0.92)',
+                    border: '2px dashed #3B82F6',
+                    borderRadius: 4,
+                    outline: 'none',
+                    resize: 'none',
+                    padding: '2px 4px',
+                    lineHeight: el.lineHeight,
+                    letterSpacing: el.letterSpacing,
+                    transform: el.rotation !== 0 ? `rotate(${el.rotation}deg)` : undefined,
+                    transformOrigin: 'top left',
+                    zIndex: 20,
+                    overflow: 'hidden',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              )
+            })()}
             <Stage
               ref={stageRef}
               width={stageW}
@@ -790,6 +935,13 @@ export default function CardEditorClient() {
                   anchorSize={8} anchorCornerRadius={3}
                   borderStroke="#3B82F6" anchorStroke="#3B82F6" anchorFill="#FFFFFF"
                   rotateAnchorOffset={20}
+                  rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
+                  rotationSnapTolerance={8}
+                  onTransform={() => {
+                    const node = trRef.current?.nodes()[0]
+                    if (node) setRotAngle(Math.round(node.rotation()))
+                  }}
+                  onTransformEnd={() => setTimeout(() => setRotAngle(null), 800)}
                 />
               </Layer>
             </Stage>

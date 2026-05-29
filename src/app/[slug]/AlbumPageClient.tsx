@@ -180,10 +180,9 @@ export default function AlbumPageClient() {
         )
         .on(
           'postgres_changes',
-          // No server-side filter on DELETE — Postgres only writes the PK to WAL by default
-          // (REPLICA IDENTITY FULL would be needed). Filter client-side instead: any photo not
-          // in our current list is a no-op, so this is safe in a multi-album environment.
-          { event: 'DELETE', schema: 'public', table: 'photos' },
+          // Server-side filter requires REPLICA IDENTITY FULL on the photos table so Postgres
+          // writes album_id to WAL on DELETE. Migration: 20260529_photos_replica_identity.sql.
+          { event: 'DELETE', schema: 'public', table: 'photos', filter: `album_id=eq.${albumId}` },
           (payload) => {
             const deletedId = (payload.old as { id: string }).id
             setPhotos((prev) => prev.filter((p) => p.id !== deletedId))
@@ -375,7 +374,6 @@ export default function AlbumPageClient() {
             )}
             <GuestShareButton
               shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/${album.custom_slug ?? album.slug}`}
-              qrUrl={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`${typeof window !== 'undefined' ? window.location.origin : 'https://hushare.space'}/${album.custom_slug ?? album.slug}`)}`}
               albumTitle={album.title}
             />
           </div>

@@ -11,7 +11,6 @@ type CardStyle = 'branded' | 'bw'
 type Props = {
   copied: 'share' | 'owner' | null
   ownerUrl: string
-  qrUrl: string
   shareUrl: string
   albumTitle: string
   onClose: () => void
@@ -111,8 +110,18 @@ function TableCardView({ shareUrl, albumTitle, onBack }: { shareUrl: string; alb
 
 // ─── Main share menu ──────────────────────────────────────────────────────────
 
-export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitle, onClose, onCopy }: Props) {
+export default function ShareMenu({ copied, ownerUrl, shareUrl, albumTitle, onClose, onCopy }: Props) {
   const [view, setView] = useState<'main' | 'tablecard'>('main')
+  const [qrDataUrl, setQrDataUrl] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    import('qrcode').then(({ default: QRCode }) => {
+      QRCode.toDataURL(shareUrl, { width: 300, margin: 2, color: { dark: '#254F22', light: '#FFFFFF' } })
+        .then((url) => { if (!cancelled) setQrDataUrl(url) })
+    })
+    return () => { cancelled = true }
+  }, [shareUrl])
 
   async function handleShare() {
     if (typeof navigator !== 'undefined' && navigator.share) {
@@ -175,7 +184,7 @@ export default function ShareMenu({ copied, ownerUrl, qrUrl, shareUrl, albumTitl
 
           <div className="mt-3 rounded-xl p-3" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
             <div className="flex items-center gap-3">
-              <Image src={qrUrl} alt="QR Code" width={92} height={92} unoptimized />
+              {qrDataUrl && <Image src={qrDataUrl} alt="QR Code" width={92} height={92} unoptimized />}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold flex items-center gap-2" style={{ color: '#254F22' }}>
                   <QrCode className="w-4 h-4" />

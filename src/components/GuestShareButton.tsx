@@ -7,14 +7,23 @@ import { showAppToast } from '@/components/AppToast'
 
 type Props = {
   shareUrl: string
-  qrUrl: string
   albumTitle: string
 }
 
-export default function GuestShareButton({ shareUrl, qrUrl, albumTitle }: Props) {
+export default function GuestShareButton({ shareUrl, albumTitle }: Props) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState('')
   const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    import('qrcode').then(({ default: QRCode }) => {
+      QRCode.toDataURL(shareUrl, { width: 300, margin: 2, color: { dark: '#254F22', light: '#FFFFFF' } })
+        .then((url) => { if (!cancelled) setQrDataUrl(url) })
+    })
+    return () => { cancelled = true }
+  }, [shareUrl])
 
   useEffect(() => {
     if (!open) return
@@ -98,7 +107,7 @@ export default function GuestShareButton({ shareUrl, qrUrl, albumTitle }: Props)
 
           <div className="mt-3 rounded-xl p-3" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
             <div className="flex items-center gap-3">
-              <Image src={qrUrl} alt="QR Code" width={80} height={80} unoptimized />
+              {qrDataUrl && <Image src={qrDataUrl} alt="QR Code" width={80} height={80} unoptimized />}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold flex items-center gap-2" style={{ color: '#254F22' }}>
                   <QrCode className="w-4 h-4" />
