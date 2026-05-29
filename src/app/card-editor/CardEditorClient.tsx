@@ -68,10 +68,10 @@ function useHistory(init: HistState) {
     setStates(prev => { const next = [...prev.slice(0, idx + 1), s]; setIdx(next.length - 1); return next })
   }, [idx])
   const undo = useCallback(() => setIdx(i => Math.max(0, i - 1)), [])
-  const redo = useCallback(() => setIdx(i => { return i }), [])  // placeholder
+  const redo = useCallback(() => setIdx(i => Math.min(states.length - 1, i + 1)), [states.length])
   const canUndo = idx > 0
   const canRedo = idx < states.length - 1
-  return { state: states[idx], push, undo: () => setIdx(i => Math.max(0, i - 1)), redo: () => setIdx(i => Math.min(states.length - 1, i + 1)), canUndo, canRedo }
+  return { state: states[idx], push, undo, redo, canUndo, canRedo }
 }
 
 // ─── Small UI atoms ───────────────────────────────────────────────────────────
@@ -181,7 +181,7 @@ export default function CardEditorClient() {
   // Stage sizing
   useEffect(() => {
     function update() {
-      const sidebar = window.innerWidth >= 1024 ? 256 + 280 : 0
+      const sidebar = window.innerWidth >= 1024 ? 56 + 256 : 0
       setStageW(Math.min(LW, window.innerWidth - sidebar - 48))
     }
     update()
@@ -269,7 +269,7 @@ export default function CardEditorClient() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  })
+  }, [selectedId, undo, redo, deleteEl, duplicateEl, moveLayer, setEls])
 
   const selected = useMemo(() => liveEls.find(e => e.id === selectedId) ?? null, [liveEls, selectedId])
 
@@ -796,7 +796,7 @@ export default function CardEditorClient() {
           </button>
         )}
 
-        <button onClick={download} disabled={downloading || !shareUrl}
+        <button onClick={download} disabled={downloading}
           className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition hover:opacity-90 disabled:opacity-40"
           style={{ background: '#254F22', color: '#FDFAF5' }}>
           <Download className="w-3.5 h-3.5" />
@@ -963,7 +963,7 @@ export default function CardEditorClient() {
             ))}
           </div>
           <div className="flex-1 overflow-y-auto p-3">
-            {rightTab === 'props' ? <PropsPanel /> : <LayersPanel />}
+            {rightTab === 'props' ? PropsPanel() : LayersPanel()}
           </div>
         </div>
 
@@ -997,7 +997,7 @@ export default function CardEditorClient() {
         {/* Mobile properties (collapsed) */}
         {selected && (
           <div className="px-3 pb-3 max-h-64 overflow-y-auto border-t" style={{ borderColor: '#F0F0F0' }}>
-            <PropsPanel />
+            {PropsPanel()}
           </div>
         )}
       </div>
