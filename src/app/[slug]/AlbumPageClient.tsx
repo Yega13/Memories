@@ -231,7 +231,6 @@ export default function AlbumPageClient() {
   // Realtime INSERT subscription handles new photos — no manual refetch needed here.
   // Calling fetchPhotos on each upload caused concurrent DB fetches that raced each other
   // and overwrote state, making newly-uploaded photos disappear until page refresh.
-  const handlePhotoAdded = () => {}
 
   const handlePhotoDeleted = (photoId: string) => {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))
@@ -388,7 +387,7 @@ export default function AlbumPageClient() {
             />
           </ErrorBoundary>
         )}
-        <UploadZone album={album} onPhotoAdded={handlePhotoAdded} />
+        <UploadZone album={album} />
         <ErrorBoundary>
         <PhotoGrid
           album={album}

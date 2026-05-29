@@ -562,7 +562,6 @@ async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: st
 
 type Props = {
   album: Album
-  onPhotoAdded: () => void
 }
 
 type PendingItem = {
@@ -816,7 +815,7 @@ async function uploadToSupabaseStorage(
   throw lastError
 }
 
-export default function UploadZone({ album, onPhotoAdded }: Props) {
+export default function UploadZone({ album }: Props) {
   const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [preparing, setPreparing] = useState(false)
@@ -1118,8 +1117,6 @@ export default function UploadZone({ album, onPhotoAdded }: Props) {
         setUploading(false)
         return
       }
-      onPhotoAdded()
-
       // Enqueue background poster jobs for successfully uploaded videos. We DO this strictly
       // after the rows exist in the DB so the PATCH route has something to update. Jobs run
       // one at a time (module-level queue), and any failure is silent — the video itself is

@@ -94,13 +94,16 @@ async function sendViaResend(to: string, subject: string, html: string, text: st
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
 
-  if (HOOK_SECRET) {
-    const id = req.headers.get('webhook-id') ?? ''
-    const timestamp = req.headers.get('webhook-timestamp') ?? ''
-    const signature = req.headers.get('webhook-signature') ?? ''
-    if (!verifyWebhook(HOOK_SECRET, id, timestamp, rawBody, signature)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!HOOK_SECRET) {
+    console.error('[auth-hook] SUPABASE_AUTH_HOOK_SECRET is not set — refusing all requests')
+    return NextResponse.json({ error: 'Not configured' }, { status: 503 })
+  }
+
+  const id = req.headers.get('webhook-id') ?? ''
+  const timestamp = req.headers.get('webhook-timestamp') ?? ''
+  const signature = req.headers.get('webhook-signature') ?? ''
+  if (!verifyWebhook(HOOK_SECRET, id, timestamp, rawBody, signature)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   let payload: HookPayload
