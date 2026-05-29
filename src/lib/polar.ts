@@ -1,3 +1,4 @@
+import { timingSafeEqual } from '@/lib/timing-safe'
 
 const PROD_BASE = 'https://api.polar.sh'
 const SANDBOX_BASE = 'https://sandbox-api.polar.sh'
@@ -107,12 +108,6 @@ export async function verifyWebhookSignature(
   return candidates.some((candidate) => timingSafeEqual(candidate, expected))
 }
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) result |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  return result === 0
-}
 
 type ProductMap = Record<string, { tier: 'pro' | 'studio'; cycle: 'monthly' | 'yearly' }>
 
