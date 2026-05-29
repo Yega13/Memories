@@ -132,6 +132,16 @@
   }
 }
 
+@keyframes editor-saved-fade {
+  0%   { opacity: 0.9; }
+  60%  { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+.animate-fade-out {
+  animation: editor-saved-fade 2s ease forwards;
+}
+
 @keyframes hush-float {
   0%,
   100% {

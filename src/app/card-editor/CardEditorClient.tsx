@@ -67,11 +67,12 @@ function useHistory(init: HistState) {
   const push = useCallback((s: HistState) => {
     setStates(prev => { const next = [...prev.slice(0, idx + 1), s]; setIdx(next.length - 1); return next })
   }, [idx])
+  const replace = useCallback((s: HistState) => { setStates([s]); setIdx(0) }, [])
   const undo = useCallback(() => setIdx(i => Math.max(0, i - 1)), [])
   const redo = useCallback(() => setIdx(i => Math.min(states.length - 1, i + 1)), [states.length])
   const canUndo = idx > 0
   const canRedo = idx < states.length - 1
-  return { state: states[idx], push, undo, redo, canUndo, canRedo }
+  return { state: states[idx], push, replace, undo, redo, canUndo, canRedo }
 }
 
 // ─── Small UI atoms ───────────────────────────────────────────────────────────
@@ -142,8 +143,10 @@ export default function CardEditorClient() {
   const shareUrl    = params.get('url') ?? ''
   const initialTitle = params.get('title') ?? ''
 
+  const LS_KEY = 'hushare_card_v1'
   const [qrDataUrl, setQrDataUrl] = useState('')
-  const { state, push, undo, redo, canUndo, canRedo } = useHistory({ els: [], bg: '#FFFFFF' })
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const { state, push, replace, undo, redo, canUndo, canRedo } = useHistory({ els: [], bg: '#FFFFFF' })
   const { els, bg } = state
   function setEls(next: El[] | ((p: El[]) => El[]), commit = true) {
     const newEls = typeof next === 'function' ? next(els) : next
@@ -214,9 +217,32 @@ export default function CardEditorClient() {
     QRCode.toDataURL(shareUrl, { width: 400, margin: 1, color: { dark: '#111111', light: '#FFFFFF' } }).then(url => {
       setQrDataUrl(url)
       const t = template(initialTitle, url, 'branded')
-      push({ els: t.els, bg: t.bg })
+      replace({ els: t.els, bg: t.bg })  // replace so undo can't go past this
     })
   }, [shareUrl, initialTitle])  // eslint-disable-line
+
+  // Load from localStorage when opened without a shareUrl
+  useEffect(() => {
+    if (shareUrl) return
+    try {
+      const raw = localStorage.getItem(LS_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as HistState
+      if (Array.isArray(saved.els) && saved.els.length > 0) replace(saved)
+    } catch { /* ignore */ }
+  }, [])  // eslint-disable-line
+
+  // Auto-save to localStorage on every committed state change
+  useEffect(() => {
+    if (els.length === 0) return
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify({ els, bg }))
+        setSavedAt(Date.now())
+      } catch { /* quota exceeded */ }
+    }, 600)
+    return () => clearTimeout(t)
+  }, [els, bg])  // eslint-disable-line
 
   // Load images
   useEffect(() => {
@@ -773,6 +799,13 @@ export default function CardEditorClient() {
 
         <span className="text-sm font-semibold text-white hidden sm:block mx-2">Card Editor</span>
 
+        {savedAt && (
+          <span key={savedAt} className="text-[10px] hidden sm:block animate-fade-out"
+            style={{ color: '#6EE7B7', opacity: 0.85 }}>
+            Saved
+          </span>
+        )}
+
         <div className="flex gap-1 ml-1">
           <button onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)"
             className="flex items-center gap-1 text-xs rounded-lg px-2.5 py-1.5 transition disabled:opacity-30"
@@ -935,6 +968,7 @@ export default function CardEditorClient() {
                   anchorSize={8} anchorCornerRadius={3}
                   borderStroke="#3B82F6" anchorStroke="#3B82F6" anchorFill="#FFFFFF"
                   rotateAnchorOffset={20}
+                  rotateAnchorCursor={`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M17.65 6.35A7.96 7.96 0 0 0 12 4c-4.42 0-8 3.58-8 8s3.58 8 8 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z' fill='%23111111'/%3E%3C/svg%3E") 12 12, crosshair`}
                   rotationSnaps={[0, 45, 90, 135, 180, 225, 270, 315]}
                   rotationSnapTolerance={8}
                   onTransform={() => {
