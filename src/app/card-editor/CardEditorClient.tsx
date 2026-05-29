@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Stage, Layer, Text, Line, Image as KonvaImage, Rect, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
@@ -12,9 +12,10 @@ import QRCode from 'qrcode'
 
 const STAGE_W = 480
 const STAGE_H = Math.round(STAGE_W * 1700 / 1200) // 680
-const DL_RATIO = 1200 / STAGE_W                   // ≈ 2.5 → 1200×1700 export
+const DL_RATIO = 1200 / STAGE_W
+const SNAP_DIST = 10
 
-// ─── Element types ────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type TextEl = {
   id: string; kind: 'text'
@@ -37,36 +38,38 @@ type El = TextEl | LineEl | ImgEl
 
 function uid() { return Math.random().toString(36).slice(2) }
 
+const CX = STAGE_W / 2
+
 function defaultElements(title: string, qrDataUrl: string): El[] {
-  const cx = STAGE_W / 2
   return [
     {
       id: 'heading', kind: 'text',
-      x: cx, y: 72, rotation: 0,
+      // x = left edge (centered: CX - width/2)
+      x: CX - 200, y: 72, rotation: 0,
       text: title || 'CAPTURE THE MOMENT',
       fontSize: 32, fontFamily: "'Playfair Display', Georgia, serif",
       fontStyle: 'bold', fill: '#111111', align: 'center', width: 400,
     },
     {
       id: 'sep', kind: 'line',
-      x: cx - 70, y: 152, rotation: 0,
+      x: CX - 70, y: 152, rotation: 0,
       length: 140, stroke: '#254F22', strokeWidth: 2,
     },
     {
       id: 'body', kind: 'text',
-      x: cx, y: 168, rotation: 0,
+      x: CX - 160, y: 168, rotation: 0,
       text: 'Scan the QR code with your camera to upload your photos and videos.',
       fontSize: 14, fontFamily: "'Playfair Display', Georgia, serif",
       fontStyle: 'normal', fill: '#555555', align: 'center', width: 320,
     },
     {
       id: 'qr', kind: 'image',
-      x: cx - 90, y: 255, rotation: 0,
+      x: CX - 90, y: 255, rotation: 0,
       src: qrDataUrl, w: 180, h: 180,
     },
     {
       id: 'footer', kind: 'text',
-      x: cx, y: STAGE_H - 38, rotation: 0,
+      x: CX - 90, y: STAGE_H - 38, rotation: 0,
       text: 'hushare.space',
       fontSize: 11, fontFamily: "'Playfair Display', Georgia, serif",
       fontStyle: 'italic', fill: '#AAAAAA', align: 'center', width: 180,
@@ -76,21 +79,13 @@ function defaultElements(title: string, qrDataUrl: string): El[] {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function useLoadedImage(src: string | null): HTMLImageElement | undefined {
-  const [img, setImg] = useState<HTMLImageElement>()
-  useEffect(() => {
-    if (!src) { setImg(undefined); return }
-    const i = new Image()
-    i.onload = () => setImg(i)
-    i.src = src
-  }, [src])
-  return img
+function getElHalfSize(el: El) {
+  if (el.kind === 'text') return { hw: el.width / 2, hh: el.fontSize }
+  if (el.kind === 'line') return { hw: el.length / 2, hh: el.strokeWidth / 2 }
+  return { hw: el.w / 2, hh: el.h / 2 }
 }
 
-// A thin wrapper so each ImgEl can use a hook (rules of hooks: only at top level)
-// We pre-load all image srcs into a Map via a single effect instead.
-
-// ─── Sidebar sub-components ───────────────────────────────────────────────────
+// ─── UI helpers ───────────────────────────────────────────────────────────────
 
 function ColorInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   const [hex, setHex] = useState(value)
@@ -128,17 +123,19 @@ function Slider({ label, value, min, max, step = 1, onChange }: {
   )
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function CardEditorClient() {
   const params = useSearchParams()
+  const router = useRouter()
   const shareUrl = params.get('url') ?? ''
   const initialTitle = params.get('title') ?? ''
 
   const [bgColor, setBgColor] = useState('#FFFFFF')
   const [elements, setElements] = useState<El[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [qrDataUrl, setQrDataUrl] = useState<string>('')
+  const [transformingId, setTransformingId] = useState<string | null>(null)
+  const [guides, setGuides] = useState({ h: false, v: false })
   const [loadedImgs, setLoadedImgs] = useState<Record<string, HTMLImageElement>>({})
   const [downloading, setDownloading] = useState(false)
   const [fontsReady, setFontsReady] = useState(false)
@@ -146,9 +143,8 @@ export default function CardEditorClient() {
   const stageRef = useRef<Konva.Stage>(null)
   const transformerRef = useRef<Konva.Transformer>(null)
   const shapeRefs = useRef<Record<string, Konva.Node>>({})
-  const logoInputRef = useRef<HTMLInputElement>(null)
 
-  // Load fonts
+  // Font loading
   useEffect(() => {
     document.fonts.ready.then(() => {
       Promise.all([
@@ -159,46 +155,53 @@ export default function CardEditorClient() {
     })
   }, [])
 
-  // Generate QR and init elements
+  // Generate QR + init
   useEffect(() => {
     if (!shareUrl) return
     QRCode.toDataURL(shareUrl, { width: 400, margin: 1, color: { dark: '#111111', light: '#FFFFFF' } })
       .then(url => {
-        setQrDataUrl(url)
         setElements(defaultElements(initialTitle, url))
       })
   }, [shareUrl, initialTitle])
 
-  // Load images referenced by elements
+  // Load images
   useEffect(() => {
     const srcs = elements.filter((e): e is ImgEl => e.kind === 'image').map(e => e.src)
-    const missing = srcs.filter(s => !loadedImgs[s])
-    if (missing.length === 0) return
-    missing.forEach(src => {
+    srcs.filter(s => !loadedImgs[s]).forEach(src => {
       const img = new Image()
       img.onload = () => setLoadedImgs(prev => ({ ...prev, [src]: img }))
       img.src = src
     })
   }, [elements, loadedImgs])
 
-  // Sync transformer to selected node
+  // Sync transformer — selectedId shows border only, transformingId shows full handles
   useEffect(() => {
     const tr = transformerRef.current
     if (!tr) return
-    const node = selectedId ? shapeRefs.current[selectedId] : null
+    const nodeId = transformingId ?? selectedId
+    const node = nodeId ? shapeRefs.current[nodeId] : null
     tr.nodes(node ? [node] : [])
+    if (node) {
+      if (transformingId) {
+        tr.enabledAnchors(['top-left', 'top-center', 'top-right', 'middle-left', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'])
+        tr.rotateEnabled(true)
+      } else {
+        // Selection border only — no resize/rotate handles
+        tr.enabledAnchors([])
+        tr.rotateEnabled(false)
+      }
+    }
     tr.getLayer()?.batchDraw()
-  }, [selectedId, elements])
+  }, [selectedId, transformingId, elements])
 
   // Delete key
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.key === 'Delete' || e.key === 'Backspace') &&
-        selectedId &&
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement)) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId &&
+        !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
         deleteSelected()
       }
+      if (e.key === 'Escape') { setSelectedId(null); setTransformingId(null) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -208,13 +211,29 @@ export default function CardEditorClient() {
     if (!selectedId) return
     setElements(prev => prev.filter(e => e.id !== selectedId))
     setSelectedId(null)
+    setTransformingId(null)
   }, [selectedId])
 
-  function updateEl<T extends El>(id: string, patch: Partial<T>) {
+  function updateEl<T extends El>(id: string, patch: Partial<Omit<T, 'id' | 'kind'>>) {
     setElements(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
   }
 
+  function handleDragMove(id: string, e: KonvaEventObject<DragEvent>) {
+    const node = e.target
+    const el = elements.find(e => e.id === id)
+    if (!el) return
+    const { hw, hh } = getElHalfSize(el)
+    const centerX = node.x() + hw
+    const centerY = node.y() + hh
+    const nearV = Math.abs(centerX - CX) < SNAP_DIST
+    const nearH = Math.abs(centerY - STAGE_H / 2) < SNAP_DIST
+    if (nearV) node.x(CX - hw)
+    if (nearH) node.y(STAGE_H / 2 - hh)
+    setGuides({ v: nearV, h: nearH })
+  }
+
   function handleDragEnd(id: string, e: KonvaEventObject<DragEvent>) {
+    setGuides({ h: false, v: false })
     updateEl(id, { x: e.target.x(), y: e.target.y() })
   }
 
@@ -224,47 +243,27 @@ export default function CardEditorClient() {
     if (!el) return
     const sx = node.scaleX(), sy = node.scaleY()
     if (el.kind === 'text') {
-      updateEl<TextEl>(id, {
-        x: node.x(), y: node.y(), rotation: node.rotation(),
-        fontSize: Math.max(6, Math.round(el.fontSize * sy)),
-        width: Math.max(40, Math.round(el.width * sx)),
-      })
+      updateEl<TextEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: Math.max(6, Math.round(el.fontSize * sy)), width: Math.max(40, Math.round(el.width * sx)) })
     } else if (el.kind === 'line') {
-      updateEl<LineEl>(id, {
-        x: node.x(), y: node.y(), rotation: node.rotation(),
-        length: Math.max(10, Math.round(el.length * sx)),
-        strokeWidth: Math.max(0.5, el.strokeWidth * sy),
-      })
+      updateEl<LineEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), length: Math.max(10, Math.round(el.length * sx)), strokeWidth: Math.max(0.5, el.strokeWidth * sy) })
     } else if (el.kind === 'image') {
-      updateEl<ImgEl>(id, {
-        x: node.x(), y: node.y(), rotation: node.rotation(),
-        w: Math.max(20, Math.round(el.w * sx)),
-        h: Math.max(20, Math.round(el.h * sy)),
-      })
+      updateEl<ImgEl>(id, { x: node.x(), y: node.y(), rotation: node.rotation(), w: Math.max(20, Math.round(el.w * sx)), h: Math.max(20, Math.round(el.h * sy)) })
     }
     node.scaleX(1); node.scaleY(1)
   }
 
   function addText() {
-    const el: TextEl = {
-      id: uid(), kind: 'text',
-      x: STAGE_W / 2, y: 80, rotation: 0,
-      text: 'New text', fontSize: 20,
-      fontFamily: "'Playfair Display', Georgia, serif",
-      fontStyle: 'normal', fill: '#111111', align: 'center', width: 300,
-    }
+    const el: TextEl = { id: uid(), kind: 'text', x: CX - 150, y: 80, rotation: 0, text: 'New text', fontSize: 20, fontFamily: "'Playfair Display', Georgia, serif", fontStyle: 'normal', fill: '#111111', align: 'center', width: 300 }
     setElements(prev => [...prev, el])
     setSelectedId(el.id)
+    setTransformingId(null)
   }
 
   function addLine() {
-    const el: LineEl = {
-      id: uid(), kind: 'line',
-      x: STAGE_W / 2 - 80, y: 200, rotation: 0,
-      length: 160, stroke: '#254F22', strokeWidth: 2,
-    }
+    const el: LineEl = { id: uid(), kind: 'line', x: CX - 80, y: 200, rotation: 0, length: 160, stroke: '#254F22', strokeWidth: 2 }
     setElements(prev => [...prev, el])
     setSelectedId(el.id)
+    setTransformingId(null)
   }
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -273,32 +272,20 @@ export default function CardEditorClient() {
     const reader = new FileReader()
     reader.onload = ev => {
       const src = ev.target?.result as string
-      const el: ImgEl = {
-        id: uid(), kind: 'image',
-        x: STAGE_W / 2 - 80, y: 100, rotation: 0,
-        src, w: 160, h: 160,
-      }
+      const el: ImgEl = { id: uid(), kind: 'image', x: CX - 80, y: 100, rotation: 0, src, w: 160, h: 160 }
       setElements(prev => [...prev, el])
       setSelectedId(el.id)
+      setTransformingId(null)
     }
     reader.readAsDataURL(file)
     e.target.value = ''
   }
 
-  function replaceQR(newQrDataUrl: string) {
-    setElements(prev => prev.map(e =>
-      e.kind === 'image' && e.id === selectedId
-        ? { ...e, src: newQrDataUrl }
-        : e
-    ))
-  }
-
   async function handleDownload() {
     if (!stageRef.current) return
-    setSelectedId(null)
+    setSelectedId(null); setTransformingId(null)
     setDownloading(true)
-    // Wait a frame so transformer hides
-    await new Promise(r => setTimeout(r, 60))
+    await new Promise(r => setTimeout(r, 80))
     try {
       const dataUrl = stageRef.current.toDataURL({ pixelRatio: DL_RATIO, mimeType: 'image/png' })
       const link = document.createElement('a')
@@ -311,45 +298,56 @@ export default function CardEditorClient() {
   }
 
   function resetLayout() {
-    if (qrDataUrl) setElements(defaultElements(initialTitle, qrDataUrl))
-    setSelectedId(null)
+    QRCode.toDataURL(shareUrl, { width: 400, margin: 1, color: { dark: '#111111', light: '#FFFFFF' } })
+      .then(url => { setElements(defaultElements(initialTitle, url)); setBgColor('#FFFFFF') })
+    setSelectedId(null); setTransformingId(null)
   }
 
   const selected = elements.find(e => e.id === selectedId)
 
-  // ─── Sidebar panel for selected element ──────────────────────────────────────
+  // ─── Sidebar: selected element properties ────────────────────────────────────
 
-  function renderSelectedProps() {
+  function renderProps() {
     if (!selected) return null
     return (
       <div className="space-y-3 pt-3 border-t" style={{ borderColor: '#F0F0F0' }}>
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold" style={{ color: '#254F22' }}>
-            {selected.kind === 'text' ? 'Text' : selected.kind === 'line' ? 'Line' : 'Image'} selected
+            {selected.kind === 'text' ? 'Text' : selected.kind === 'line' ? 'Line' : 'Image'}
           </span>
-          <button onClick={deleteSelected} className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 transition hover:opacity-80"
+          <button onClick={deleteSelected} className="flex items-center gap-1 text-xs rounded-lg px-2 py-1"
             style={{ background: '#FFF0F0', color: '#C0392B', border: '1px solid #FFCCCC' }}>
             <Trash2 className="w-3 h-3" /> Delete
           </button>
         </div>
 
+        {!transformingId && (
+          <button onClick={() => setTransformingId(selectedId)}
+            className="w-full text-xs font-semibold rounded-lg py-2 transition hover:opacity-80"
+            style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
+            Enable resize &amp; rotate
+          </button>
+        )}
+        {transformingId && (
+          <button onClick={() => setTransformingId(null)}
+            className="w-full text-xs font-semibold rounded-lg py-2 transition hover:opacity-80"
+            style={{ background: '#E8F5E9', color: '#254F22', border: '1px solid #C8E6C9' }}>
+            Lock (disable handles)
+          </button>
+        )}
+
         {selected.kind === 'text' && (
           <>
             <div>
               <label className="text-xs text-gray-500 block mb-1">Text</label>
-              <textarea
-                value={selected.text}
-                onChange={e => updateEl<TextEl>(selected.id, { text: e.target.value })}
-                className="w-full rounded-lg border px-2 py-1.5 text-sm"
-                style={{ borderColor: '#E0E0E0', resize: 'vertical', minHeight: 60 }}
-              />
+              <textarea value={selected.text} onChange={e => updateEl<TextEl>(selected.id, { text: e.target.value })}
+                className="w-full rounded-lg border px-2 py-1.5 text-sm" style={{ borderColor: '#E0E0E0', resize: 'vertical', minHeight: 60 }} />
             </div>
             <Slider label="Font size" value={selected.fontSize} min={8} max={80} onChange={v => updateEl<TextEl>(selected.id, { fontSize: v })} />
             <Slider label="Width" value={selected.width} min={60} max={STAGE_W - 20} onChange={v => updateEl<TextEl>(selected.id, { width: v })} />
             <div>
               <label className="text-xs text-gray-500 block mb-1">Font</label>
-              <select value={selected.fontFamily}
-                onChange={e => updateEl<TextEl>(selected.id, { fontFamily: e.target.value })}
+              <select value={selected.fontFamily} onChange={e => updateEl<TextEl>(selected.id, { fontFamily: e.target.value })}
                 className="w-full rounded border px-2 py-1 text-xs" style={{ borderColor: '#E0E0E0' }}>
                 <option value="'Playfair Display', Georgia, serif">Playfair Display (Serif)</option>
                 <option value="'Geist', system-ui, sans-serif">Geist (Sans)</option>
@@ -362,13 +360,7 @@ export default function CardEditorClient() {
                 {(['normal', 'bold', 'italic', 'bold italic'] as const).map(s => (
                   <button key={s} onClick={() => updateEl<TextEl>(selected.id, { fontStyle: s })}
                     className="flex-1 text-xs rounded py-1 transition"
-                    style={{
-                      background: selected.fontStyle === s ? '#254F22' : '#F5F0E8',
-                      color: selected.fontStyle === s ? '#FDFAF5' : '#5C3D2E',
-                      border: '1px solid ' + (selected.fontStyle === s ? '#254F22' : '#DDD5C5'),
-                      fontWeight: s.includes('bold') ? 700 : 400,
-                      fontStyle: s.includes('italic') ? 'italic' : 'normal',
-                    }}>
+                    style={{ background: selected.fontStyle === s ? '#254F22' : '#F5F0E8', color: selected.fontStyle === s ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (selected.fontStyle === s ? '#254F22' : '#DDD5C5'), fontWeight: s.includes('bold') ? 700 : 400, fontStyle: s.includes('italic') ? 'italic' : 'normal' }}>
                     {s === 'normal' ? 'Aa' : s === 'bold' ? 'B' : s === 'italic' ? 'I' : 'BI'}
                   </button>
                 ))}
@@ -380,12 +372,8 @@ export default function CardEditorClient() {
                 {(['left', 'center', 'right'] as const).map(a => (
                   <button key={a} onClick={() => updateEl<TextEl>(selected.id, { align: a })}
                     className="flex-1 text-xs rounded py-1 transition"
-                    style={{
-                      background: selected.align === a ? '#254F22' : '#F5F0E8',
-                      color: selected.align === a ? '#FDFAF5' : '#5C3D2E',
-                      border: '1px solid ' + (selected.align === a ? '#254F22' : '#DDD5C5'),
-                    }}>
-                    {a === 'left' ? '⬤·' : a === 'center' ? '·⬤·' : '·⬤'}
+                    style={{ background: selected.align === a ? '#254F22' : '#F5F0E8', color: selected.align === a ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (selected.align === a ? '#254F22' : '#DDD5C5') }}>
+                    {a === 'left' ? 'Left' : a === 'center' ? 'Center' : 'Right'}
                   </button>
                 ))}
               </div>
@@ -416,14 +404,14 @@ export default function CardEditorClient() {
     )
   }
 
-  // ─── Canvas render ────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#EBEBEB', fontFamily: 'system-ui, sans-serif' }}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-3 sticky top-0 z-10"
         style={{ background: '#FFFFFF', borderBottom: '1px solid #E5E5E5' }}>
-        <button onClick={() => window.history.back()} className="text-sm font-medium" style={{ color: '#555' }}>← Back</button>
+        <button onClick={() => router.back()} className="text-sm font-medium" style={{ color: '#555' }}>← Back</button>
         <span className="text-sm font-semibold" style={{ color: '#1A1A1A' }}>Card Editor</span>
         <div className="flex gap-2">
           <button onClick={resetLayout} title="Reset to default"
@@ -440,12 +428,11 @@ export default function CardEditorClient() {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-0 flex-1">
+      <div className="flex flex-col lg:flex-row flex-1">
         {/* Sidebar */}
         <div className="lg:w-72 shrink-0 overflow-y-auto p-4 space-y-4"
           style={{ background: '#FFFFFF', borderRight: '1px solid #E5E5E5', maxHeight: 'calc(100vh - 57px)' }}>
 
-          {/* Background */}
           <div>
             <p className="text-xs font-semibold mb-2" style={{ color: '#555' }}>Background</p>
             <ColorInput label="Color" value={bgColor} onChange={setBgColor} />
@@ -454,48 +441,37 @@ export default function CardEditorClient() {
           <div className="border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
             <p className="text-xs font-semibold mb-2" style={{ color: '#555' }}>Add element</p>
             <div className="flex gap-1.5 flex-wrap">
-              <button onClick={addText}
-                className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80"
+              <button onClick={addText} className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80"
                 style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
                 <Type className="w-3 h-3" /> Text
               </button>
-              <button onClick={addLine}
-                className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80"
+              <button onClick={addLine} className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80"
                 style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
                 ─ Line
               </button>
-              <label className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 transition hover:opacity-80 cursor-pointer"
+              <label className="flex items-center gap-1 text-xs font-semibold rounded-lg px-2.5 py-2 cursor-pointer transition hover:opacity-80"
                 style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
                 <ImagePlus className="w-3 h-3" /> Image
-                <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
               </label>
             </div>
           </div>
 
-          {/* Selected element props */}
-          {renderSelectedProps()}
+          {renderProps()}
 
           {!selected && (
-            <div className="pt-2">
-              <p className="text-xs" style={{ color: '#AAAAAA' }}>
-                Click any element on the canvas to select it. Drag to move, use handles to resize or rotate.
-              </p>
-            </div>
-          )}
-
-          <div className="pt-2 border-t" style={{ borderColor: '#F0F0F0' }}>
-            <p className="text-xs" style={{ color: '#AAAAAA' }}>
-              1200×1700 px download — A5 / 5×7&quot; print-ready
+            <p className="text-xs pt-1" style={{ color: '#AAAAAA' }}>
+              Click an element to select it. Double-click or use the button to resize &amp; rotate.
             </p>
-          </div>
+          )}
         </div>
 
-        {/* Canvas area */}
+        {/* Canvas */}
         <div className="flex-1 flex items-start justify-center p-6 overflow-auto">
           <div style={{ position: 'relative' }}>
             {!fontsReady && (
               <div className="absolute inset-0 flex items-center justify-center z-10 rounded-xl"
-                style={{ background: 'rgba(255,255,255,0.7)', fontSize: 13, color: '#888' }}>
+                style={{ background: 'rgba(255,255,255,0.75)', fontSize: 13, color: '#888' }}>
                 Loading fonts…
               </div>
             )}
@@ -503,20 +479,20 @@ export default function CardEditorClient() {
               ref={stageRef}
               width={STAGE_W}
               height={STAGE_H}
-              style={{ borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.18)', cursor: 'default' }}
-              onMouseDown={e => { if (e.target === e.target.getStage()) setSelectedId(null) }}
+              style={{ borderRadius: 12, boxShadow: '0 8px 40px rgba(0,0,0,0.18)' }}
+              onMouseDown={e => { if (e.target === e.target.getStage()) { setSelectedId(null); setTransformingId(null) } }}
             >
               <Layer>
-                {/* Background */}
                 <Rect x={0} y={0} width={STAGE_W} height={STAGE_H} fill={bgColor} />
 
-                {/* Elements */}
                 {elements.map(el => {
-                  const isSelected = el.id === selectedId
-                  const commonProps = {
+                  const common = {
                     draggable: true,
-                    onClick: () => setSelectedId(el.id),
-                    onTap: () => setSelectedId(el.id),
+                    onClick: () => { setSelectedId(el.id); setTransformingId(null) },
+                    onTap: () => { setSelectedId(el.id); setTransformingId(null) },
+                    onDblClick: () => { setSelectedId(el.id); setTransformingId(el.id) },
+                    onDblTap: () => { setSelectedId(el.id); setTransformingId(el.id) },
+                    onDragMove: (e: KonvaEventObject<DragEvent>) => handleDragMove(el.id, e),
                     onDragEnd: (e: KonvaEventObject<DragEvent>) => handleDragEnd(el.id, e),
                     onTransformEnd: (e: KonvaEventObject<Event>) => handleTransformEnd(el.id, e),
                     ref: (node: Konva.Node | null) => {
@@ -525,57 +501,32 @@ export default function CardEditorClient() {
                     },
                   }
 
-                  if (el.kind === 'text') {
-                    return (
-                      <Text
-                        key={el.id}
-                        {...commonProps}
-                        x={el.x}
-                        y={el.y}
-                        offsetX={el.align === 'center' ? el.width / 2 : 0}
-                        rotation={el.rotation}
-                        text={el.text}
-                        fontSize={el.fontSize}
-                        fontFamily={el.fontFamily}
-                        fontStyle={el.fontStyle}
-                        fill={el.fill}
-                        align={el.align}
-                        width={el.width}
-                        lineHeight={1.35}
-                        wrap="word"
-                      />
-                    )
-                  }
+                  if (el.kind === 'text') return (
+                    <Text key={el.id} {...common}
+                      x={el.x} y={el.y} rotation={el.rotation}
+                      text={el.text} fontSize={el.fontSize}
+                      fontFamily={el.fontFamily} fontStyle={el.fontStyle}
+                      fill={el.fill} align={el.align} width={el.width}
+                      lineHeight={1.35} wrap="word"
+                    />
+                  )
 
-                  if (el.kind === 'line') {
-                    return (
-                      <Line
-                        key={el.id}
-                        {...commonProps}
-                        x={el.x}
-                        y={el.y}
-                        rotation={el.rotation}
-                        points={[0, 0, el.length, 0]}
-                        stroke={el.stroke}
-                        strokeWidth={el.strokeWidth}
-                        hitStrokeWidth={12}
-                      />
-                    )
-                  }
+                  if (el.kind === 'line') return (
+                    <Line key={el.id} {...common}
+                      x={el.x} y={el.y} rotation={el.rotation}
+                      points={[0, 0, el.length, 0]}
+                      stroke={el.stroke} strokeWidth={el.strokeWidth}
+                      hitStrokeWidth={14}
+                    />
+                  )
 
                   if (el.kind === 'image') {
                     const img = loadedImgs[el.src]
                     if (!img) return null
                     return (
-                      <KonvaImage
-                        key={el.id}
-                        {...commonProps}
-                        x={el.x}
-                        y={el.y}
-                        rotation={el.rotation}
-                        image={img}
-                        width={el.w}
-                        height={el.h}
+                      <KonvaImage key={el.id} {...common}
+                        x={el.x} y={el.y} rotation={el.rotation}
+                        image={img} width={el.w} height={el.h}
                       />
                     )
                   }
@@ -583,10 +534,14 @@ export default function CardEditorClient() {
                   return null
                 })}
 
+                {/* Center guide lines — shown during drag */}
+                {guides.v && <Line points={[CX, 0, CX, STAGE_H]} stroke="#3B82F6" strokeWidth={1} dash={[6, 4]} listening={false} />}
+                {guides.h && <Line points={[0, STAGE_H / 2, STAGE_W, STAGE_H / 2]} stroke="#3B82F6" strokeWidth={1} dash={[6, 4]} listening={false} />}
+
                 <Transformer
                   ref={transformerRef}
-                  rotateEnabled={true}
-                  boundBoxFunc={(oldBox, newBox) => (newBox.width < 10 || newBox.height < 10 ? oldBox : newBox)}
+                  rotateEnabled={!!transformingId}
+                  boundBoxFunc={(old, next) => (next.width < 10 || next.height < 10 ? old : next)}
                   anchorSize={9}
                   anchorCornerRadius={3}
                   borderStroke="#254F22"

@@ -29,7 +29,9 @@
       "Bash(git commit *)",
       "Bash(cat tailwind.config.ts)",
       "Bash(cat tailwind.config.js)",
-      "Bash(grep -o \"hush-home-visuals[^}]*}\\\\|hush-home-mobile[^}]*}\\\\|lg\\\\\\\\\\\\\\\\:hidden[^}]*}\\\\|@media[^{]*1024[^}]*{[^}]*hush-home\" .next/static/css/d271dbeb35d87262.css)"
+      "Bash(grep -o \"hush-home-visuals[^}]*}\\\\|hush-home-mobile[^}]*}\\\\|lg\\\\\\\\\\\\\\\\:hidden[^}]*}\\\\|@media[^{]*1024[^}]*{[^}]*hush-home\" .next/static/css/d271dbeb35d87262.css)",
+      "Bash(node -e \"const pkg = require\\('./node_modules/uuid/package.json'\\); console.log\\(pkg.version, pkg.name\\)\")",
+      "Bash(grep -r \"uuid\" src/ --include=\"*.ts\" --include=\"*.tsx\" -l)"
     ]
   }
 }

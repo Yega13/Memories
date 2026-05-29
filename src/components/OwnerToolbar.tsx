@@ -154,8 +154,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   }, [showShare, showSettings])
 
   useEffect(() => {
-    document.body.style.overflow = showShare ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
+    if (showShare) document.body.classList.add('hush-scroll-locked')
+    else document.body.classList.remove('hush-scroll-locked')
+    return () => document.body.classList.remove('hush-scroll-locked')
   }, [showShare])
 
   useEffect(() => {

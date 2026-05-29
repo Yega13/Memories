@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Download, X } from 'lucide-react'
 import QRCode from 'qrcode'
 
@@ -205,6 +206,7 @@ export async function renderBWCard(canvas: HTMLCanvasElement, title: string, sha
 }
 
 export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props) {
+  const router = useRouter()
   const [style, setStyle] = useState<CardStyle>('branded')
   const [downloading, setDownloading] = useState(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -233,7 +235,7 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
 
   function openEditor() {
     const p = new URLSearchParams({ url: shareUrl, title: albumTitle || '' })
-    window.location.href = `/card-editor?${p}`
+    router.push(`/card-editor?${p}`)
   }
 
   return (
