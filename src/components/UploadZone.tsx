@@ -611,7 +611,7 @@ const HEIC_MIME_TYPES = new Set([
   'image/heic-sequence',
   'image/heif-sequence',
 ])
-const FILE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,image/avif,video/*'
+const FILE_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,image/avif,image/heic,image/heif,video/*'
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))

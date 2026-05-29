@@ -160,7 +160,7 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   const url = String(row.url ?? '').trim()
   const storageBackend = row.storage_backend
   const mediaType = row.media_type
-  if (!storagePath.startsWith(`${albumId}/`) || !url) return null
+  if (!storagePath.startsWith(`${albumId}/`) || !url || !url.startsWith('https://')) return null
   if (!storageBackend || !STORAGE_BACKENDS.has(storageBackend)) return null
   if (!mediaType || !MEDIA_TYPES.has(mediaType)) return null
   if (mediaType === 'image' && storageBackend !== 'supabase') return null
