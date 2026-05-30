@@ -197,11 +197,20 @@ export default function CardEditorClient() {
   const isDragging = useRef(false)
   const copiedEl = useRef<El | null>(null)
 
-  // Load extra fonts (only for card editor)
+  // Load extra fonts (only for card editor) then force canvas redraw once they're ready
   useEffect(() => {
     const link = document.createElement('link')
     link.rel = 'stylesheet'
     link.href = 'https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,400&family=Dancing+Script:wght@400;700&family=Raleway:wght@400;700&family=Oswald:wght@400;700&display=swap'
+    link.onload = () => {
+      // CSS is parsed — now wait for the actual font binary data to be ready
+      Promise.allSettled([
+        document.fonts.load("400 14px Montserrat"),
+        document.fonts.load("400 14px Raleway"),
+        document.fonts.load("400 14px Oswald"),
+        document.fonts.load("400 14px 'Dancing Script'"),
+      ]).then(() => stageRef.current?.batchDraw())
+    }
     document.head.appendChild(link)
     return () => { try { document.head.removeChild(link) } catch { /* already removed */ } }
   }, [])
