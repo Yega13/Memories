@@ -104,6 +104,7 @@ async function uploadVideoMultipart(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ albumId, filename, contentType: file.type || 'video/mp4', totalSize: file.size }),
+    signal: AbortSignal.timeout(30_000),
   })
   let initBody: { error?: string; uploadId?: string; key?: string } = {}
   try { initBody = await initRes.json() } catch { /* ignore */ }
@@ -134,6 +135,7 @@ async function uploadVideoMultipart(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, uploadId, partNumber }),
+        signal: AbortSignal.timeout(15_000),
       })
       if (presignRes.ok) {
         const data = await presignRes.json() as { url?: string }
@@ -169,7 +171,9 @@ async function uploadVideoMultipart(
             if (etag) { resolve({ partNumber, etag }); return }
             reject(new Error(`No ETag for chunk ${partNumber}`))
           } else {
-            reject(new Error(`Chunk ${partNumber} failed: ${xhr.status}`))
+            const err = new Error(`Chunk ${partNumber} failed: ${xhr.status}`)
+            ;(err as Error & { status?: number }).status = xhr.status
+            reject(err)
           }
         } else {
           let body: { error?: string; partNumber?: number; etag?: string } = {}
@@ -177,7 +181,9 @@ async function uploadVideoMultipart(
           if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
             resolve({ partNumber: body.partNumber, etag: body.etag })
           } else {
-            reject(new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`))
+            const err = new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`)
+            ;(err as Error & { status?: number }).status = xhr.status
+            reject(err)
           }
         }
       }
@@ -204,6 +210,10 @@ async function uploadVideoMultipart(
           break
         } catch (e) {
           lastErr = e instanceof Error ? e : new Error(String(e))
+          // 4xx = definitive server rejection (file too large, bad request, auth).
+          // Retrying won't help — break immediately to surface the error fast.
+          const httpStatus = (lastErr as Error & { status?: number }).status
+          if (typeof httpStatus === 'number' && httpStatus >= 400 && httpStatus < 500) break
           if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))
         }
       }
@@ -235,6 +245,7 @@ async function uploadVideoMultipart(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ uploadId, key, parts }),
+    signal: AbortSignal.timeout(30_000),
   })
   let completeBody: { error?: string; storage_path?: string; url?: string } = {}
   try { completeBody = await completeRes.json() } catch { /* ignore */ }
@@ -849,7 +860,9 @@ async function uploadToSupabaseStorage(
 ): Promise<void> {
   const token = await getUploadToken()
   let lastError: Error = new Error('Upload failed')
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  // 8 attempts with exponential backoff: 500 → 1000 → 2000 → 4000 → 8000 → 16000ms (~31s total).
+  // Cellular handoffs and tower switches typically last 5–15s — linear 500ms×attempt gave up too fast.
+  for (let attempt = 1; attempt <= 8; attempt++) {
     try {
       await uploadToSupabaseOnce(file, path, token, contentType)
       return
@@ -863,9 +876,12 @@ async function uploadToSupabaseStorage(
         || /storage upload failed: [5]\d{2}/.test(lastError.message.toLowerCase())
         || /storage upload failed: 429/.test(lastError.message)
       if (!retriable) throw lastError
-      if (attempt < 5) {
+      if (attempt < 8) {
         const retryAfterMs = (lastError as Error & { retryAfterMs?: number }).retryAfterMs
-        await wait(retryAfterMs && retryAfterMs > 0 ? Math.min(retryAfterMs, 30_000) : 500 * attempt)
+        const backoff = retryAfterMs && retryAfterMs > 0
+          ? Math.min(retryAfterMs, 30_000)
+          : Math.min(500 * Math.pow(2, attempt - 1), 16_000)  // 500, 1000, 2000, 4000, 8000, 16000, 16000
+        await wait(backoff)
       }
     }
   }
@@ -1061,10 +1077,12 @@ export default function UploadZone({ album }: Props) {
         duration_seconds: null,
       }
     } catch (err) {
-      // Log loud + clear when Stream gives up. Without this we just see a generic "chunk 1"
-      // error from the R2 fallback and have no way to diagnose what Stream actually hit.
       const msg = err instanceof Error ? err.message : String(err)
-      console.error(`[stream] upload FAILED for "${item.file.name}" (${item.file.size} bytes); falling back to R2. Reason:`, msg)
+      // 503 = Stream simply not configured on this deployment — expected, not an error.
+      // Any other failure is unexpected and worth surfacing so we can diagnose it.
+      if (!/503|not configured/i.test(msg)) {
+        console.error(`[stream] upload FAILED for "${item.file.name}" (${item.file.size} bytes); falling back to R2. Reason:`, msg)
+      }
     }
 
     const res = item.file.size > MULTIPART_THRESHOLD
