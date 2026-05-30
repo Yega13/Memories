@@ -773,7 +773,10 @@ async function stripExifClientSide(file: File): Promise<File> {
   try {
     const buf = await file.arrayBuffer()
     const stripped = stripExifFromJpeg(new Uint8Array(buf))
-    return new File([stripped.buffer as ArrayBuffer], file.name, { type: file.type, lastModified: file.lastModified })
+    // Copy into a fresh ArrayBuffer so TypeScript knows the type is ArrayBuffer, not ArrayBufferLike
+    const buf2 = new ArrayBuffer(stripped.byteLength)
+    new Uint8Array(buf2).set(stripped)
+    return new File([buf2], file.name, { type: file.type, lastModified: file.lastModified })
   } catch {
     return file
   }
