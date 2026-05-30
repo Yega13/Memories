@@ -296,7 +296,7 @@ export default function LightboxOverlay({
               alt={current.caption || ''}
               className="block max-h-[min(70vh,760px)] max-w-full object-contain"
               ref={(node) => onMediaNodeChange(node)}
-              style={mediaZoomStyle(current)}
+              style={{ ...mediaZoomStyle(current), transition: 'opacity 0.15s ease' }}
               onLoad={(e) => {
                 if (e.currentTarget.src.endsWith(current.url) || !current.thumb_url) {
                   onSetOriginalLoaded((prev) => {

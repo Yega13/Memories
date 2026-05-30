@@ -12,7 +12,8 @@
     "preview": "npm run cf:build && wrangler dev",
     "start": "next start",
     "lint": "eslint",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "test": "playwright test --reporter=list"
   },
   "dependencies": {
     "@fontsource/playfair-display": "^5.2.8",

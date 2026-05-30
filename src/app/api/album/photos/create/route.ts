@@ -9,6 +9,10 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
+// Supabase storage base URL — all images stored via the supabase backend must come from here.
+// Prevents crafted API calls from storing arbitrary external URLs that render in album viewers.
+const SUPABASE_STORAGE_BASE = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '') + '/storage/v1/object/public/'
+
 type PhotoRow = {
   storage_path?: string
   storage_backend?: 'supabase' | 'r2' | 'stream'
@@ -160,11 +164,15 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   const url = String(row.url ?? '').trim()
   const storageBackend = row.storage_backend
   const mediaType = row.media_type
-  if (!storagePath.startsWith(`${albumId}/`) || !url || !url.startsWith('https://')) return null
+  if (!storagePath.startsWith(`${albumId}/`) || !url) return null
   if (!storageBackend || !STORAGE_BACKENDS.has(storageBackend)) return null
   if (!mediaType || !MEDIA_TYPES.has(mediaType)) return null
   if (mediaType === 'image' && storageBackend !== 'supabase') return null
   if (mediaType === 'video' && storageBackend !== 'r2' && storageBackend !== 'stream') return null
+  // Enforce that image URLs actually point to this project's Supabase storage.
+  // A bare https:// check would allow any external host to be stored and rendered.
+  if (storageBackend === 'supabase' && SUPABASE_STORAGE_BASE && !url.startsWith(SUPABASE_STORAGE_BASE)) return null
+  if ((storageBackend === 'r2' || storageBackend === 'stream') && !url.startsWith('https://')) return null
 
   // Validate thumbnail fields if present. Both must be album-scoped + a https url, or both
   // must be null (no half-state). On failure we drop them silently (insert without thumb)
@@ -174,7 +182,7 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   let thumbPath: string | null = null
   let thumbUrl: string | null = null
   if (rawThumbPath && rawThumbUrl) {
-    if (rawThumbPath.startsWith(`${albumId}/`) && rawThumbUrl.startsWith('https://')) {
+    if (rawThumbPath.startsWith(`${albumId}/`) && rawThumbUrl.startsWith(SUPABASE_STORAGE_BASE || 'https://')) {
       thumbPath = mediaTextOrNull(rawThumbPath, 256)
       thumbUrl = mediaTextOrNull(rawThumbUrl, 2048)
     }

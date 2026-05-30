@@ -527,7 +527,7 @@ async function processMirrorQueue(): Promise<void> {
 // generation fails at any step, we just don't include it — the upload still succeeds with
 // the original, and the grid falls back to `photo.url`.
 
-const THUMB_LONGEST_DIM = 900
+const THUMB_LONGEST_DIM = 600
 const THUMB_QUALITY = 0.8
 const THUMB_ENCODE_TIMEOUT_MS = 5_000
 
