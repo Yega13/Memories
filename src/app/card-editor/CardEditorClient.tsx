@@ -19,7 +19,7 @@ const LH = Math.round(LW * 1700 / 1200)  // 680
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Base = { id: string; x: number; y: number; rotation: number; opacity: number; locked: boolean; visible: boolean; name: string }
+type Base = { id: string; x: number; y: number; rotation: number; opacity: number; locked: boolean; visible: boolean; name: string; shadowEnabled?: boolean; shadowColor?: string; shadowBlur?: number; shadowOffsetX?: number; shadowOffsetY?: number }
 type TextEl    = Base & { kind: 'text';    text: string; fontSize: number; fontFamily: string; fontStyle: string; textDecoration: string; fill: string; align: 'left'|'center'|'right'; width: number; letterSpacing: number; lineHeight: number }
 type RectEl    = Base & { kind: 'rect';    width: number; height: number; fill: string; stroke: string; strokeWidth: number; cornerRadius: number }
 type EllipseEl = Base & { kind: 'ellipse'; radiusX: number; radiusY: number; fill: string; stroke: string; strokeWidth: number }
@@ -47,14 +47,15 @@ function template(title: string, qr: string, style: 'branded'|'bw'|'clean'): { e
   const qrEl = makeQrEl(qr)
 
   if (style === 'branded') {
-    // Red header band — matches the actual Hushare branded design
-    const headerRect: RectEl = { ...base('Header'), kind: 'rect', x: 0, y: 0, width: LW, height: 100, fill: '#630826', stroke: '#630826', strokeWidth: 0, cornerRadius: 0 }
-    const shadowRect: RectEl = { ...base('Header shadow'), kind: 'rect', x: 0, y: 100, width: LW, height: 4, fill: '#9B1727', stroke: '#9B1727', strokeWidth: 0, cornerRadius: 0 }
-    const brandText: TextEl = { ...base('Brand'), kind: 'text', x: 0, y: 34, text: 'HUSHARE', fontSize: 26, fontFamily: SERIF, fontStyle: 'bold', textDecoration: '', fill: '#FFFFFF', align: 'center', width: LW, letterSpacing: 6, lineHeight: 1.2 }
+    // Red header band — matches the actual Hushare branded design (z-order: first = bottom)
+    const headerRect: RectEl = { ...base('Header'), locked: true, kind: 'rect', x: 0, y: 0, width: LW, height: 100, fill: '#630826', stroke: '#630826', strokeWidth: 0, cornerRadius: 0 }
+    const shadowRect: RectEl = { ...base('Header shadow'), locked: true, kind: 'rect', x: 0, y: 100, width: LW, height: 4, fill: '#9B1727', stroke: '#9B1727', strokeWidth: 0, cornerRadius: 0 }
+    // Logo: 618×146 native → scale to fit 228×54 in header (locked, not editable by accident)
+    const logoImg: ImgEl = { ...base('Logo'), locked: true, kind: 'image', x: (LW - 228) / 2, y: 23, src: '/logo/logo-light-transparent.png', width: 228, height: 54 }
     const heading: TextEl = { ...base('Heading'), kind: 'text', x: CX - 200, y: 120, text: title || 'CAPTURE THE MOMENT', fontSize: 28, fontFamily: SERIF, fontStyle: 'bold', textDecoration: '', fill: '#1A1A1A', align: 'center', width: 400, letterSpacing: 1, lineHeight: 1.3 }
     const sep: LineEl = { ...base('Divider'), kind: 'line', x: CX - 70, y: 200, length: 140, stroke: '#630826', strokeWidth: 2, lineCap: 'round', dashed: false }
     const body: TextEl = { ...base('Body'), kind: 'text', x: CX - 155, y: 215, text: 'Scan the QR code with your camera to upload your photos and videos.', fontSize: 13, fontFamily: SERIF, fontStyle: 'normal', textDecoration: '', fill: '#555555', align: 'center', width: 310, letterSpacing: 0, lineHeight: 1.5 }
-    return { els: [footer, qrEl, body, sep, heading, brandText, shadowRect, headerRect], bg: '#FAFAFA' }
+    return { els: [headerRect, shadowRect, logoImg, footer, qrEl, body, sep, heading], bg: '#FAFAFA' }
   }
 
   if (style === 'clean') {
@@ -194,6 +195,16 @@ export default function CardEditorClient() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const gestureRef = useRef<{ active: boolean; startAngle: number; startRot: number; startDist: number; startScale: number }>({ active: false, startAngle: 0, startRot: 0, startDist: 0, startScale: 1 })
   const isDragging = useRef(false)
+  const copiedEl = useRef<El | null>(null)
+
+  // Load extra fonts (only for card editor)
+  useEffect(() => {
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,400&family=Dancing+Script:wght@400;700&family=Raleway:wght@400;700&family=Oswald:wght@400;700&display=swap'
+    document.head.appendChild(link)
+    return () => { try { document.head.removeChild(link) } catch { /* already removed */ } }
+  }, [])
 
   // Stage sizing
   useEffect(() => {
@@ -294,6 +305,8 @@ export default function CardEditorClient() {
           if (e.key === 'z') { e.preventDefault(); undo() }
           if (e.key === 'y' || (e.shiftKey && e.key === 'z')) { e.preventDefault(); redo() }
           if (e.key === 'd' && selectedId) { e.preventDefault(); duplicateEl(selectedId) }
+          if (e.key === 'c' && selectedId) { e.preventDefault(); const el = liveEls.find(x => x.id === selectedId); if (el) copiedEl.current = el }
+          if (e.key === 'v' && copiedEl.current) { e.preventDefault(); pasteEl(copiedEl.current) }
           if (e.key === ']' && selectedId) { e.preventDefault(); moveLayer(selectedId, 1) }
           if (e.key === '[' && selectedId) { e.preventDefault(); moveLayer(selectedId, -1) }
         }
@@ -309,7 +322,7 @@ export default function CardEditorClient() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, undo, redo, deleteEl, duplicateEl, moveLayer, setEls])
+  }, [selectedId, undo, redo, deleteEl, duplicateEl, pasteEl, moveLayer, setEls, liveEls])
 
   const selected = useMemo(() => liveEls.find(e => e.id === selectedId) ?? null, [liveEls, selectedId])
 
@@ -330,6 +343,12 @@ export default function CardEditorClient() {
     const dup = { ...el, id: uid(), x: el.x + 16, y: el.y + 16, name: el.name + ' copy' }
     const idx = liveEls.findIndex(e => e.id === id)
     setEls(p => [...p.slice(0, idx + 1), dup, ...p.slice(idx + 1)])
+    setSelectedId(dup.id)
+  }
+
+  function pasteEl(el: El) {
+    const dup = { ...el, id: uid(), x: Math.min(el.x + 20, LW - 20), y: Math.min(el.y + 20, LH - 20), name: el.name.replace(/ copy$/, '') + ' copy' }
+    setEls(p => [...p, dup])
     setSelectedId(dup.id)
   }
 
@@ -522,6 +541,11 @@ export default function CardEditorClient() {
       draggable: !locked,
       opacity: el.opacity,
       visible: el.visible,
+      shadowEnabled: !!el.shadowEnabled,
+      shadowColor: el.shadowColor ?? '#000000',
+      shadowBlur: el.shadowBlur ?? 10,
+      shadowOffsetX: el.shadowOffsetX ?? 4,
+      shadowOffsetY: el.shadowOffsetY ?? 4,
       onClick:    () => { setSelectedId(el.id); setTransforming(false) },
       onTap:      () => { setSelectedId(el.id); setTransforming(false) },
       onDblClick: () => {
@@ -613,6 +637,10 @@ export default function CardEditorClient() {
               <select value={s.fontFamily} onChange={e => updateEl(s.id, { fontFamily: e.target.value })}
                 className="w-full mt-0.5 rounded border px-2 py-1 text-xs" style={{ borderColor: '#E0E0E0' }}>
                 <option value="'Playfair Display', Georgia, serif">Playfair Display</option>
+                <option value="'Montserrat', sans-serif">Montserrat</option>
+                <option value="'Raleway', sans-serif">Raleway</option>
+                <option value="'Oswald', sans-serif">Oswald</option>
+                <option value="'Dancing Script', cursive">Dancing Script</option>
                 <option value="'Geist', system-ui, sans-serif">Geist Sans</option>
                 <option value="'Playwrite GB J', cursive">Playwrite Script</option>
                 <option value="Georgia, serif">Georgia</option>
@@ -628,6 +656,11 @@ export default function CardEditorClient() {
                   {fs === 'normal' ? 'Aa' : fs === 'bold' ? 'B' : fs === 'italic' ? 'I' : 'BI'}
                 </button>
               ))}
+              <button onClick={() => updateEl(s.id, { textDecoration: s.textDecoration === 'underline' ? '' : 'underline' })}
+                className="flex-1 text-xs rounded py-1 transition"
+                style={{ background: s.textDecoration === 'underline' ? '#254F22' : '#F5F0E8', color: s.textDecoration === 'underline' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.textDecoration === 'underline' ? '#254F22' : '#DDD5C5'), textDecoration: 'underline' }}>
+                U
+              </button>
             </div>
             <div className="flex gap-1">
               {(['left','center','right'] as const).map(a => (
@@ -682,6 +715,25 @@ export default function CardEditorClient() {
             </label>
           </div>
         )}
+
+        {/* Shadow */}
+        <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold" style={{ color: '#555' }}>Shadow</p>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <span className="text-xs" style={{ color: '#888' }}>{s.shadowEnabled ? 'On' : 'Off'}</span>
+              <input type="checkbox" checked={!!s.shadowEnabled} onChange={e => updateEl(s.id, { shadowEnabled: e.target.checked })} />
+            </label>
+          </div>
+          {s.shadowEnabled && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2"><span className="text-xs w-10 shrink-0" style={{ color: '#666' }}>Color</span><ColorSwatch value={s.shadowColor ?? '#000000'} onChange={v => updateEl(s.id, { shadowColor: v })} /></div>
+              <SliderRow label="Blur" value={s.shadowBlur ?? 10} min={0} max={50} onChange={v => updateEl(s.id, { shadowBlur: v })} />
+              <SliderRow label="Offset X" value={s.shadowOffsetX ?? 4} min={-30} max={30} onChange={v => updateEl(s.id, { shadowOffsetX: v })} />
+              <SliderRow label="Offset Y" value={s.shadowOffsetY ?? 4} min={-30} max={30} onChange={v => updateEl(s.id, { shadowOffsetY: v })} />
+            </div>
+          )}
+        </div>
 
         {/* Alignment */}
         <div className="pt-2 border-t" style={{ borderColor: '#F0F0F0' }}>
@@ -914,7 +966,8 @@ export default function CardEditorClient() {
                   onBlur={commitTextEdit}
                   onKeyDown={e => {
                     if (e.key === 'Escape') { setEditingTextId(null) }
-                    if (e.key === 'Enter' && e.metaKey) commitTextEdit()
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitTextEdit() }
+                    // Shift+Enter → inserts newline (default textarea behavior)
                   }}
                   style={{
                     position: 'absolute',
