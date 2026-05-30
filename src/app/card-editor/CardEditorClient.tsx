@@ -43,20 +43,34 @@ function makeQrEl(src: string): ImgEl {
 
 function template(title: string, qr: string, style: 'branded'|'bw'|'clean'): { els: El[]; bg: string } {
   const SERIF = "'Playfair Display', Georgia, serif"
-  const heading: TextEl = { ...base('Heading'), kind: 'text', x: CX - 200, y: 72, text: title || 'CAPTURE THE MOMENT', fontSize: 30, fontFamily: SERIF, fontStyle: 'bold', textDecoration: '', fill: style === 'branded' ? '#630826' : '#111111', align: 'center', width: 400, letterSpacing: 1, lineHeight: 1.3 }
-  const sep: LineEl = { ...base('Divider'), kind: 'line', x: CX - 70, y: 148, length: 140, stroke: style === 'branded' ? '#630826' : '#254F22', strokeWidth: 2, lineCap: 'round', dashed: false }
-  const body: TextEl = { ...base('Body'), kind: 'text', x: CX - 155, y: 162, text: 'Scan the QR code with your camera to upload your photos and videos.', fontSize: 13, fontFamily: SERIF, fontStyle: 'normal', textDecoration: '', fill: '#555555', align: 'center', width: 310, letterSpacing: 0, lineHeight: 1.5 }
   const footer: TextEl = { ...base('Footer'), kind: 'text', x: CX - 90, y: LH - 36, text: 'hushare.space', fontSize: 11, fontFamily: SERIF, fontStyle: 'italic', textDecoration: '', fill: '#AAAAAA', align: 'center', width: 180, letterSpacing: 0.5, lineHeight: 1.2 }
   const qrEl = makeQrEl(qr)
-  const bg = style === 'branded' ? '#FAFAFA' : '#FFFFFF'
-  const els = [footer, qrEl, body, sep, heading]  // bottom to top z-order
 
-  if (style === 'bw') {
-    const border: RectEl = { ...base('Border'), kind: 'rect', x: 20, y: 20, width: LW - 40, height: LH - 40, fill: 'transparent', stroke: '#111111', strokeWidth: 2, cornerRadius: 0 }
-    const border2: RectEl = { ...base('Border inner'), kind: 'rect', x: 32, y: 32, width: LW - 64, height: LH - 64, fill: 'transparent', stroke: '#111111', strokeWidth: 1, cornerRadius: 0 }
-    return { els: [border2, border, ...els], bg }
+  if (style === 'branded') {
+    // Red header band — matches the actual Hushare branded design
+    const headerRect: RectEl = { ...base('Header'), kind: 'rect', x: 0, y: 0, width: LW, height: 100, fill: '#630826', stroke: '#630826', strokeWidth: 0, cornerRadius: 0 }
+    const shadowRect: RectEl = { ...base('Header shadow'), kind: 'rect', x: 0, y: 100, width: LW, height: 4, fill: '#9B1727', stroke: '#9B1727', strokeWidth: 0, cornerRadius: 0 }
+    const brandText: TextEl = { ...base('Brand'), kind: 'text', x: 0, y: 34, text: 'HUSHARE', fontSize: 26, fontFamily: SERIF, fontStyle: 'bold', textDecoration: '', fill: '#FFFFFF', align: 'center', width: LW, letterSpacing: 6, lineHeight: 1.2 }
+    const heading: TextEl = { ...base('Heading'), kind: 'text', x: CX - 200, y: 120, text: title || 'CAPTURE THE MOMENT', fontSize: 28, fontFamily: SERIF, fontStyle: 'bold', textDecoration: '', fill: '#1A1A1A', align: 'center', width: 400, letterSpacing: 1, lineHeight: 1.3 }
+    const sep: LineEl = { ...base('Divider'), kind: 'line', x: CX - 70, y: 200, length: 140, stroke: '#630826', strokeWidth: 2, lineCap: 'round', dashed: false }
+    const body: TextEl = { ...base('Body'), kind: 'text', x: CX - 155, y: 215, text: 'Scan the QR code with your camera to upload your photos and videos.', fontSize: 13, fontFamily: SERIF, fontStyle: 'normal', textDecoration: '', fill: '#555555', align: 'center', width: 310, letterSpacing: 0, lineHeight: 1.5 }
+    return { els: [footer, qrEl, body, sep, heading, brandText, shadowRect, headerRect], bg: '#FAFAFA' }
   }
-  return { els, bg }
+
+  if (style === 'clean') {
+    const heading: TextEl = { ...base('Heading'), kind: 'text', x: CX - 200, y: 72, text: title || 'CAPTURE THE MOMENT', fontSize: 30, fontFamily: SERIF, fontStyle: 'bold', textDecoration: '', fill: '#111111', align: 'center', width: 400, letterSpacing: 1, lineHeight: 1.3 }
+    const sep: LineEl = { ...base('Divider'), kind: 'line', x: CX - 70, y: 148, length: 140, stroke: '#254F22', strokeWidth: 2, lineCap: 'round', dashed: false }
+    const body: TextEl = { ...base('Body'), kind: 'text', x: CX - 155, y: 162, text: 'Scan the QR code with your camera to upload your photos and videos.', fontSize: 13, fontFamily: SERIF, fontStyle: 'normal', textDecoration: '', fill: '#555555', align: 'center', width: 310, letterSpacing: 0, lineHeight: 1.5 }
+    return { els: [footer, qrEl, body, sep, heading], bg: '#FFFFFF' }
+  }
+
+  // bw
+  const heading: TextEl = { ...base('Heading'), kind: 'text', x: CX - 200, y: 72, text: title || 'CAPTURE THE MOMENT', fontSize: 30, fontFamily: SERIF, fontStyle: 'bold', textDecoration: '', fill: '#111111', align: 'center', width: 400, letterSpacing: 1, lineHeight: 1.3 }
+  const sep: LineEl = { ...base('Divider'), kind: 'line', x: CX - 70, y: 148, length: 140, stroke: '#254F22', strokeWidth: 2, lineCap: 'round', dashed: false }
+  const body: TextEl = { ...base('Body'), kind: 'text', x: CX - 155, y: 162, text: 'Scan the QR code with your camera to upload your photos and videos.', fontSize: 13, fontFamily: SERIF, fontStyle: 'normal', textDecoration: '', fill: '#555555', align: 'center', width: 310, letterSpacing: 0, lineHeight: 1.5 }
+  const border: RectEl = { ...base('Border'), kind: 'rect', x: 20, y: 20, width: LW - 40, height: LH - 40, fill: 'transparent', stroke: '#111111', strokeWidth: 2, cornerRadius: 0 }
+  const border2: RectEl = { ...base('Border inner'), kind: 'rect', x: 32, y: 32, width: LW - 64, height: LH - 64, fill: 'transparent', stroke: '#111111', strokeWidth: 1, cornerRadius: 0 }
+  return { els: [border2, border, footer, qrEl, body, sep, heading], bg: '#FFFFFF' }
 }
 
 // ─── Undo/redo ────────────────────────────────────────────────────────────────
@@ -364,8 +378,8 @@ export default function CardEditorClient() {
 
   function applyTemplate(style: 'branded'|'bw'|'clean') {
     if (!qrDataUrl) return
-    const t = template(initialTitle, qrDataUrl, style === 'clean' ? 'branded' : style)
-    push({ els: t.els, bg: style === 'clean' ? '#FFFFFF' : t.bg })
+    const t = template(initialTitle, qrDataUrl, style)
+    push({ els: t.els, bg: t.bg })
     setSelectedId(null)
   }
 
