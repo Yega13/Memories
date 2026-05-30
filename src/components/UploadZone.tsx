@@ -11,6 +11,7 @@ import {
   type MediaKind,
 } from '@/lib/media'
 import { formatFileSize } from '@/lib/utils'
+import { stripExifFromJpeg } from '@/lib/exif'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
 import { R2_SINGLE_UPLOAD_TIMEOUT_MS, R2_CHUNK_UPLOAD_TIMEOUT_MS, UPLOAD_CONCURRENCY_MOBILE, UPLOAD_CONCURRENCY_DESKTOP, R2_MULTIPART_CONCURRENCY, R2_CHUNK_SIZE_BYTES, STREAM_CHUNK_SIZE_BYTES } from '@/lib/constants'
 import { showAppToast } from '@/components/AppToast'
@@ -444,15 +445,20 @@ async function processPosterQueue(): Promise<void> {
   if (posterRunning) return
   posterRunning = true
   try {
-    while (posterQueue.length > 0) {
-      const job = posterQueue.shift()
-      if (!job) break
-      try {
-        await runPosterJob(job)
-      } catch (err) {
-        console.warn('[poster] job failed (silent):', job.storagePath, err)
+    // 2 concurrent workers instead of serial — halves wait time for multi-video uploads.
+    const POSTER_CONCURRENCY = 2
+    async function worker() {
+      while (posterQueue.length > 0) {
+        const job = posterQueue.shift()
+        if (!job) break
+        try {
+          await runPosterJob(job)
+        } catch (err) {
+          console.warn('[poster] job failed (silent):', job.storagePath, err)
+        }
       }
     }
+    await Promise.all(Array.from({ length: POSTER_CONCURRENCY }, worker))
   } finally {
     posterRunning = false
   }
@@ -523,6 +529,22 @@ async function processMirrorQueue(): Promise<void> {
 
 const THUMB_LONGEST_DIM = 900
 const THUMB_QUALITY = 0.8
+const THUMB_ENCODE_TIMEOUT_MS = 5_000
+
+// Races blob encoding against a timeout. If encoding hangs (rare but happens on some
+// browser/hardware combos), resolves null after 5 s so the upload continues without a thumbnail
+// rather than stalling indefinitely. Works for both HTMLCanvasElement and OffscreenCanvas.
+function toBlobWithTimeout(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  type: string,
+  quality: number,
+): Promise<Blob | null> {
+  const encode: Promise<Blob | null> = canvas instanceof OffscreenCanvas
+    ? canvas.convertToBlob({ type, quality })
+    : new Promise<Blob | null>((res) => (canvas as HTMLCanvasElement).toBlob(res, type, quality))
+  const timeout = new Promise<null>((res) => window.setTimeout(() => res(null), THUMB_ENCODE_TIMEOUT_MS))
+  return Promise.race([encode, timeout])
+}
 
 async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: string } | null> {
   try {
@@ -535,21 +557,28 @@ async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: st
       const scale = longest > THUMB_LONGEST_DIM ? THUMB_LONGEST_DIM / longest : 1
       const tw = Math.max(1, Math.round(w * scale))
       const th = Math.max(1, Math.round(h * scale))
-      const canvas = document.createElement('canvas')
-      canvas.width = tw
-      canvas.height = th
-      const ctx = canvas.getContext('2d')
+
+      // OffscreenCanvas.convertToBlob() is Promise-native and has no DOM dependency.
+      // Falls back to HTMLCanvasElement for browsers without OffscreenCanvas (Safari < 16.4).
+      const supportsOffscreen = typeof OffscreenCanvas !== 'undefined'
+      let canvas: HTMLCanvasElement | OffscreenCanvas
+      if (supportsOffscreen) {
+        canvas = new OffscreenCanvas(tw, th)
+      } else {
+        const el = document.createElement('canvas')
+        el.width = tw
+        el.height = th
+        canvas = el
+      }
+      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
       if (!ctx) return null
       ctx.drawImage(bitmap, 0, 0, tw, th)
+
       // Prefer WebP when the browser supports encoding it. Smaller files, identical quality.
-      const webpBlob: Blob | null = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b), 'image/webp', THUMB_QUALITY),
-      )
+      const webpBlob = await toBlobWithTimeout(canvas, 'image/webp', THUMB_QUALITY)
       if (webpBlob && webpBlob.type === 'image/webp') return { blob: webpBlob, ext: 'webp' }
       // Fallback: JPEG. Universally supported.
-      const jpegBlob: Blob | null = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b), 'image/jpeg', THUMB_QUALITY),
-      )
+      const jpegBlob = await toBlobWithTimeout(canvas, 'image/jpeg', THUMB_QUALITY)
       if (jpegBlob) return { blob: jpegBlob, ext: 'jpg' }
       return null
     } finally {
@@ -734,6 +763,22 @@ async function convertHeicToJpeg(file: File): Promise<File> {
   }
 }
 
+// ─── Client-side EXIF stripping ──────────────────────────────────────────────
+// Strip EXIF from JPEG files before upload so GPS, device info, and timestamps are
+// never stored in Supabase. The download route also strips on the way out — this gives
+// double protection. Non-JPEG images (PNG, WebP, GIF) don't use JPEG EXIF segments.
+// Degrades gracefully: if stripping fails, the original file is uploaded unchanged.
+async function stripExifClientSide(file: File): Promise<File> {
+  if (!/^image\/jpe?g$/i.test(file.type) && !/\.jpe?g$/i.test(file.name)) return file
+  try {
+    const buf = await file.arrayBuffer()
+    const stripped = stripExifFromJpeg(new Uint8Array(buf))
+    return new File([stripped.buffer as ArrayBuffer], file.name, { type: file.type, lastModified: file.lastModified })
+  } catch {
+    return file
+  }
+}
+
 // ─── XHR-based Supabase Storage upload ───────────────────────────────────────
 // The Supabase JS SDK uses plain fetch() with no timeout. Under concurrent uploads
 // (3–5 workers) a single hanging request occupies a browser connection slot
@@ -857,6 +902,10 @@ export default function UploadZone({ album }: Props) {
     }
   }, [])
 
+  // Pre-warm the HEIC worker so the 3 MB WASM loads during component mount rather than
+  // blocking the first iPhone photo conversion. No-op if the worker is already running.
+  useEffect(() => { getHeicWorker() }, [])
+
   async function addFiles(files: FileList | null) {
     if (uploading || preparing) return
     if (!files) return
@@ -881,6 +930,19 @@ export default function UploadZone({ album }: Props) {
       }
 
       const heic = kind === 'image' && isHeicFile(file)
+
+      // Validate non-HEIC images by decoding a bitmap — catches corrupt/truncated files
+      // before they enter the queue and stall mid-upload. HEIC is excluded because
+      // createImageBitmap doesn't support it natively; the HEIC worker handles validation.
+      if (kind === 'image' && !heic) {
+        try {
+          const bmp = await createImageBitmap(file)
+          bmp.close()
+        } catch {
+          rejected.push(`${file.name}: unreadable image file`)
+          continue
+        }
+      }
 
       next.push({
         file,
@@ -927,30 +989,36 @@ export default function UploadZone({ album }: Props) {
       }
     }
 
+    // Strip EXIF from JPEG before upload — removes GPS, device info, timestamps.
+    // Applied after HEIC conversion (HEIC→JPEG already produces clean JPEG from heic2any).
+    if (item.kind === 'image') uploadFile = await stripExifClientSide(uploadFile)
+
     const ext = extensionFor(uploadFile, item.kind)
     const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
     const filename = `${baseId}.${ext}`
 
     if (item.kind === 'image') {
       const path = `${album.id}/${filename}`
-      await uploadToSupabaseStorage(uploadFile, path, uploadFile.type || undefined)
 
-      // Best-effort grid thumbnail. Generated locally so the original keeps its full quality,
-      // then uploaded to a sibling path under the album. Any failure (decode, encode, upload)
-      // is swallowed — the grid falls back to the original url so the user-visible behavior
-      // is unchanged.
+      // Upload the main image and generate the thumbnail simultaneously — neither depends
+      // on the other finishing first. This shaves ~200-400 ms off each image on the critical
+      // path (thumbnail generation no longer blocks behind the main upload).
+      const [, thumb] = await Promise.all([
+        uploadToSupabaseStorage(uploadFile, path, uploadFile.type || undefined),
+        generateImageThumbnail(uploadFile).catch(() => null),
+      ])
+
       let thumbPath: string | null = null
       let thumbUrl: string | null = null
-      try {
-        const thumb = await generateImageThumbnail(uploadFile)
-        if (thumb) {
+      if (thumb) {
+        try {
           const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
           await uploadToSupabaseStorage(thumb.blob, tPath, thumb.blob.type || undefined)
           thumbPath = tPath
           thumbUrl = supabase.storage.from('Photos').getPublicUrl(tPath).data.publicUrl
+        } catch {
+          // silent — thumbnail is best-effort
         }
-      } catch {
-        // silent — thumbnail is best-effort
       }
 
       return {

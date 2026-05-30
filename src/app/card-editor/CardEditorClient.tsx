@@ -1,39 +1,28 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Stage, Layer, Text, Line, Rect as KRect, Ellipse, Image as KonvaImage, Transformer } from 'react-konva'
 import type Konva from 'konva'
 import type { KonvaEventObject } from 'konva/lib/Node'
-import {
-  AlignCenter, AlignLeft, AlignRight, ArrowLeft, ChevronDown, ChevronUp, Circle,
-  Copy, Download, Eye, EyeOff, ImagePlus, Layers, Lock, Minus, MousePointer,
-  Plus, Redo2, RotateCcw, Square, Trash2, Type, Undo2, Unlock, Minus as LineIcon,
-} from 'lucide-react'
+import { ArrowLeft, Circle, Download, ImagePlus, Layers, Minus, MousePointer, Redo2, Square, Type, Undo2 } from 'lucide-react'
 import QRCode from 'qrcode'
+import type { Base, TextEl, RectEl, EllipseEl, LineEl, ImgEl, El, HistState, ElPatch } from './types'
+import { ColorSwatch, NumInput, SliderRow } from './ui-atoms'
+import PropsPanel from './PropsPanel'
+import LayersPanel from './LayersPanel'
 
 // ─── Dimensions ───────────────────────────────────────────────────────────────
 
 const LW = 480        // logical card width (coordinate space)
 const LH = Math.round(LW * 1700 / 1200)  // 680
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Base = { id: string; x: number; y: number; rotation: number; opacity: number; locked: boolean; visible: boolean; name: string; shadowEnabled?: boolean; shadowColor?: string; shadowBlur?: number; shadowOffsetX?: number; shadowOffsetY?: number }
-type TextEl    = Base & { kind: 'text';    text: string; fontSize: number; fontFamily: string; fontStyle: string; textDecoration: string; fill: string; align: 'left'|'center'|'right'; width: number; letterSpacing: number; lineHeight: number }
-type RectEl    = Base & { kind: 'rect';    width: number; height: number; fill: string; stroke: string; strokeWidth: number; cornerRadius: number }
-type EllipseEl = Base & { kind: 'ellipse'; radiusX: number; radiusY: number; fill: string; stroke: string; strokeWidth: number }
-type LineEl    = Base & { kind: 'line';    length: number; stroke: string; strokeWidth: number; lineCap: 'butt'|'round'; dashed: boolean }
-type ImgEl     = Base & { kind: 'image';   src: string; width: number; height: number }
-type El = TextEl | RectEl | EllipseEl | LineEl | ImgEl
-
-type HistState = { els: El[]; bg: string }
-
 function uid() { return Math.random().toString(36).slice(2, 9) }
 function base(name: string): Base { return { id: uid(), x: LW/2, y: LH/2, rotation: 0, opacity: 1, locked: false, visible: true, name } }
 
 const CX = LW / 2, CY = LH / 2
 const SNAP = 8
+const LS_KEY = 'hushare_card_v1'
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
@@ -76,78 +65,34 @@ function template(title: string, qr: string, style: 'branded'|'bw'|'clean'): { e
 
 // ─── Undo/redo ────────────────────────────────────────────────────────────────
 
+type HistAction =
+  | { type: 'PUSH';    state: HistState }
+  | { type: 'REPLACE'; state: HistState }
+  | { type: 'UNDO' }
+  | { type: 'REDO' }
+
+type HR = { states: HistState[]; idx: number }
+
+function histReducer(s: HR, a: HistAction): HR {
+  switch (a.type) {
+    case 'PUSH': {
+      const states = [...s.states.slice(0, s.idx + 1), a.state].slice(-50)
+      return { states, idx: states.length - 1 }
+    }
+    case 'REPLACE': return { states: [a.state], idx: 0 }
+    case 'UNDO':    return { ...s, idx: Math.max(0, s.idx - 1) }
+    case 'REDO':    return { ...s, idx: Math.min(s.states.length - 1, s.idx + 1) }
+  }
+}
+
 function useHistory(init: HistState) {
-  const [states, setStates] = useState<HistState[]>([init])
-  const [idx, setIdx] = useState(0)
-  const push = useCallback((s: HistState) => {
-    setStates(prev => { const next = [...prev.slice(0, idx + 1), s]; setIdx(next.length - 1); return next })
-  }, [idx])
-  const replace = useCallback((s: HistState) => { setStates([s]); setIdx(0) }, [])
-  const undo = useCallback(() => setIdx(i => Math.max(0, i - 1)), [])
-  const redo = useCallback(() => setIdx(i => Math.min(states.length - 1, i + 1)), [states.length])
-  const canUndo = idx > 0
-  const canRedo = idx < states.length - 1
-  return { state: states[idx], push, replace, undo, redo, canUndo, canRedo }
-}
-
-// ─── Small UI atoms ───────────────────────────────────────────────────────────
-
-function ColorSwatch({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [hex, setHex] = useState(value)
-  useEffect(() => setHex(value), [value])
-  function handle(raw: string) {
-    const v = raw.startsWith('#') ? raw : '#' + raw
-    setHex(v)
-    if (/^#[0-9A-Fa-f]{6}$/.test(v)) onChange(v)
-  }
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="relative">
-        <input type="color" value={value} onChange={e => { setHex(e.target.value); onChange(e.target.value) }}
-          className="absolute inset-0 opacity-0 cursor-pointer" style={{ width: 24, height: 24 }} />
-        <div className="rounded border" style={{ width: 24, height: 24, background: value, borderColor: '#D0D0D0' }} />
-      </div>
-      <input type="text" value={hex} onChange={e => handle(e.target.value)} maxLength={7}
-        className="rounded border px-1.5 py-0.5 text-xs font-mono" style={{ width: 72, borderColor: '#E0E0E0' }} />
-    </div>
-  )
-}
-
-function NumInput({ label, value, onChange, min, max, step = 1, unit = '' }: { label: string; value: number; min?: number; max?: number; step?: number; unit?: string; onChange: (v: number) => void }) {
-  // Local state so mobile keyboards can type freely without re-render kicking them out
-  const [local, setLocal] = useState(String(Math.round(value * 10) / 10))
-  useEffect(() => { setLocal(String(Math.round(value * 10) / 10)) }, [value])
-  function commit(raw: string) {
-    const n = parseFloat(raw)
-    if (!isNaN(n)) {
-      const clamped = min !== undefined ? Math.max(min, max !== undefined ? Math.min(max, n) : n) : n
-      onChange(clamped)
-    } else { setLocal(String(Math.round(value * 10) / 10)) }
-  }
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>{label}</span>
-      <div className="flex items-center gap-1 rounded border px-1.5 py-1" style={{ borderColor: '#E0E0E0' }}>
-        <input
-          type="text" inputMode="decimal" value={local}
-          onChange={e => setLocal(e.target.value)}
-          onBlur={e => commit(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { commit(local); e.currentTarget.blur() } }}
-          className="w-full text-xs bg-transparent outline-none" style={{ color: '#1A1A1A' }} />
-        {unit && <span className="text-xs shrink-0" style={{ color: '#999' }}>{unit}</span>}
-      </div>
-    </div>
-  )
-}
-
-function SliderRow({ label, value, min, max, step = 1, onChange }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs shrink-0 w-16" style={{ color: '#666' }}>{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} className="flex-1" />
-      <span className="text-xs w-8 text-right font-mono" style={{ color: '#999' }}>{Math.round(value * 10) / 10}</span>
-    </div>
-  )
+  const [{ states, idx }, dispatch] = useReducer(histReducer, { states: [init], idx: 0 })
+  const push    = useCallback((s: HistState) => dispatch({ type: 'PUSH',    state: s }), [])
+  const replace = useCallback((s: HistState) => dispatch({ type: 'REPLACE', state: s }), [])
+  const undo    = useCallback(() => dispatch({ type: 'UNDO' }), [])
+  const redo    = useCallback(() => dispatch({ type: 'REDO' }), [])
+  return { state: states[idx], push, replace, undo, redo,
+           canUndo: idx > 0, canRedo: idx < states.length - 1 }
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -158,17 +103,18 @@ export default function CardEditorClient() {
   const shareUrl    = params.get('url') ?? ''
   const initialTitle = params.get('title') ?? ''
 
-  const LS_KEY = 'hushare_card_v1'
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const { state, push, replace, undo, redo, canUndo, canRedo } = useHistory({ els: [], bg: '#FFFFFF' })
   const { els, bg } = state
-  function setEls(next: El[] | ((p: El[]) => El[]), commit = true) {
-    const newEls = typeof next === 'function' ? next(els) : next
-    if (commit) push({ els: newEls, bg })
-    else _setElsNoHistory(newEls)
-  }
   const [_transientEls, _setElsNoHistory] = useState<El[]>([])
+  const bgRef = useRef(bg); bgRef.current = bg
+  // Stable after Phase 2 (push has empty deps); safe to use in callbacks
+  const setEls = useCallback((next: El[] | ((p: El[]) => El[]), commit = true) => {
+    const newEls = typeof next === 'function' ? next(elsRef.current) : next
+    if (commit) push({ els: newEls, bg: bgRef.current })
+    else _setElsNoHistory(newEls)
+  }, [push])
   const liveEls = _transientEls.length > 0 ? _transientEls : els
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -196,6 +142,13 @@ export default function CardEditorClient() {
   const gestureRef = useRef<{ active: boolean; startAngle: number; startRot: number; startDist: number; startScale: number }>({ active: false, startAngle: 0, startRot: 0, startDist: 0, startScale: 1 })
   const isDragging = useRef(false)
   const copiedEl = useRef<El | null>(null)
+
+  // Stable refs so the keyboard effect never needs to re-register
+  const selectedIdRef  = useRef(selectedId);   selectedIdRef.current  = selectedId
+  const liveElsRef     = useRef<El[]>([]);      liveElsRef.current     = liveEls as El[]
+  const editingIdRef   = useRef(editingTextId); editingIdRef.current   = editingTextId
+  const transformRef   = useRef(transforming);  transformRef.current   = transforming
+  const elsRef         = useRef<El[]>([]);      elsRef.current         = els
 
   // Load extra fonts (only for card editor) then force canvas redraw once they're ready
   useEffect(() => {
@@ -303,47 +256,79 @@ export default function CardEditorClient() {
     tr.getLayer()?.batchDraw()
   }, [selectedId, transforming, liveEls])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — registered once; reads current values via refs
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const inp = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
-      if (e.key === 'Escape') { setSelectedId(null); setTransforming(false) }
+      const sid    = selectedIdRef.current
+      const els_   = liveElsRef.current
+      const editId = editingIdRef.current
+      const tfm    = transformRef.current
+      const inp    = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+
+      if (e.key === 'Escape') {
+        if (editId)     { setEditingTextId(null) }
+        else if (tfm)   { setTransforming(false) }
+        else            { setSelectedId(null); setTransforming(false) }
+        return
+      }
       if (!inp) {
-        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) { deleteEl(selectedId); return }
+        if ((e.key === 'Delete' || e.key === 'Backspace') && sid) {
+          setEls(p => p.filter(el => el.id !== sid)); setSelectedId(null); setTransforming(false)
+          return
+        }
         if (e.ctrlKey || e.metaKey) {
           if (e.key === 'z') { e.preventDefault(); undo() }
           if (e.key === 'y' || (e.shiftKey && e.key === 'z')) { e.preventDefault(); redo() }
-          if (e.key === 'd' && selectedId) { e.preventDefault(); duplicateEl(selectedId) }
-          if (e.key === 'c' && selectedId) { e.preventDefault(); const el = liveEls.find(x => x.id === selectedId); if (el) copiedEl.current = el }
-          if (e.key === 'v' && copiedEl.current) { e.preventDefault(); pasteEl(copiedEl.current) }
-          if (e.key === ']' && selectedId) { e.preventDefault(); moveLayer(selectedId, 1) }
-          if (e.key === '[' && selectedId) { e.preventDefault(); moveLayer(selectedId, -1) }
+          if (e.key === 'd' && sid) {
+            e.preventDefault()
+            const el = els_.find(x => x.id === sid); if (!el) return
+            const dup = { ...el, id: uid(), x: el.x + 16, y: el.y + 16, name: el.name + ' copy' }
+            const idx = els_.findIndex(x => x.id === sid)
+            setEls(p => [...p.slice(0, idx + 1), dup, ...p.slice(idx + 1)])
+            setSelectedId(dup.id)
+          }
+          if (e.key === 'c' && sid) { e.preventDefault(); const el = els_.find(x => x.id === sid); if (el) copiedEl.current = el }
+          if (e.key === 'v' && copiedEl.current) {
+            e.preventDefault()
+            const el = copiedEl.current
+            const dup = { ...el, id: uid(), x: Math.min(el.x + 20, LW - 20), y: Math.min(el.y + 20, LH - 20), name: el.name.replace(/ copy$/, '') + ' copy' }
+            setEls(p => [...p, dup]); setSelectedId(dup.id)
+          }
+          if (e.key === ']' && sid) { e.preventDefault(); setEls(p => { const i = p.findIndex(x => x.id === sid); const ni = Math.min(p.length - 1, i + 1); if (ni === i) return p; const n = [...p]; [n[i], n[ni]] = [n[ni], n[i]]; return n }) }
+          if (e.key === '[' && sid) { e.preventDefault(); setEls(p => { const i = p.findIndex(x => x.id === sid); const ni = Math.max(0, i - 1); if (ni === i) return p; const n = [...p]; [n[i], n[ni]] = [n[ni], n[i]]; return n }) }
         }
-        // Arrow nudge
-        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && selectedId) {
+        if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key) && sid) {
           e.preventDefault()
           const d = e.shiftKey ? 10 : 1
           const dx = e.key === 'ArrowLeft' ? -d : e.key === 'ArrowRight' ? d : 0
           const dy = e.key === 'ArrowUp' ? -d : e.key === 'ArrowDown' ? d : 0
-          setEls(p => p.map(el => el.id === selectedId ? { ...el, x: el.x + dx, y: el.y + dy } : el))
+          setEls(p => p.map(el => el.id === sid ? { ...el, x: el.x + dx, y: el.y + dy } : el))
         }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, undo, redo, deleteEl, duplicateEl, pasteEl, moveLayer, setEls, liveEls])
+  }, [undo, redo, push])  // all stable after useReducer; registered once
 
   const selected = useMemo(() => liveEls.find(e => e.id === selectedId) ?? null, [liveEls, selectedId])
 
   // ─── Element CRUD ──────────────────────────────────────────────────────────
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function updateEl(id: string, patch: Record<string, any>, commit = true) {
+  function updateEl(id: string, patch: ElPatch, commit = true) {
     setEls(p => p.map(e => e.id === id ? { ...e, ...patch } : e), commit)
   }
 
   function deleteEl(id: string) {
-    setEls(p => p.filter(e => e.id !== id)); setSelectedId(null); setTransforming(false)
+    const el = elsRef.current.find(e => e.id === id)
+    setEls(p => p.filter(e => e.id !== id))
+    setSelectedId(null); setTransforming(false)
+    if (el?.kind === 'image') {
+      setLoadedImgs(prev => {
+        const stillUsed = elsRef.current.some(e => e.id !== id && e.kind === 'image' && (e as ImgEl).src === el.src)
+        if (stillUsed) return prev
+        const next = { ...prev }; delete next[el.src]; return next
+      })
+    }
   }
 
   function duplicateEl(id: string) {
@@ -397,8 +382,9 @@ export default function CardEditorClient() {
     const file = e.target.files?.[0]; if (!file) return
     const reader = new FileReader()
     reader.onload = ev => {
-      const src = ev.target?.result as string
-      const el: ImgEl = { ...base('Image'), kind: 'image', x: CX - 80, y: CY - 80, src, width: 160, height: 160 }
+      const result = ev.target?.result
+      if (typeof result !== 'string') return
+      const el: ImgEl = { ...base('Image'), kind: 'image', x: CX - 80, y: CY - 80, src: result, width: 160, height: 160 }
       setEls(p => [...p, el]); setSelectedId(el.id); setTool('select')
     }
     reader.readAsDataURL(file); e.target.value = ''
@@ -427,7 +413,7 @@ export default function CardEditorClient() {
     if (snapV) node.x(CX - hw)
     if (snapH) node.y(CY - hh)
     setGuides({ v: snapV, h: snapH, vx: CX, hy: CY })
-    _setElsNoHistory(p => (p.length ? p : els).map(e => e.id === id ? { ...e, x: node.x(), y: node.y() } : e))
+    _setElsNoHistory(p => p.map(e => e.id === id ? { ...e, x: node.x(), y: node.y() } : e))
   }
 
   function handleDragEnd(id: string, e: KonvaEventObject<DragEvent>) {
@@ -437,7 +423,7 @@ export default function CardEditorClient() {
   }
 
   function handleTransformEnd(id: string, e: KonvaEventObject<Event>) {
-    const node = e.target; const el = liveEls.find(e => e.id === id); if (!el) return
+    const node = e.target; const el = elsRef.current.find(e => e.id === id); if (!el) return
     const sx = node.scaleX(), sy = node.scaleY()
     if (el.kind === 'text')    updateEl(id, { x: node.x(), y: node.y(), rotation: node.rotation(), fontSize: Math.max(6, Math.round(el.fontSize * sy)), width: Math.max(40, Math.round(el.width * sx)) })
     else if (el.kind === 'rect')    updateEl(id, { x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(4, Math.round(el.width * sx)), height: Math.max(4, Math.round(el.height * sy)) })
@@ -563,7 +549,7 @@ export default function CardEditorClient() {
         else setTransforming(true)
       },
       onDblTap: () => { setSelectedId(el.id); setTransforming(true) },
-      onDragStart: () => { isDragging.current = true },
+      onDragStart: () => { isDragging.current = true; _setElsNoHistory(elsRef.current) },
       onDragMove: (e: KonvaEventObject<DragEvent>) => handleDragMove(el.id, e),
       onDragEnd:  (e: KonvaEventObject<DragEvent>) => { isDragging.current = false; handleDragEnd(el.id, e) },
       onTransformEnd: (e: KonvaEventObject<Event>) => handleTransformEnd(el.id, e),
@@ -574,280 +560,18 @@ export default function CardEditorClient() {
     }
   }
 
-  // ─── Properties panel ─────────────────────────────────────────────────────
+  // ─── Layer reorder (for LayersPanel) ──────────────────────────────────────
 
-  function PropsPanel() {
-    if (!selected) return (
-      <div className="space-y-4">
-        <div>
-          <p className="text-xs font-semibold mb-2" style={{ color: '#555' }}>Background</p>
-          <ColorSwatch value={bg} onChange={v => push({ els, bg: v })} />
-        </div>
-        <div>
-          <p className="text-xs font-semibold mb-2" style={{ color: '#555' }}>Templates</p>
-          <div className="space-y-1.5">
-            {(['branded','bw','clean'] as const).map(s => (
-              <button key={s} onClick={() => applyTemplate(s)}
-                className="w-full text-xs font-medium rounded-lg px-3 py-2 text-left transition hover:opacity-80"
-                style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
-                {s === 'branded' ? 'Hushare Branded (red)' : s === 'bw' ? 'B&W Elegant' : 'Clean White'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className="text-xs" style={{ color: '#AAAAAA' }}>Click an element to edit. Double-click to resize/rotate. Two fingers to rotate on mobile.</p>
-      </div>
-    )
-
-    const s = selected
-    return (
-      <div className="space-y-3">
-        {/* Position & Size */}
-        <div>
-          <p className="text-xs font-semibold mb-2" style={{ color: '#555' }}>Position & Size</p>
-          <div className="grid grid-cols-2 gap-2">
-            <NumInput label="X" value={s.x} onChange={v => updateEl(s.id, { x: v })} />
-            <NumInput label="Y" value={s.y} onChange={v => updateEl(s.id, { y: v })} />
-            {'width' in s && <NumInput label="W" value={(s as RectEl).width} min={1} onChange={v => updateEl(s.id, { width: v })} />}
-            {(s.kind === 'rect' || s.kind === 'image') && <NumInput label="H" value={s.height} min={1} onChange={v => updateEl(s.id, { height: v })} />}
-            {s.kind === 'line' && <NumInput label="Length" value={s.length} min={1} onChange={v => updateEl(s.id, { length: v })} />}
-            {s.kind === 'ellipse' && <NumInput label="Rx" value={s.radiusX} min={1} onChange={v => updateEl(s.id, { radiusX: v })} />}
-            {s.kind === 'ellipse' && <NumInput label="Ry" value={s.radiusY} min={1} onChange={v => updateEl(s.id, { radiusY: v })} />}
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <NumInput label="Rotation" value={s.rotation} onChange={v => updateEl(s.id, { rotation: v })} unit="°" />
-            <NumInput label="Opacity" value={Math.round(s.opacity * 100)} min={0} max={100} onChange={v => updateEl(s.id, { opacity: v / 100 })} unit="%" />
-          </div>
-        </div>
-
-        {/* Text props */}
-        {s.kind === 'text' && (
-          <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
-            <p className="text-xs font-semibold" style={{ color: '#555' }}>Text</p>
-            <textarea value={s.text} onChange={e => updateEl(s.id, { text: e.target.value })}
-              className="w-full rounded-lg border px-2 py-1.5 text-sm" style={{ borderColor: '#E0E0E0', resize: 'vertical', minHeight: 56 }} />
-            <div className="flex gap-1.5">
-              <div className="flex-1">
-                <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>Size</span>
-                <div className="flex items-center gap-1 rounded border px-1.5 py-1 mt-0.5" style={{ borderColor: '#E0E0E0' }}>
-                  <input type="number" value={s.fontSize} min={6} max={200} onChange={e => updateEl(s.id, { fontSize: Number(e.target.value) })} className="w-full text-xs bg-transparent outline-none" />
-                  <span className="text-xs" style={{ color: '#999' }}>px</span>
-                </div>
-              </div>
-              <div className="flex-1">
-                <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>Spacing</span>
-                <div className="flex items-center gap-1 rounded border px-1.5 py-1 mt-0.5" style={{ borderColor: '#E0E0E0' }}>
-                  <input type="number" value={s.letterSpacing} step={0.5} onChange={e => updateEl(s.id, { letterSpacing: Number(e.target.value) })} className="w-full text-xs bg-transparent outline-none" />
-                </div>
-              </div>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wide" style={{ color: '#999' }}>Font</span>
-              <select value={s.fontFamily} onChange={e => updateEl(s.id, { fontFamily: e.target.value })}
-                className="w-full mt-0.5 rounded border px-2 py-1 text-xs" style={{ borderColor: '#E0E0E0' }}>
-                <option value="'Playfair Display', Georgia, serif">Playfair Display</option>
-                <option value="'Montserrat', sans-serif">Montserrat</option>
-                <option value="'Raleway', sans-serif">Raleway</option>
-                <option value="'Oswald', sans-serif">Oswald</option>
-                <option value="'Dancing Script', cursive">Dancing Script</option>
-                <option value="'Geist', system-ui, sans-serif">Geist Sans</option>
-                <option value="'Playwrite GB J', cursive">Playwrite Script</option>
-                <option value="Georgia, serif">Georgia</option>
-                <option value="Arial, sans-serif">Arial</option>
-                <option value="'Times New Roman', serif">Times New Roman</option>
-              </select>
-            </div>
-            <div className="flex gap-1">
-              {(['normal','bold','italic','bold italic'] as const).map(fs => (
-                <button key={fs} onClick={() => updateEl(s.id, { fontStyle: fs })}
-                  className="flex-1 text-xs rounded py-1 transition"
-                  style={{ background: s.fontStyle === fs ? '#254F22' : '#F5F0E8', color: s.fontStyle === fs ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.fontStyle === fs ? '#254F22' : '#DDD5C5'), fontWeight: fs.includes('bold') ? 700 : 400, fontStyle: fs.includes('italic') ? 'italic' : 'normal' }}>
-                  {fs === 'normal' ? 'Aa' : fs === 'bold' ? 'B' : fs === 'italic' ? 'I' : 'BI'}
-                </button>
-              ))}
-              <button onClick={() => updateEl(s.id, { textDecoration: s.textDecoration === 'underline' ? '' : 'underline' })}
-                className="flex-1 text-xs rounded py-1 transition"
-                style={{ background: s.textDecoration === 'underline' ? '#254F22' : '#F5F0E8', color: s.textDecoration === 'underline' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.textDecoration === 'underline' ? '#254F22' : '#DDD5C5'), textDecoration: 'underline' }}>
-                U
-              </button>
-            </div>
-            <div className="flex gap-1">
-              {(['left','center','right'] as const).map(a => (
-                <button key={a} onClick={() => updateEl(s.id, { align: a })}
-                  className="flex-1 py-1.5 rounded transition"
-                  style={{ background: s.align === a ? '#254F22' : '#F5F0E8', color: s.align === a ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.align === a ? '#254F22' : '#DDD5C5') }}>
-                  {a === 'left' ? <AlignLeft className="w-3.5 h-3.5 mx-auto" /> : a === 'center' ? <AlignCenter className="w-3.5 h-3.5 mx-auto" /> : <AlignRight className="w-3.5 h-3.5 mx-auto" />}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: '#666' }}>Color</span>
-              <ColorSwatch value={s.fill} onChange={v => updateEl(s.id, { fill: v })} />
-            </div>
-            <SliderRow label="Width" value={s.width} min={40} max={LW - 20} onChange={v => updateEl(s.id, { width: v })} />
-            <SliderRow label="Line H" value={s.lineHeight} min={0.8} max={3} step={0.1} onChange={v => updateEl(s.id, { lineHeight: v })} />
-          </div>
-        )}
-
-        {/* Shape props */}
-        {(s.kind === 'rect' || s.kind === 'ellipse') && (
-          <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
-            <p className="text-xs font-semibold" style={{ color: '#555' }}>Shape</p>
-            <div className="flex items-center gap-2"><span className="text-xs w-10" style={{ color: '#666' }}>Fill</span><ColorSwatch value={s.fill} onChange={v => updateEl(s.id, { fill: v })} /></div>
-            <div className="flex items-center gap-2"><span className="text-xs w-10" style={{ color: '#666' }}>Stroke</span><ColorSwatch value={s.stroke} onChange={v => updateEl(s.id, { stroke: v })} /></div>
-            <SliderRow label="Stroke W" value={s.strokeWidth} min={0} max={20} onChange={v => updateEl(s.id, { strokeWidth: v })} />
-            {s.kind === 'rect' && <SliderRow label="Radius" value={s.cornerRadius} min={0} max={80} onChange={v => updateEl(s.id, { cornerRadius: v })} />}
-          </div>
-        )}
-
-        {/* Line props */}
-        {s.kind === 'line' && (
-          <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
-            <p className="text-xs font-semibold" style={{ color: '#555' }}>Line</p>
-            <div className="flex items-center gap-2"><span className="text-xs w-10" style={{ color: '#666' }}>Color</span><ColorSwatch value={s.stroke} onChange={v => updateEl(s.id, { stroke: v })} /></div>
-            <SliderRow label="Thickness" value={s.strokeWidth} min={0.5} max={20} step={0.5} onChange={v => updateEl(s.id, { strokeWidth: v })} />
-            <div className="flex gap-1">
-              <button onClick={() => updateEl(s.id, { lineCap: 'round' })} className="flex-1 text-xs rounded py-1" style={{ background: s.lineCap === 'round' ? '#254F22' : '#F5F0E8', color: s.lineCap === 'round' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.lineCap === 'round' ? '#254F22' : '#DDD5C5') }}>Rounded</button>
-              <button onClick={() => updateEl(s.id, { lineCap: 'butt' })} className="flex-1 text-xs rounded py-1" style={{ background: s.lineCap === 'butt' ? '#254F22' : '#F5F0E8', color: s.lineCap === 'butt' ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.lineCap === 'butt' ? '#254F22' : '#DDD5C5') }}>Square</button>
-              <button onClick={() => updateEl(s.id, { dashed: !s.dashed })} className="flex-1 text-xs rounded py-1" style={{ background: s.dashed ? '#254F22' : '#F5F0E8', color: s.dashed ? '#FDFAF5' : '#5C3D2E', border: '1px solid ' + (s.dashed ? '#254F22' : '#DDD5C5') }}>Dashed</button>
-            </div>
-          </div>
-        )}
-
-        {/* Image props */}
-        {s.kind === 'image' && (
-          <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
-            <label className="flex items-center justify-center gap-1.5 w-full rounded-lg py-2 text-xs font-semibold cursor-pointer hover:opacity-80"
-              style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px dashed #DDD5C5' }}>
-              <ImagePlus className="w-3 h-3" /> Replace image
-              <input type="file" accept="image/*" className="hidden" onChange={handleImgUpload} />
-            </label>
-          </div>
-        )}
-
-        {/* Shadow */}
-        <div className="space-y-2 border-t pt-3" style={{ borderColor: '#F0F0F0' }}>
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold" style={{ color: '#555' }}>Shadow</p>
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <span className="text-xs" style={{ color: '#888' }}>{s.shadowEnabled ? 'On' : 'Off'}</span>
-              <input type="checkbox" checked={!!s.shadowEnabled} onChange={e => updateEl(s.id, { shadowEnabled: e.target.checked })} />
-            </label>
-          </div>
-          {s.shadowEnabled && (
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-2"><span className="text-xs w-10 shrink-0" style={{ color: '#666' }}>Color</span><ColorSwatch value={s.shadowColor ?? '#000000'} onChange={v => updateEl(s.id, { shadowColor: v })} /></div>
-              <SliderRow label="Blur" value={s.shadowBlur ?? 10} min={0} max={50} onChange={v => updateEl(s.id, { shadowBlur: v })} />
-              <SliderRow label="Offset X" value={s.shadowOffsetX ?? 4} min={-30} max={30} onChange={v => updateEl(s.id, { shadowOffsetX: v })} />
-              <SliderRow label="Offset Y" value={s.shadowOffsetY ?? 4} min={-30} max={30} onChange={v => updateEl(s.id, { shadowOffsetY: v })} />
-            </div>
-          )}
-        </div>
-
-        {/* Alignment */}
-        <div className="pt-2 border-t" style={{ borderColor: '#F0F0F0' }}>
-          <p className="text-[10px] uppercase tracking-wide mb-1.5" style={{ color: '#999' }}>Align to canvas</p>
-          <div className="grid grid-cols-3 gap-1">
-            {([
-              ['← Left', 'left'], ['— Center H', 'cx'], ['Right →', 'right'],
-              ['↑ Top', 'top'],   ['| Center V', 'cy'], ['↓ Bottom', 'bottom'],
-            ] as const).map(([label, axis]) => (
-              <button key={axis} onClick={() => alignEl(axis)}
-                className="text-[10px] rounded py-1.5 px-1 transition hover:opacity-80"
-                style={{ background: '#F5F5F5', color: '#555', border: '1px solid #E0E0E0' }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-1.5">
-          <button onClick={() => duplicateEl(s.id)} className="flex-1 flex items-center justify-center gap-1 text-xs rounded-lg py-2 transition hover:opacity-80"
-            style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
-            <Copy className="w-3 h-3" /> Copy
-          </button>
-          <button onClick={() => moveLayer(s.id, 1)} className="flex items-center justify-center gap-1 text-xs rounded-lg px-3 py-2 transition hover:opacity-80"
-            style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
-            <ChevronUp className="w-3 h-3" />
-          </button>
-          <button onClick={() => moveLayer(s.id, -1)} className="flex items-center justify-center gap-1 text-xs rounded-lg px-3 py-2 transition hover:opacity-80"
-            style={{ background: '#F5F0E8', color: '#5C3D2E', border: '1px solid #DDD5C5' }}>
-            <ChevronDown className="w-3 h-3" />
-          </button>
-          <button onClick={() => updateEl(s.id, { locked: !s.locked })} className="flex items-center justify-center text-xs rounded-lg px-2.5 py-2"
-            style={{ background: s.locked ? '#FFF3E0' : '#F5F5F5', color: s.locked ? '#E65100' : '#888', border: '1px solid ' + (s.locked ? '#FFE0B2' : '#E0E0E0') }}>
-            {s.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
-          </button>
-          <button onClick={() => deleteEl(s.id)} className="flex items-center justify-center text-xs rounded-lg px-2.5 py-2"
-            style={{ background: '#FFF0F0', color: '#C0392B', border: '1px solid #FFCCCC' }}>
-            <Trash2 className="w-3 h-3" />
-          </button>
-        </div>
-
-        {/* Transform toggle */}
-        <button onClick={() => setTransforming(t => !t)} className="w-full text-xs font-semibold rounded-lg py-2 transition"
-          style={{ background: transforming ? '#E8F5E9' : '#F5F5F5', color: transforming ? '#254F22' : '#555', border: '1px solid ' + (transforming ? '#C8E6C9' : '#E0E0E0') }}>
-          {transforming ? '✓ Handles on — dbl-click canvas to edit text' : 'Enable resize / rotate handles (dbl-click)'}
-        </button>
-      </div>
-    )
-  }
-
-  // ─── Layers panel ─────────────────────────────────────────────────────────
-
-  function LayersPanel() {
-    function dropLayer(targetId: string) {
-      if (!dragLayerId || dragLayerId === targetId) return
-      setEls(p => {
-        const next = [...p]
-        const fromIdx = next.findIndex(e => e.id === dragLayerId)
-        const toIdx   = next.findIndex(e => e.id === targetId)
-        const [item] = next.splice(fromIdx, 1)
-        next.splice(toIdx, 0, item)
-        return next
-      })
-      setDragLayerId(null); setDragOverId(null)
-    }
-    return (
-      <div className="space-y-1">
-        <p className="text-[10px] uppercase tracking-wide mb-2" style={{ color: '#999' }}>Drag to reorder — top = front</p>
-        {[...liveEls].reverse().map(el => (
-          <div key={el.id}
-            draggable
-            onDragStart={() => setDragLayerId(el.id)}
-            onDragOver={e => { e.preventDefault(); setDragOverId(el.id) }}
-            onDrop={() => dropLayer(el.id)}
-            onDragEnd={() => { setDragLayerId(null); setDragOverId(null) }}
-            onClick={() => { setSelectedId(el.id); setTransforming(false) }}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 cursor-grab active:cursor-grabbing transition select-none"
-            style={{
-              background: el.id === selectedId ? '#E8F5E9' : el.id === dragOverId ? '#EEF2FF' : 'transparent',
-              border: '1px solid ' + (el.id === selectedId ? '#C8E6C9' : el.id === dragOverId ? '#C7D2FE' : 'transparent'),
-              opacity: el.id === dragLayerId ? 0.4 : 1,
-            }}>
-            <span className="text-[10px] w-10 shrink-0 text-center rounded px-1 py-0.5 font-mono uppercase" style={{ background: '#F5F5F5', color: '#888' }}>
-              {el.kind.slice(0, 4)}
-            </span>
-            <span className="flex-1 text-xs truncate" style={{ color: '#1A1A1A' }}>{el.name}</span>
-            <button onClick={e => { e.stopPropagation(); updateEl(el.id, { visible: !el.visible }, true) }}
-              className="p-1 rounded transition hover:opacity-70">
-              {el.visible ? <Eye className="w-3 h-3" style={{ color: '#888' }} /> : <EyeOff className="w-3 h-3" style={{ color: '#BBB' }} />}
-            </button>
-            <button onClick={e => { e.stopPropagation(); updateEl(el.id, { locked: !el.locked }, true) }}
-              className="p-1 rounded transition hover:opacity-70">
-              {el.locked ? <Lock className="w-3 h-3" style={{ color: '#E67' }} /> : <Unlock className="w-3 h-3" style={{ color: '#BBB' }} />}
-            </button>
-            <div className="flex flex-col gap-0">
-              <button onClick={e => { e.stopPropagation(); moveLayer(el.id, 1) }} className="p-0.5 hover:opacity-70"><ChevronUp className="w-3 h-3" style={{ color: '#888' }} /></button>
-              <button onClick={e => { e.stopPropagation(); moveLayer(el.id, -1) }} className="p-0.5 hover:opacity-70"><ChevronDown className="w-3 h-3" style={{ color: '#888' }} /></button>
-            </div>
-          </div>
-        ))}
-        {liveEls.length === 0 && <p className="text-xs py-3 text-center" style={{ color: '#AAAAAA' }}>No elements yet.</p>}
-      </div>
-    )
-  }
+  const reorderEls = useCallback((fromId: string, toId: string) => {
+    setEls(p => {
+      const next = [...p]
+      const fromIdx = next.findIndex(e => e.id === fromId)
+      const toIdx   = next.findIndex(e => e.id === toId)
+      const [item] = next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, item)
+      return next
+    })
+  }, [setEls])
 
   // ─── Tool definitions ─────────────────────────────────────────────────────
 
@@ -1073,7 +797,10 @@ export default function CardEditorClient() {
             ))}
           </div>
           <div className="flex-1 overflow-y-auto p-3">
-            {rightTab === 'props' ? PropsPanel() : LayersPanel()}
+            {rightTab === 'props'
+              ? <PropsPanel selected={selected} bg={bg} els={els} qrDataUrl={qrDataUrl} transforming={transforming} push={push} updateEl={updateEl} deleteEl={deleteEl} duplicateEl={duplicateEl} moveLayer={moveLayer} alignEl={alignEl} handleImgUpload={handleImgUpload} applyTemplate={applyTemplate} setTransforming={setTransforming} />
+              : <LayersPanel els={liveEls} selectedId={selectedId} dragLayerId={dragLayerId} dragOverId={dragOverId} setSelectedId={setSelectedId} setTransforming={setTransforming} setDragLayerId={setDragLayerId} setDragOverId={setDragOverId} updateEl={updateEl} moveLayer={moveLayer} reorderEls={reorderEls} />
+            }
           </div>
         </div>
 
@@ -1107,7 +834,7 @@ export default function CardEditorClient() {
         {/* Mobile properties (collapsed) */}
         {selected && (
           <div className="px-3 pb-3 max-h-64 overflow-y-auto border-t" style={{ borderColor: '#F0F0F0' }}>
-            {PropsPanel()}
+            <PropsPanel selected={selected} bg={bg} els={els} qrDataUrl={qrDataUrl} transforming={transforming} push={push} updateEl={updateEl} deleteEl={deleteEl} duplicateEl={duplicateEl} moveLayer={moveLayer} alignEl={alignEl} handleImgUpload={handleImgUpload} applyTemplate={applyTemplate} setTransforming={setTransforming} />
           </div>
         )}
       </div>
