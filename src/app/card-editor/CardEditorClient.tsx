@@ -130,8 +130,10 @@ export default function CardEditorClient() {
   const [loadedImgs, setLoadedImgs] = useState<Record<string, HTMLImageElement>>({})
   const [rightTab, setRightTab] = useState<'props'|'layers'>('props')
   const [stageW, setStageW] = useState(LW)
+  const [zoom, setZoom] = useState(1)
   const stageH = Math.round(stageW * LH / LW)
   const scale = stageW / LW
+  const stageScale = scale * zoom   // final Konva scale (logical → screen pixels)
   const dlRatio = 1200 / stageW
 
   const stageRef = useRef<Konva.Stage>(null)
@@ -150,22 +152,10 @@ export default function CardEditorClient() {
   const transformRef   = useRef(transforming);  transformRef.current   = transforming
   const elsRef         = useRef<El[]>([]);      elsRef.current         = els
 
-  // Load extra fonts (only for card editor) then force canvas redraw once they're ready
+  // Fonts are loaded via Next.js (layout.tsx) — served from same origin, CSP-safe.
+  // After all fonts finish loading, force Konva to repaint so canvas picks them up.
   useEffect(() => {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = 'https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;1,400&family=Dancing+Script:wght@400;700&family=Raleway:wght@400;700&family=Oswald:wght@400;700&display=swap'
-    link.onload = () => {
-      // CSS is parsed — now wait for the actual font binary data to be ready
-      Promise.allSettled([
-        document.fonts.load("400 14px Montserrat"),
-        document.fonts.load("400 14px Raleway"),
-        document.fonts.load("400 14px Oswald"),
-        document.fonts.load("400 14px 'Dancing Script'"),
-      ]).then(() => stageRef.current?.batchDraw())
-    }
-    document.head.appendChild(link)
-    return () => { try { document.head.removeChild(link) } catch { /* already removed */ } }
+    document.fonts.ready.then(() => stageRef.current?.batchDraw())
   }, [])
 
   // Stage sizing
@@ -177,6 +167,18 @@ export default function CardEditorClient() {
     update()
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
+  }, [])
+
+  // Ctrl+Scroll to zoom
+  useEffect(() => {
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      setZoom(z => Math.min(3, Math.max(0.25, +(z - e.deltaY * 0.001).toFixed(2))))
+    }
+    const el = stageContainer.current
+    el?.addEventListener('wheel', onWheel, { passive: false })
+    return () => el?.removeEventListener('wheel', onWheel)
   }, [])
 
   // Prevent native pinch on canvas
@@ -628,6 +630,18 @@ export default function CardEditorClient() {
           </button>
         )}
 
+        {/* Zoom controls */}
+        <div className="hidden sm:flex items-center gap-0.5 rounded-lg overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+          <button onClick={() => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))} title="Zoom out"
+            className="px-2 py-1.5 text-sm hover:opacity-70 transition" style={{ color: '#DDD' }}>−</button>
+          <button onClick={() => setZoom(1)} title="Reset zoom"
+            className="px-1.5 py-1.5 text-[10px] font-mono hover:opacity-70 transition min-w-[3rem] text-center" style={{ color: '#DDD' }}>
+            {Math.round(zoom * 100)}%
+          </button>
+          <button onClick={() => setZoom(z => Math.min(3, +(z + 0.25).toFixed(2)))} title="Zoom in"
+            className="px-2 py-1.5 text-sm hover:opacity-70 transition" style={{ color: '#DDD' }}>+</button>
+        </div>
+
         <button onClick={download} disabled={downloading}
           className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition hover:opacity-90 disabled:opacity-40"
           style={{ background: '#254F22', color: '#FDFAF5' }}>
@@ -704,11 +718,11 @@ export default function CardEditorClient() {
                   }}
                   style={{
                     position: 'absolute',
-                    left: el.x * scale,
-                    top: el.y * scale,
-                    width: el.width * scale,
-                    minHeight: el.fontSize * scale * 1.5,
-                    fontSize: el.fontSize * scale,
+                    left: el.x * stageScale,
+                    top: el.y * stageScale,
+                    width: el.width * stageScale,
+                    minHeight: el.fontSize * stageScale * 1.5,
+                    fontSize: el.fontSize * stageScale,
                     fontFamily: el.fontFamily,
                     fontStyle: el.fontStyle.includes('italic') ? 'italic' : 'normal',
                     fontWeight: el.fontStyle.includes('bold') ? 700 : 400,
@@ -733,10 +747,10 @@ export default function CardEditorClient() {
             })()}
             <Stage
               ref={stageRef}
-              width={stageW}
-              height={stageH}
-              scaleX={scale}
-              scaleY={scale}
+              width={stageW * zoom}
+              height={stageH * zoom}
+              scaleX={stageScale}
+              scaleY={stageScale}
               style={{ borderRadius: 8, boxShadow: '0 8px 48px rgba(0,0,0,0.25)', cursor: tool === 'select' ? 'default' : 'crosshair', display: 'block' }}
               onClick={onStageClick}
               onTouchStart={onTouchStart}

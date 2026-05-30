@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Playfair_Display, Playwrite_GB_J } from "next/font/google";
+import { Geist, Playfair_Display, Playwrite_GB_J, Montserrat, Raleway, Oswald, Dancing_Script } from "next/font/google";
 import Script from "next/script";
 import AppToastViewport from "@/components/AppToast";
 import SiteFooter from "@/components/SiteFooter";
@@ -22,6 +22,11 @@ const handwriting = Playwrite_GB_J({
   weight: "400",
   adjustFontFallback: false,
 });
+
+const montserrat = Montserrat({ variable: "--font-montserrat", subsets: ["latin"], display: "swap" });
+const raleway    = Raleway({    variable: "--font-raleway",    subsets: ["latin"], display: "swap" });
+const oswald     = Oswald({     variable: "--font-oswald",     subsets: ["latin"], display: "swap" });
+const dancingScript = Dancing_Script({ variable: "--font-dancing", subsets: ["latin"], display: "swap" });
 
 export const runtime = "nodejs";
 
@@ -316,7 +321,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-        className={`${geistSans.variable} ${playfair.variable} ${handwriting.variable} h-full antialiased`}
+        className={`${geistSans.variable} ${playfair.variable} ${handwriting.variable} ${montserrat.variable} ${raleway.variable} ${oswald.variable} ${dancingScript.variable} h-full antialiased`}
     >
       <head>
         <link rel="preconnect" href="https://zleajzevvhugkwlqlolt.supabase.co" />
