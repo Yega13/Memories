@@ -6,6 +6,7 @@ import { uploadCapsForTier, PRO_VIDEO_BYTES } from '@/lib/media'
 import type { R2Env } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyMimeByMagic } from '@/lib/file-magic'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300

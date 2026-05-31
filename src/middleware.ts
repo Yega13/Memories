@@ -32,13 +32,17 @@ export async function middleware(request: NextRequest) {
     },
   })
 
-  await supabase.auth.getUser()
+  try {
+    await supabase.auth.getUser()
+  } catch {
+    // Network error or Supabase unavailable — non-fatal, let the request through.
+  }
 
   return applySecurityHeaders(response, request)
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/auth/hook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/auth/hook|api/upload|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
