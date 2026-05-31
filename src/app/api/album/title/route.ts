@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyOwnerWithRateLimit } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookieWithRateLimit } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string; title?: string }
+  let body: { slug?: string; title?: string }
   try {
     body = await req.json()
   } catch {
@@ -20,13 +20,12 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const title = String(body.title ?? '').trim().slice(0, MAX_TITLE_LENGTH)
-  if (!slug || !token || !title) {
+  if (!slug || !title) {
     return NextResponse.json({ error: 'Album title is required' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyOwnerWithRateLimit(req, slug, token)
+  const access = await verifyOwnerViaCookieWithRateLimit(req, slug)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

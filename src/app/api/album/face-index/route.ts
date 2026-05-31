@@ -4,7 +4,7 @@ import { ensureCollection, indexPhotoFaces } from '@/lib/rekognition'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { getUserTierById } from '@/lib/subscriptions'
 import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -69,15 +69,13 @@ function rateLimitResponse(retryAfterSeconds: number) {
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const slug = url.searchParams.get('slug')?.trim() ?? ''
-  const ownerToken = url.searchParams.get('owner_token')?.trim() ?? ''
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
   const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index_list'), 60, 30)
   if (!ipLimit.ok) return rateLimitResponse(ipLimit.retryAfterSeconds)
 
   // Face indexing triggers paid Rekognition API calls — verify the requester owns this album.
-  if (!ownerToken) return NextResponse.json({ error: 'owner_token required' }, { status: 401, headers: NO_STORE })
-  const ownerAccess = await verifyAlbumOwnerAccess(slug, ownerToken)
+  const ownerAccess = await verifyOwnerViaCookie(slug)
   if (!ownerAccess.ok) return NextResponse.json({ error: ownerAccess.error }, { status: ownerAccess.status, headers: NO_STORE })
 
   const { admin, album } = await resolveAlbum(slug)
@@ -121,7 +119,7 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
-  let body: { slug?: string; photoId?: string; owner_token?: string }
+  let body: { slug?: string; photoId?: string }
   try {
     body = await req.json()
   } catch {
@@ -129,15 +127,13 @@ async function handlePost(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const ownerToken = String(body.owner_token ?? '').trim()
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
   const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index'), INDEX_WINDOW_SECONDS, INDEX_IP_MAX)
   if (!ipLimit.ok) return rateLimitResponse(ipLimit.retryAfterSeconds)
 
   // Face indexing triggers paid Rekognition API calls — verify the requester owns this album.
-  if (!ownerToken) return NextResponse.json({ error: 'owner_token required' }, { status: 401, headers: NO_STORE })
-  const ownerAccess = await verifyAlbumOwnerAccess(slug, ownerToken)
+  const ownerAccess = await verifyOwnerViaCookie(slug)
   if (!ownerAccess.ok) return NextResponse.json({ error: ownerAccess.error }, { status: ownerAccess.status, headers: NO_STORE })
 
   const { admin, album } = await resolveAlbum(slug)

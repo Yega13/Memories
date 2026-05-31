@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { validateCustomSlug } from '@/lib/custom-slug'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -22,7 +22,6 @@ type CollectionSummary = {
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const albumSlug = (searchParams.get('slug') ?? '').trim()
-  const token = (searchParams.get('owner_token') ?? '').trim()
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,8 +35,8 @@ export async function GET(req: Request) {
 
   const admin = createAdminClient()
   let album: { id: string } | null = null
-  if (albumSlug && token) {
-    const verified = await verifyOwnedAlbum(admin, albumSlug, token)
+  if (albumSlug) {
+    const verified = await verifyOwnedAlbum(albumSlug)
     if ('error' in verified) return verified.error
     album = verified.album
   }
@@ -79,7 +78,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string; name?: string; description?: string; collection_slug?: string; collection_id?: string }
+  let body: { slug?: string; name?: string; description?: string; collection_slug?: string; collection_id?: string }
   try {
     body = await req.json()
   } catch {
@@ -87,13 +86,12 @@ export async function POST(req: Request) {
   }
 
   const albumSlug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const collectionId = String(body.collection_id ?? '').trim()
   const name = String(body.name ?? '').trim().slice(0, 80)
   const description = String(body.description ?? '').trim().slice(0, 240)
   const rawCollectionSlug = String(body.collection_slug ?? slugFromName(name)).trim()
 
-  const hasAlbum = !!albumSlug && !!token
+  const hasAlbum = !!albumSlug
   const isCreatingNew = !collectionId
 
   // Creating a new collection requires a name; adding to an existing one requires an album.
@@ -125,7 +123,7 @@ export async function POST(req: Request) {
 
   let album: AlbumForCollection | null = null
   if (hasAlbum) {
-    const verified = await verifyOwnedAlbum(admin, albumSlug, token)
+    const verified = await verifyOwnedAlbum(albumSlug)
     if ('error' in verified) return verified.error
     album = verified.album
   }
@@ -273,12 +271,9 @@ export async function DELETE(req: Request) {
 }
 
 async function verifyOwnedAlbum(
-  admin: ReturnType<typeof createAdminClient>,
   albumSlug: string,
-  token: string,
 ): Promise<{ album: AlbumForCollection } | { error: NextResponse }> {
-  void admin
-  const access = await verifyAlbumOwnerAccess<AlbumForCollection>(albumSlug, token)
+  const access = await verifyOwnerViaCookie<AlbumForCollection>(albumSlug)
   if (!access.ok) {
     return { error: NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE }) }
   }

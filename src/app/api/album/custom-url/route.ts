@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { requireTier } from '@/lib/subscriptions'
 import { validateCustomSlug } from '@/lib/custom-slug'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string; custom_slug?: string | null }
+  let body: { slug?: string; custom_slug?: string | null }
   try {
     body = await req.json()
   } catch {
@@ -22,10 +22,9 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const rawCustom = body.custom_slug
-  if (!slug || !token) {
-    return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
+  if (!slug) {
+    return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
   }
 
   const supabase = await createClient()
@@ -40,7 +39,7 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const access = await verifyAlbumOwnerAccess<{ id: string; owner_token: string; user_id: string | null; custom_slug: string | null }>(slug, token, 'custom_slug')
+  const access = await verifyOwnerViaCookie<{ id: string; owner_token: string; user_id: string | null; custom_slug: string | null }>(slug, 'custom_slug')
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

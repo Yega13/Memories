@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string }
+  let body: { slug?: string }
   try {
     body = await req.json()
   } catch {
@@ -18,13 +18,11 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
-
-  if (!slug || !token) {
+  if (!slug) {
     return NextResponse.json({ isOwner: false }, { headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess(slug, token)
+  const access = await verifyOwnerViaCookie(slug)
   if (!access.ok) {
     if (access.reason === 'access_denied') {
       return NextResponse.json({ isOwner: false, accessDenied: true, error: access.error }, { headers: NO_STORE })

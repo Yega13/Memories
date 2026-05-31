@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -28,10 +28,9 @@ export async function POST(req: Request) {
   }
 
   const slug = String(form.get('slug') ?? '').trim()
-  const token = String(form.get('owner_token') ?? '').trim()
   const file = form.get('file')
 
-  if (!slug || !token || !(file instanceof Blob)) {
+  if (!slug || !(file instanceof Blob)) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
   if (file.size > MAX_BACKGROUND_BYTES) {
@@ -41,7 +40,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Use a JPG, PNG, WebP, or AVIF image' }, { status: 415, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess<{ id: string; owner_token: string; user_id: string | null; custom_slug?: string | null; background_theme: string | null }>(slug, token, 'background_theme')
+  const access = await verifyOwnerViaCookie<{ id: string; owner_token: string; user_id: string | null; custom_slug?: string | null; background_theme: string | null }>(slug, 'background_theme')
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

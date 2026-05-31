@@ -7,7 +7,6 @@ import type { PhotoFilterChoice } from '@/components/photo-grid/PhotoSettingsMod
 type Options = {
   album: Pick<Album, 'media_radius' | 'media_filter'>
   slug: string
-  ownerToken: string | null
   forceGlobalRadius: boolean
   currentId: string | undefined
   lightboxRadiusMax: number | null
@@ -57,7 +56,6 @@ function filterFor(
 export function usePhotoSettings({
   album,
   slug,
-  ownerToken,
   forceGlobalRadius,
   currentId,
   lightboxRadiusMax,
@@ -107,7 +105,7 @@ export function usePhotoSettings({
   }
 
   async function savePhotoSettings() {
-    if (!settingsPhoto || !ownerToken) return
+    if (!settingsPhoto) return
     setSettingsSaving(true)
     setSettingsError('')
     try {
@@ -116,7 +114,6 @@ export function usePhotoSettings({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slug,
-          owner_token: ownerToken,
           photo_id: settingsPhoto.id,
           display_radius: settingsRadius === (album.media_radius ?? 12) ? null : settingsRadius,
           display_filter: settingsFilter === 'global' ? null : settingsFilter,
@@ -162,13 +159,12 @@ export function usePhotoSettings({
     const caption = settingsCaption
     const author = settingsAuthor
     setSettingsPhoto(null)
-    if (!photo || !ownerToken) return
+    if (!photo) return
     void fetch('/api/album/photo/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         slug,
-        owner_token: ownerToken,
         photo_id: photo.id,
         display_radius: radius === (album.media_radius ?? 12) ? null : radius,
         display_filter: filter === 'global' ? null : filter,

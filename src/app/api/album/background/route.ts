@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isValidAlbumBackground, normalizeAlbumBackground } from '@/lib/album-background'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 import { storagePathFromPublicPhotoUrl } from '@/lib/storage-path'
 
 export const runtime = 'nodejs'
@@ -13,7 +13,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string; background_theme?: string | null }
+  let body: { slug?: string; background_theme?: string | null }
   try {
     body = await req.json()
   } catch {
@@ -21,15 +21,14 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
-  if (!slug || !token) {
-    return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
+  if (!slug) {
+    return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
   }
   if (!isValidAlbumBackground(body.background_theme)) {
     return NextResponse.json({ error: 'Invalid background' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess<{ id: string; owner_token: string; user_id: string | null; custom_slug?: string | null; background_theme: string | null }>(slug, token, 'background_theme')
+  const access = await verifyOwnerViaCookie<{ id: string; owner_token: string; user_id: string | null; custom_slug?: string | null; background_theme: string | null }>(slug, 'background_theme')
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

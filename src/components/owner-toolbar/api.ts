@@ -5,8 +5,8 @@ async function jsonBody<T>(res: Response): Promise<T> {
   return (await res.json().catch(() => ({}))) as T
 }
 
-export async function fetchCollections(slug: string, ownerToken: string): Promise<CollectionSummary[]> {
-  const params = new URLSearchParams({ slug, owner_token: ownerToken })
+export async function fetchCollections(slug: string): Promise<CollectionSummary[]> {
+  const params = new URLSearchParams({ slug })
   const res = await fetch(`/api/collections?${params.toString()}`)
   const body = await jsonBody<{ collections?: CollectionSummary[] }>(res)
   return res.ok ? body.collections ?? [] : []
@@ -14,13 +14,12 @@ export async function fetchCollections(slug: string, ownerToken: string): Promis
 
 export async function saveCustomUrlRequest(
   slug: string,
-  ownerToken: string,
   customSlug: string | null,
 ): Promise<{ ok: true; custom_slug: string | null } | { ok: false; error: string }> {
   const res = await fetch('/api/album/custom-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ slug, owner_token: ownerToken, custom_slug: customSlug }),
+    body: JSON.stringify({ slug, custom_slug: customSlug }),
   })
   const body = await jsonBody<{ error?: string; custom_slug?: string | null }>(res)
   if (!res.ok) return { ok: false, error: body.error ?? `Save failed (${res.status})` }
@@ -29,13 +28,12 @@ export async function saveCustomUrlRequest(
 
 export async function savePasswordRequest(
   slug: string,
-  ownerToken: string,
   password: string | null,
 ): Promise<{ ok: true; password_protected: boolean } | { ok: false; error: string }> {
   const res = await fetch('/api/album/password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ slug, owner_token: ownerToken, password }),
+    body: JSON.stringify({ slug, password }),
   })
   const body = await jsonBody<{ error?: string; password_protected?: boolean }>(res)
   if (!res.ok) return { ok: false, error: body.error ?? `Save failed (${res.status})` }
@@ -44,13 +42,12 @@ export async function savePasswordRequest(
 
 export async function saveBackgroundRequest(
   slug: string,
-  ownerToken: string,
   backgroundTheme: string | null,
 ): Promise<{ ok: true; background_theme: string | null } | { ok: false; error: string }> {
   const res = await fetch('/api/album/background', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ slug, owner_token: ownerToken, background_theme: backgroundTheme }),
+    body: JSON.stringify({ slug, background_theme: backgroundTheme }),
   })
   const body = await jsonBody<{ error?: string; background_theme?: string | null }>(res)
   if (!res.ok) return { ok: false, error: body.error ?? `Save failed (${res.status})` }
@@ -59,7 +56,6 @@ export async function saveBackgroundRequest(
 
 export async function saveMediaSettingsRequest(
   slug: string,
-  ownerToken: string,
   mediaRadius: number,
   videoAutoplay: boolean,
   mediaFilter: MediaDisplayFilter,
@@ -75,7 +71,6 @@ export async function saveMediaSettingsRequest(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       slug,
-      owner_token: ownerToken,
       media_radius: mediaRadius,
       video_autoplay: videoAutoplay,
       media_filter: mediaFilter,
@@ -96,12 +91,10 @@ export async function saveMediaSettingsRequest(
 
 export async function uploadBackgroundRequest(
   slug: string,
-  ownerToken: string,
   file: File,
 ): Promise<{ ok: true; background_theme: string } | { ok: false; error: string }> {
   const form = new FormData()
   form.set('slug', slug)
-  form.set('owner_token', ownerToken)
   form.set('file', file)
   const res = await fetch('/api/album/background/upload', {
     method: 'POST',
@@ -116,7 +109,6 @@ export async function uploadBackgroundRequest(
 
 export async function createCollectionRequest(input: {
   slug: string
-  ownerToken: string
   name: string
   description: string
   collectionSlug: string
@@ -126,7 +118,6 @@ export async function createCollectionRequest(input: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       slug: input.slug,
-      owner_token: input.ownerToken,
       name: input.name,
       description: input.description,
       collection_slug: input.collectionSlug,
@@ -141,13 +132,12 @@ export async function createCollectionRequest(input: {
 
 export async function addAlbumToCollectionRequest(
   slug: string,
-  ownerToken: string,
   collectionId: string,
 ): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
   const res = await fetch('/api/collections', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ slug, owner_token: ownerToken, collection_id: collectionId }),
+    body: JSON.stringify({ slug, collection_id: collectionId }),
   })
   const body = await jsonBody<{ error?: string; collection?: { slug: string } }>(res)
   if (!res.ok || !body.collection) {
@@ -158,12 +148,11 @@ export async function addAlbumToCollectionRequest(
 
 export async function deleteAlbumRequest(
   slug: string,
-  ownerToken: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const res = await fetch('/api/album/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ slug, owner_token: ownerToken }),
+    body: JSON.stringify({ slug }),
   })
   const body = await jsonBody<{ error?: string }>(res)
   if (!res.ok) return { ok: false, error: body.error ?? `Delete failed (${res.status})` }

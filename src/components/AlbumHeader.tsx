@@ -12,11 +12,10 @@ type Props = {
   album: Album
   photoCount: number
   isOwner: boolean
-  ownerToken: string | null
   onAlbumUpdated: (patch: Partial<Album>) => void
 }
 
-export default function AlbumHeader({ album, photoCount, isOwner, ownerToken, onAlbumUpdated }: Props) {
+export default function AlbumHeader({ album, photoCount, isOwner, onAlbumUpdated }: Props) {
   const holdTimerRef = useRef<number | null>(null)
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(album.title)
@@ -36,7 +35,7 @@ export default function AlbumHeader({ album, photoCount, isOwner, ownerToken, on
   }
 
   async function saveTitle() {
-    if (!ownerToken) return
+    if (!isOwner) return
     const nextTitle = title.trim().slice(0, 120)
     if (!nextTitle) {
       showAppToast('Album title is required.', 'error')
@@ -47,7 +46,7 @@ export default function AlbumHeader({ album, photoCount, isOwner, ownerToken, on
       const res = await fetch('/api/album/title', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: album.slug, owner_token: ownerToken, title: nextTitle }),
+        body: JSON.stringify({ slug: album.slug, title: nextTitle }),
       })
       const body = (await res.json().catch(() => ({}))) as { error?: string; title?: string }
       if (!res.ok || !body.title) {

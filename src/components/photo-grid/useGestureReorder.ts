@@ -18,7 +18,6 @@ type Point = { x: number; y: number }
 type Options = {
   photos: Photo[]
   slug: string
-  ownerToken: string | null
   isOwner: boolean
   arrangeMode: boolean
   onPhotosReordered: (photos: Photo[]) => void
@@ -47,7 +46,6 @@ export type GestureReorder = {
 export function useGestureReorder({
   photos,
   slug,
-  ownerToken,
   isOwner,
   arrangeMode,
   onPhotosReordered,
@@ -145,7 +143,7 @@ export function useGestureReorder({
   }
 
   async function savePhotoOrder(nextPhotos: Photo[]) {
-    if (!ownerToken) return
+    if (!isOwner) return
     const previousPhotos = photos
     onPhotosReordered(nextPhotos)
     setReorderSaving(true)
@@ -153,7 +151,7 @@ export function useGestureReorder({
       const res = await fetch('/api/album/photos/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, owner_token: ownerToken, photo_ids: nextPhotos.map((photo) => photo.id) }),
+        body: JSON.stringify({ slug, photo_ids: nextPhotos.map((photo) => photo.id) }),
       })
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }
@@ -171,7 +169,7 @@ export function useGestureReorder({
   }
 
   function startReorderPress(photo: Photo, e: React.PointerEvent<HTMLDivElement>) {
-    if (e.button !== 0 || !isOwner || !ownerToken || reorderSaving) return
+    if (e.button !== 0 || !isOwner || reorderSaving) return
     if (arrangeMode) {
       // Only the drag handle (data-drag-handle) initiates a drag. Detecting it here on the
       // tile means setPointerCapture is called on e.currentTarget — the tile — which is exactly

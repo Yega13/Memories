@@ -49,6 +49,10 @@ type Props = {
   onToggleArrangeMode: () => void
 }
 
+// ownerToken is kept in props only to build the owner share URL (the #owner=… link
+// that recipients use to log in on a new device). It is NOT passed to any API call —
+// all owner mutations use the HttpOnly hushare_owner_* cookie set by /api/album/owner-login.
+
 // Convert a UTC ISO string from the DB to the value format for datetime-local input.
 function toDatetimeLocal(iso: string | null): string {
   if (!iso) return ''
@@ -136,11 +140,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const loadCollections = useCallback(async () => {
     setCollectionsLoading(true)
     try {
-      setCollections(await fetchCollections(album.slug, ownerToken))
+      setCollections(await fetchCollections(album.slug))
     } finally {
       setCollectionsLoading(false)
     }
-  }, [album.slug, ownerToken])
+  }, [album.slug])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -219,7 +223,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     try {
       const result = await saveCustomUrlRequest(
         album.slug,
-        ownerToken,
         action === 'clear' ? null : customUrlInput.trim().toLowerCase(),
       )
       if (!result.ok) {
@@ -247,7 +250,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     try {
       const result = await savePasswordRequest(
         album.slug,
-        ownerToken,
         action === 'clear' ? null : passwordInput,
       )
       if (!result.ok) {
@@ -274,7 +276,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     const previousBackground = album.background_theme ?? null
     onAlbumUpdated({ background_theme: choice })
     try {
-      const result = await saveBackgroundRequest(album.slug, ownerToken, choice)
+      const result = await saveBackgroundRequest(album.slug, choice)
       if (!result.ok) {
         onAlbumUpdated({ background_theme: previousBackground })
         setBackgroundError(result.error)
@@ -302,7 +304,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const resetFilterOverrides = nextFilter !== savedMediaFilter
       const result = await saveMediaSettingsRequest(
         album.slug,
-        ownerToken,
         nextRadius,
         nextAutoplay,
         nextFilter,
@@ -434,7 +435,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
 
     setBackgroundSaving(true)
     try {
-      const result = await uploadBackgroundRequest(album.slug, ownerToken, file)
+      const result = await uploadBackgroundRequest(album.slug, file)
       if (!result.ok) {
         setBackgroundError(result.error)
         showAppToast(result.error, 'error')
@@ -457,7 +458,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setCollectionError('')
     setCollectionUrl('')
     try {
-      const result = await addAlbumToCollectionRequest(album.slug, ownerToken, collectionId)
+      const result = await addAlbumToCollectionRequest(album.slug, collectionId)
       if (!result.ok) {
         setCollectionError(result.error)
         showAppToast(result.error, 'error')
@@ -590,7 +591,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setDeletingAlbum(true)
     setDeleteError('')
     try {
-      const result = await deleteAlbumRequest(album.slug, ownerToken)
+      const result = await deleteAlbumRequest(album.slug)
       if (!result.ok) {
         setDeleteError(result.error)
         showAppToast(result.error, 'error')
@@ -626,7 +627,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const res = await fetch('/api/album/reveal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: album.slug, owner_token: ownerToken, reveal_at }),
+        body: JSON.stringify({ slug: album.slug, reveal_at }),
       })
       const result = (await res.json()) as { ok?: boolean; reveal_at?: string | null; error?: string }
       if (!res.ok || !result.ok) {

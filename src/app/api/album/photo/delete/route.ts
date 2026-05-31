@@ -3,7 +3,7 @@ import { getCloudflareContext } from '@opennextjs/cloudflare'
 import type { R2Env } from '@/lib/r2'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 import { deleteFaces } from '@/lib/rekognition'
 import { deleteStreamVideo } from '@/lib/cloudflare-stream'
 
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string; photo_id?: string }
+  let body: { slug?: string; photo_id?: string }
   try {
     body = await req.json()
   } catch {
@@ -23,14 +23,13 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const photoId = String(body.photo_id ?? '').trim()
 
-  if (!slug || !token || !photoId) {
+  if (!slug || !photoId) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess(slug, token)
+  const access = await verifyOwnerViaCookie(slug)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string; photo_ids?: string[] }
+  let body: { slug?: string; photo_ids?: string[] }
   try {
     body = await req.json()
   } catch {
@@ -19,16 +19,15 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const photoIds = Array.isArray(body.photo_ids) ? body.photo_ids.map((id) => String(id).trim()).filter(Boolean) : []
-  if (!slug || !token || photoIds.length === 0) {
+  if (!slug || photoIds.length === 0) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
   if (new Set(photoIds).size !== photoIds.length) {
     return NextResponse.json({ error: 'Duplicate media ids' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess(slug, token)
+  const access = await verifyOwnerViaCookie(slug)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

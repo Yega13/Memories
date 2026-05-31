@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyOwnerWithRateLimit } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookieWithRateLimit } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  let body: { slug?: string; owner_token?: string; reveal_at?: string | null }
+  let body: { slug?: string; reveal_at?: string | null }
   try {
     body = await req.json()
   } catch {
@@ -19,10 +19,9 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const rawRevealAt = body.reveal_at
 
-  if (!slug || !token) {
+  if (!slug) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
 
@@ -36,7 +35,7 @@ export async function POST(req: Request) {
     revealAt = parsed.toISOString()
   }
 
-  const access = await verifyOwnerWithRateLimit(req, slug, token)
+  const access = await verifyOwnerViaCookieWithRateLimit(req, slug)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   cookieNameForAlbum,
   deriveAccessToken,
+  MAX_PASSWORD_LEN,
   PASSWORD_COOKIE_MAX_AGE_SECONDS,
   verifyPassword,
 } from '@/lib/album-password'
@@ -38,6 +39,9 @@ export async function POST(req: Request) {
   const password = String(body.password ?? '')
   if (!slug || !password) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
+  }
+  if (password.length > MAX_PASSWORD_LEN) {
+    return NextResponse.json({ error: 'Incorrect password' }, { status: 401, headers: NO_STORE })
   }
 
   const admin = createAdminClient()

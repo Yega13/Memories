@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { clampMediaRadius, isMediaDisplayFilter, type MediaDisplayFilter } from '@/lib/media-display'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX, mediaTextOrNull } from '@/lib/media-text'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -15,7 +15,6 @@ export async function POST(req: Request) {
 
   let body: {
     slug?: string
-    owner_token?: string
     photo_id?: string
     display_radius?: number | null
     display_filter?: MediaDisplayFilter | null
@@ -29,7 +28,6 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const photoId = String(body.photo_id ?? '').trim()
   const displayRadius = body.display_radius == null ? null : clampMediaRadius(body.display_radius)
   const displayFilter = body.display_filter == null
@@ -42,7 +40,7 @@ export async function POST(req: Request) {
   const caption = hasCaption ? mediaTextOrNull(body.caption, MEDIA_CAPTION_MAX) : undefined
   const authorName = hasAuthorName ? mediaTextOrNull(body.author_name, MEDIA_AUTHOR_MAX) : undefined
 
-  if (!slug || !token || !photoId) {
+  if (!slug || !photoId) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
   if (body.display_radius != null && displayRadius == null) {
@@ -52,7 +50,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid filter' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess(slug, token)
+  const access = await verifyOwnerViaCookie(slug)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

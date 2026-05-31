@@ -148,33 +148,31 @@ export default function AlbumPageClient() {
 
     setAlbum(data)
 
-    if (ownerToken) {
-      try {
-        const authRes = await fetch('/api/album/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug: data.slug, owner_token: ownerToken }),
-        })
-        const result = (await authRes.json()) as { isOwner?: boolean; accessDenied?: boolean }
-        setIsOwner(!!result.isOwner)
-        if (result.accessDenied) setOwnerAccessDenied(true)
+    try {
+      const authRes = await fetch('/api/album/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: data.slug }),
+      })
+      const result = (await authRes.json()) as { isOwner?: boolean; accessDenied?: boolean }
+      setIsOwner(!!result.isOwner)
+      if (result.accessDenied) setOwnerAccessDenied(true)
 
-        if (result.isOwner) {
-          try {
-            const tierRes = await fetch('/api/me/tier', { cache: 'no-store' })
-            const tierJson = (await tierRes.json()) as { tier?: Tier }
-            if (tierJson.tier) setUserTier(tierJson.tier)
-          } catch {
-          }
+      if (result.isOwner) {
+        try {
+          const tierRes = await fetch('/api/me/tier', { cache: 'no-store' })
+          const tierJson = (await tierRes.json()) as { tier?: Tier }
+          if (tierJson.tier) setUserTier(tierJson.tier)
+        } catch {
         }
-      } catch {
-        setIsOwner(false)
       }
+    } catch {
+      setIsOwner(false)
     }
 
     await fetchPhotos(data.id)
     setLoading(false)
-  }, [slug, ownerToken, ownerTokenReady])
+  }, [slug, ownerTokenReady])
 
   const fetchPhotos = async (albumId: string) => {
     const { data } = await supabase
@@ -343,7 +341,7 @@ export default function AlbumPageClient() {
 
   const reportHref = `/report?album=${encodeURIComponent(album.title)}&url=${encodeURIComponent(publicAlbumUrl)}&slug=${encodeURIComponent(publicSlug)}`
 
-  if (ownerAccessDenied && ownerToken) {
+  if (ownerAccessDenied) {
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center"
@@ -379,7 +377,7 @@ export default function AlbumPageClient() {
           }}
         />
       )}
-      <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} ownerToken={ownerToken} onAlbumUpdated={handleAlbumUpdated} />
+      <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} onAlbumUpdated={handleAlbumUpdated} />
 
       {isOwner && (
         <OwnerToolbar
@@ -435,7 +433,6 @@ export default function AlbumPageClient() {
           photos={photos}
           isOwner={isOwner}
           slug={album.slug}
-          ownerToken={ownerToken}
           forceGlobalRadius={forceGlobalRadius}
           onRadiusMaxChange={setMediaRadiusMax}
           onPhotoDeleted={handlePhotoDeleted}

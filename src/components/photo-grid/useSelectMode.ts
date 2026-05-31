@@ -4,7 +4,6 @@ import type { Photo } from '@/lib/supabase'
 
 type Options = {
   slug: string
-  ownerToken: string | null
   arrangeMode: boolean
   onPhotoDeleted: (id: string) => void
 }
@@ -22,7 +21,6 @@ export type SelectMode = {
 
 export function useSelectMode({
   slug,
-  ownerToken,
   arrangeMode,
   onPhotoDeleted,
 }: Options): SelectMode {
@@ -54,7 +52,7 @@ export function useSelectMode({
   }
 
   async function bulkDeleteSelected() {
-    if (!ownerToken || selectedIds.size === 0) return
+    if (selectedIds.size === 0) return
     setBulkDeleting(true)
     const ids = [...selectedIds]
     // Server max is 200 per request — chunk just in case.
@@ -67,7 +65,7 @@ export function useSelectMode({
         const res = await fetch('/api/album/photo/bulk-delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ slug, owner_token: ownerToken, photo_ids: batch }),
+          body: JSON.stringify({ slug, photo_ids: batch }),
         })
         const body = (await res.json().catch(() => ({}))) as { deleted?: number; error?: string }
         if (res.ok && typeof body.deleted === 'number') {

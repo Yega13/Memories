@@ -27,7 +27,6 @@ type Props = {
   photos: Photo[]
   isOwner: boolean
   slug: string
-  ownerToken: string | null
   forceGlobalRadius: boolean
   onRadiusMaxChange: (max: number) => void
   onPhotoDeleted: (id: string) => void
@@ -39,7 +38,7 @@ type Props = {
   onCoverSet?: (photoId: string | null) => void
 }
 
-export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered, slideshowRequestId = 0, arrangeMode = false, coverPhotoId, onCoverSet }: Props) {
+export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRadius, onRadiusMaxChange, onPhotoDeleted, onPhotoUpdated, onPhotosReordered, slideshowRequestId = 0, arrangeMode = false, coverPhotoId, onCoverSet }: Props) {
   const gridRef = useRef<HTMLDivElement>(null)
   const lightboxHistoryRef = useRef(false)
   const lightboxVideoRef = useRef<HTMLVideoElement | null>(null)
@@ -62,7 +61,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const {
     selectMode, selectedIds, bulkDeleting,
     enterSelectMode, exitSelectMode, toggleSelection, selectAll, bulkDeleteSelected,
-  } = useSelectMode({ slug, ownerToken, arrangeMode, onPhotoDeleted })
+  } = useSelectMode({ slug, arrangeMode, onPhotoDeleted })
 
   const {
     reorderDraggingId, reorderTargetId, reorderSaving, dragGhostPointer,
@@ -73,7 +72,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   } = useGestureReorder({
     photos,
     slug,
-    ownerToken,
     isOwner,
     arrangeMode,
     onPhotosReordered,
@@ -108,7 +106,6 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   } = usePhotoSettings({
     album,
     slug,
-    ownerToken,
     forceGlobalRadius,
     currentId: current?.id,
     lightboxRadiusMax,
@@ -137,14 +134,14 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   const slideshowFrameClass = slideshowActive && slideshowAnimation !== 'none' ? ` hush-slideshow-frame hush-slideshow-${slideshowAnimation}` : ''
 
   async function setCoverPhoto(photo: Photo) {
-    if (!ownerToken) return
+    if (!isOwner) return
     const newCoverId = coverPhotoId === photo.id ? null : photo.id
     setSettingCover(true)
     try {
       const res = await fetch('/api/album/cover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, owner_token: ownerToken, photo_id: newCoverId }),
+        body: JSON.stringify({ slug, photo_id: newCoverId }),
       })
       if (res.ok) {
         onCoverSet?.(newCoverId)
@@ -182,13 +179,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, ownerToken, fo
   }
 
   async function deletePhoto(photo: Photo) {
-    if (!ownerToken) return
+    if (!isOwner) return
     setDeleting(photo.id)
 
     const res = await fetch('/api/album/photo/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slug, owner_token: ownerToken, photo_id: photo.id }),
+      body: JSON.stringify({ slug, photo_id: photo.id }),
     })
 
     if (res.ok) {

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { clampMediaRadius, clampSlideshowInterval, isMediaDisplayFilter, isMediaHoverEffect, isMobileGridColumns, isSlideshowAnimation, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyOwnerWithRateLimit } from '@/lib/album-owner-access'
+import { verifyOwnerViaCookieWithRateLimit } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -14,7 +14,6 @@ export async function POST(req: Request) {
 
   let body: {
     slug?: string
-    owner_token?: string
     media_radius?: number
     video_autoplay?: boolean
     media_filter?: MediaDisplayFilter
@@ -32,7 +31,6 @@ export async function POST(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const token = String(body.owner_token ?? '').trim()
   const mediaRadius = clampMediaRadius(body.media_radius)
   const videoAutoplay = Boolean(body.video_autoplay)
   const rawMediaFilter = body.media_filter ?? 'none'
@@ -45,8 +43,8 @@ export async function POST(req: Request) {
   const rawSlideshowAnimation = body.slideshow_animation ?? 'fade'
   const slideshowAnimation = isSlideshowAnimation(rawSlideshowAnimation) ? rawSlideshowAnimation : null
 
-  if (!slug || !token) {
-    return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
+  if (!slug) {
+    return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
   }
   if (mediaRadius == null) {
     return NextResponse.json({ error: 'Invalid border radius' }, { status: 400, headers: NO_STORE })
@@ -67,7 +65,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid slideshow animation' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyOwnerWithRateLimit(req, slug, token)
+  const access = await verifyOwnerViaCookieWithRateLimit(req, slug)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }
