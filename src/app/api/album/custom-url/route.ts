@@ -85,6 +85,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'That URL is already taken' }, { status: 409, headers: NO_STORE })
   }
 
+  // The pre-check above is a UX fast-path only. The unique constraint on
+  // (slug, custom_slug) is the correctness guarantee — a 23505 error below
+  // means a concurrent request claimed the slug between our check and this
+  // write, and is intentionally surfaced as a clean 409.
   const { error: writeError } = await admin
     .from('albums')
     .update({ custom_slug: newSlug, user_id: album.user_id ?? user.id })

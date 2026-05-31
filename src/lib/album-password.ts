@@ -1,20 +1,21 @@
 
-const HASH_VERSION = 'hmac-sha256-v1'
+const LEGACY_HASH_VERSION = 'hmac-sha256-v1'
 const KEY_BITS = 256
 const MIN_VERIFY_ITERATIONS = 50_000
+const PBKDF2_ITERATIONS = 310_000
 
-export const MIN_PASSWORD_LEN = 6
+export const MIN_PASSWORD_LEN = 10
 export const MAX_PASSWORD_LEN = 128
 
 export async function hashPassword(password: string): Promise<string> {
-  const salt: Uint8Array<ArrayBuffer> = crypto.getRandomValues(new Uint8Array(16))
-  const hash = await hmacPassword(password, salt)
-  return `${HASH_VERSION}$${toBase64(salt)}$${toBase64(hash)}`
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const hash = await pbkdf2(password, salt, PBKDF2_ITERATIONS)
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${toBase64(salt)}$${toBase64(hash)}`
 }
 
 export async function verifyPassword(password: string, stored: string): Promise<boolean> {
   const parts = stored.split('$')
-  if (parts.length === 3 && parts[0] === HASH_VERSION) {
+  if (parts.length === 3 && parts[0] === LEGACY_HASH_VERSION) {
     let salt: Uint8Array<ArrayBuffer>
     let expected: Uint8Array<ArrayBuffer>
     try {
@@ -57,6 +58,8 @@ export async function deriveAccessToken(passwordHash: string, albumId: string): 
   return toBase64(new Uint8Array(sig))
 }
 
+// Legacy: kept only for verifying old hmac-sha256-v1 hashes already in the DB.
+// Do NOT call this for new password hashes — use hashPassword() which uses PBKDF2.
 async function hmacPassword(
   password: string,
   salt: Uint8Array<ArrayBuffer>,
@@ -76,17 +79,17 @@ async function hmacPassword(
 }
 
 function passwordPeppers(): string[] {
-  if (!process.env.ALBUM_PASSWORD_PEPPER) {
-    console.warn('[album-password] ALBUM_PASSWORD_PEPPER is not set; falling back to secondary secrets. Set a dedicated pepper in env.')
+  const primary = process.env.ALBUM_PASSWORD_PEPPER
+  if (!primary) {
+    throw new Error(
+      '[album-password] ALBUM_PASSWORD_PEPPER is required. ' +
+      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"',
+    )
   }
-  const peppers = [
-    process.env.ALBUM_PASSWORD_PEPPER ??
-      process.env.SUPABASE_SERVICE_ROLE_KEY ??
-      process.env.POLAR_WEBHOOK_SECRET,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    process.env.POLAR_WEBHOOK_SECRET,
-  ].filter((value): value is string => Boolean(value))
-  return Array.from(new Set(peppers))
+  // Optional previous pepper for zero-downtime rotation: set ALBUM_PASSWORD_PEPPER_PREVIOUS
+  // to the old value, deploy, then remove it once all verify calls have cycled through.
+  const previous = process.env.ALBUM_PASSWORD_PEPPER_PREVIOUS
+  return previous ? [primary, previous] : [primary]
 }
 
 async function pbkdf2(

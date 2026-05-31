@@ -33,8 +33,19 @@ export async function POST(req: Request) {
   // before parsing. Re-parsing the same string into JSON below is fine.
   const rawBody = await req.text()
 
-  const ok = await verifyWebhookSignature(rawBody, req.headers, secret)
-  if (!ok) {
+  // Support a previous secret during zero-downtime rotation: set
+  // POLAR_WEBHOOK_SECRET_PREVIOUS to the old value, deploy, update Polar's
+  // webhook to the new secret, then remove POLAR_WEBHOOK_SECRET_PREVIOUS.
+  const previousSecret = process.env.POLAR_WEBHOOK_SECRET_PREVIOUS
+  const secrets = previousSecret ? [secret, previousSecret] : [secret]
+  let verified = false
+  for (const s of secrets) {
+    if (await verifyWebhookSignature(rawBody, req.headers, s)) {
+      verified = true
+      break
+    }
+  }
+  if (!verified) {
     console.warn('[polar/webhook] signature verification failed')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401, headers: NO_STORE })
   }

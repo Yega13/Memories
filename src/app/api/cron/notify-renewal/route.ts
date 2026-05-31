@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendBillingReminderEmail } from '@/lib/email'
+import { timingSafeEqual } from '@/lib/timing-safe'
 
 export const runtime = 'nodejs'
 
@@ -20,8 +21,12 @@ export async function POST(req: Request) {
     console.error('[notify-renewal] BILLING_REMINDER_SECRET not set; refusing to run')
     return NextResponse.json({ error: 'Not configured' }, { status: 503, headers: NO_STORE })
   }
+  if (secret.length < 32) {
+    console.error('[notify-renewal] BILLING_REMINDER_SECRET must be at least 32 characters')
+    return NextResponse.json({ error: 'Not configured' }, { status: 503, headers: NO_STORE })
+  }
   const auth = req.headers.get('authorization') ?? ''
-  if (auth !== `Bearer ${secret}`) {
+  if (!timingSafeEqual(auth, `Bearer ${secret}`)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE })
   }
 

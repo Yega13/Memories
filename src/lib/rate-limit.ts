@@ -6,8 +6,8 @@ type RateLimitResult =
 
 /**
  * Sliding-window rate limiter backed by the `rate_limit_events` Supabase table.
- * Fails open: if the table doesn't exist yet or any DB error occurs, the request is allowed.
- * Apply the migration in supabase/migrations/20260522_rate_limit_events.sql to activate.
+ * Fails CLOSED on DB errors: a transient outage is safer than allowing unlimited requests.
+ * Apply the migration in supabase/migrations/20260522_rate_limit_events.sql before deploying.
  */
 export async function checkRateLimit(
   key: string,
@@ -25,10 +25,10 @@ export async function checkRateLimit(
       .gte('created_at', since)
 
     if (countError) {
-      // Table missing or other DB error — fail open so rate limiting never breaks the feature.
-      if (/does not exist|undefined/i.test(countError.message ?? '')) return { ok: true }
-      console.warn('[rate-limit] count failed:', countError.message)
-      return { ok: true }
+      // Fail closed on all DB errors — a transient outage is less bad than a DoS window.
+      // Ensure the migration has run before deploying; a missing table will block requests.
+      console.warn('[rate-limit] count failed — failing closed:', countError.message)
+      return { ok: false, retryAfterSeconds: 60 }
     }
 
     if (count != null && count >= maxRequests) {
@@ -45,7 +45,7 @@ export async function checkRateLimit(
 
     return { ok: true }
   } catch {
-    return { ok: true }
+    return { ok: false, retryAfterSeconds: 60 }
   }
 }
 

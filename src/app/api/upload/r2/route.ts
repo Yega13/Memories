@@ -5,6 +5,7 @@ import { getUserTierById } from '@/lib/subscriptions'
 import { uploadCapsForTier, PRO_VIDEO_BYTES } from '@/lib/media'
 import type { R2Env } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyMimeByMagic } from '@/lib/file-magic'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -104,6 +105,10 @@ export async function POST(req: Request) {
   if (!allowed.has(contentType)) {
     return NextResponse.json({ error: `Unsupported content type: ${contentType}` }, { status: 415, headers: NO_STORE })
   }
+  const magicOk = await verifyMimeByMagic(file, contentType)
+  if (!magicOk) {
+    return NextResponse.json({ error: 'File content does not match declared type' }, { status: 415, headers: NO_STORE })
+  }
 
   const ctx = getCloudflareContext()
   const env = ctx?.env as R2Env | undefined
@@ -116,7 +121,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'R2_PUBLIC_HOST not configured' }, { status: 500, headers: NO_STORE })
   }
 
-  const key = `${albumId}/${filename}`
+  const randomPrefix = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map(b => b.toString(16).padStart(2, '0')).join('')
+  const key = `${albumId}/${randomPrefix}/${filename}`
   try {
     // Pass the Blob directly — avoids buffering the whole file into an ArrayBuffer
     // inside the Worker, which would hit the 128 MB memory limit for large videos.

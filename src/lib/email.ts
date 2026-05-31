@@ -1,6 +1,8 @@
 const VERIFIED_FROM = 'Hushare <noreply@hushare.space>'
 const FALLBACK_FROM = 'Hushare <onboarding@resend.dev>'
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
 const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
 
@@ -14,6 +16,10 @@ function escapeHtml(str: string): string {
 }
 
 async function sendEmail(to: string, subject: string, html: string, text: string) {
+  if (!EMAIL_RE.test(to)) {
+    console.error('[email] invalid recipient address — dropped:', to.slice(0, 64))
+    return
+  }
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) {
     console.warn('[email] RESEND_API_KEY not set — email dropped')
@@ -29,10 +35,13 @@ async function sendEmail(to: string, subject: string, html: string, text: string
       body: JSON.stringify({ from, to: [to], subject, html, text }),
     })
     if (!res.ok) {
-      console.error('[email] Resend error:', res.status, await res.text())
+      const body = await res.text()
+      console.error('[email] Resend error:', res.status, body)
+      throw new Error(`Email send failed: ${res.status}`)
     }
   } catch (err) {
     console.error('[email] fetch failed:', err instanceof Error ? err.message : String(err))
+    throw err
   }
 }
 

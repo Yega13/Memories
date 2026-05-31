@@ -84,6 +84,9 @@ export async function GET(req: Request) {
 
   const tier = await getUserTierById(byCustom.user_id)
   if (tier === 'free') {
+    // Intentional: return the same { album: null } 404 as "slug never existed"
+    // to prevent subscription-status enumeration. Do not add a different body
+    // or status code here.
     return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
   }
 

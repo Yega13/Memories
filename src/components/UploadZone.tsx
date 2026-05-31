@@ -93,6 +93,12 @@ async function uploadToR2(
 // overhead and forced full chunk buffering in Worker heap before the R2 call.
 const CHUNK_SIZE = R2_CHUNK_SIZE_BYTES
 
+// Presigned URL direct-to-R2 path: if a PUT returns 403 or CORS error, the S3 credentials
+// are wrong or the R2 bucket CORS policy doesn't allow the origin. Mark it broken so all
+// subsequent chunks skip presign and go straight to the Worker proxy path, which uses the
+// R2 binding (no S3 credentials needed) and always works. Resets per page load.
+let r2PresignWorking = true
+
 async function uploadVideoMultipart(
   file: File,
   albumId: string,
@@ -128,8 +134,9 @@ async function uploadVideoMultipart(
     chunkEnd: number,
   ): Promise<{ partNumber: number; etag: string }> {
     // Try presigned URL first — browser PUTs directly to R2, Worker not in data path.
-    // 501 = credentials not configured → fall through to Worker-proxied path silently.
+    // Skip if already known-broken (403/CORS from a previous chunk this session).
     let presignedUrl: string | null = null
+    if (r2PresignWorking) {
     try {
       const presignRes = await fetch('/api/upload/r2/multipart?action=presign', {
         method: 'POST',
@@ -143,6 +150,7 @@ async function uploadVideoMultipart(
       }
       // 501 = not configured; any other non-ok status → fall through to Worker proxy
     } catch { /* network error getting presigned URL → fall through */ }
+    } // end if (r2PresignWorking)
 
     return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest()
@@ -170,6 +178,12 @@ async function uploadVideoMultipart(
             const etag = (xhr.getResponseHeader('ETag') ?? '').replace(/"/g, '')
             if (etag) { resolve({ partNumber, etag }); return }
             reject(new Error(`No ETag for chunk ${partNumber}`))
+          } else if (xhr.status === 403) {
+            // Presigned URL rejected — bad S3 credentials or missing R2 CORS policy.
+            // Mark broken so all subsequent chunks skip presign and use Worker proxy.
+            r2PresignWorking = false
+            console.warn('[r2/presign] 403 on chunk PUT — S3 credentials invalid or R2 CORS not configured. Switching to Worker proxy for all chunks.')
+            reject(Object.assign(new Error(`Presigned URL rejected (403), switching to Worker proxy`), { switchToProxy: true }))
           } else {
             const err = new Error(`Chunk ${partNumber} failed: ${xhr.status}`)
             ;(err as Error & { status?: number }).status = xhr.status
@@ -187,7 +201,16 @@ async function uploadVideoMultipart(
           }
         }
       }
-      xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}`))
+      xhr.onerror = () => {
+        if (presignedUrl) {
+          // CORS error blocks reading status — treat same as 403 (broken presign credentials/policy)
+          r2PresignWorking = false
+          console.warn('[r2/presign] CORS error on chunk PUT — switching to Worker proxy for all chunks.')
+          reject(Object.assign(new Error(`Presigned URL CORS error, switching to Worker proxy`), { switchToProxy: true }))
+          return
+        }
+        reject(new Error(`Network error on chunk ${partNumber}`))
+      }
       xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
       xhr.send(chunk)
     })
@@ -210,8 +233,9 @@ async function uploadVideoMultipart(
           break
         } catch (e) {
           lastErr = e instanceof Error ? e : new Error(String(e))
-          // 4xx = definitive server rejection (file too large, bad request, auth).
-          // Retrying won't help — break immediately to surface the error fast.
+          // Presign 403/CORS → immediate free retry using Worker proxy (don't burn an attempt)
+          if ((lastErr as Error & { switchToProxy?: boolean }).switchToProxy) { attempt--; continue }
+          // 4xx = definitive server rejection. Retrying won't help — surface it fast.
           const httpStatus = (lastErr as Error & { status?: number }).status
           if (typeof httpStatus === 'number' && httpStatus >= 400 && httpStatus < 500) break
           if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))

@@ -16,7 +16,7 @@ export function validateCustomSlug(input: unknown): SlugValidationResult {
   if (typeof input !== 'string') return { ok: false, reason: 'Must be text' }
   const slug = input.trim().toLowerCase()
 
-  if (slug.length < 3) return { ok: false, reason: 'At least 3 characters' }
+  if (slug.length < 4) return { ok: false, reason: 'At least 4 characters' }
   if (slug.length > 40) return { ok: false, reason: 'At most 40 characters' }
 
   if (!/^[a-z0-9-]+$/.test(slug)) {

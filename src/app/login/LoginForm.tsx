@@ -8,13 +8,24 @@ type Status = 'idle' | 'sending' | 'sent' | 'error'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
-// Preserve a same-origin `?next=` so the user lands where they intended after
-// the OAuth round-trip or magic-link click. Reject absolute or protocol-relative
-// values so `?next=//evil.com` can't redirect off-site.
+// Decode and validate a ?next= param so only same-origin paths are allowed.
+// Uses the URL constructor to normalize all encoding variants (%2F%2F, etc.)
+// before the origin check — a plain startsWith('/') check is bypassable.
+function parseSafeNext(raw: string): string {
+  if (!raw) return ''
+  try {
+    const url = new URL(raw, window.location.origin)
+    if (url.origin !== window.location.origin) return ''
+    return url.pathname + url.search
+  } catch {
+    return ''
+  }
+}
+
 function buildCallbackUrl(): string {
   const params = new URLSearchParams(window.location.search)
   const rawNext = params.get('next') ?? ''
-  const safeNext = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : ''
+  const safeNext = parseSafeNext(rawNext)
   const url = new URL('/auth/callback', window.location.origin)
   if (safeNext) url.searchParams.set('next', safeNext)
   return url.toString()
@@ -42,7 +53,7 @@ export default function LoginForm() {
         if (cancelled || !data.signedIn) return
         const params = new URLSearchParams(window.location.search)
         const rawNext = params.get('next') ?? ''
-        const safeNext = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : ''
+        const safeNext = parseSafeNext(rawNext)
         window.location.href = safeNext || (data.canAccessAccount ? '/account' : '/')
       } catch {
         // Transient network errors are fine - the next tick will retry.
