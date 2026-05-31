@@ -213,7 +213,7 @@ export function useGestureReorder({
   // pointer events are flaky for hold detection. Skips arrange mode (pointer-event drag handles
   // that with setPointerCapture).
   function handleTilePointerTouchStart(photo: Photo, e: React.TouchEvent<HTMLDivElement>) {
-    if (!isOwner || !ownerToken || reorderSaving || arrangeMode) return
+    if (!isOwner || reorderSaving || arrangeMode) return
     if (e.touches.length !== 1) return
     const t = e.touches[0]
     longPressOriginRef.current = { x: t.clientX, y: t.clientY }
