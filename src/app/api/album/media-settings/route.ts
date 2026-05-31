@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { clampMediaRadius, clampSlideshowInterval, isMediaDisplayFilter, isMediaHoverEffect, isMobileGridColumns, isSlideshowAnimation, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { verifyOwnerWithRateLimit } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid slideshow animation' }, { status: 400, headers: NO_STORE })
   }
 
-  const access = await verifyAlbumOwnerAccess(slug, token)
+  const access = await verifyOwnerWithRateLimit(req, slug, token)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }

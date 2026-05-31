@@ -110,7 +110,8 @@ export default function AlbumPageClient() {
     setRevealGate(null)
     setOwnerAccessDenied(false)
     const qs = new URLSearchParams({ slug })
-    if (ownerToken) qs.set('owner_token', ownerToken)
+    // owner_token is NOT sent in the URL — the browser auto-sends the HttpOnly
+    // hushare_owner_* cookie set by /api/album/owner-login, which the server reads.
     const res = await fetch(`/api/album/resolve?${qs.toString()}`, {
       cache: 'no-store',
     })

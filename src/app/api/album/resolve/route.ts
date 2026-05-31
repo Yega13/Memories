@@ -57,7 +57,8 @@ const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, backgr
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const slug = (searchParams.get('slug') ?? '').trim()
-  const ownerToken = (searchParams.get('owner_token') ?? '').trim()
+  // owner_token is read from the HttpOnly cookie set by /api/album/owner-login,
+  // not from the URL — tokens in query params leak to logs and Referer headers.
   if (!slug) {
     return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
   }
@@ -80,7 +81,7 @@ export async function GET(req: Request) {
     if (byRandom.retired_at) {
       return NextResponse.json({ album: null }, { status: 404, headers: NO_STORE })
     }
-    return await buildResponse(byRandom, ownerToken)
+    return await buildResponse(byRandom)
   }
 
   // Custom-slug lookup. Tier-gated.
@@ -102,10 +103,10 @@ export async function GET(req: Request) {
   }
 
   // Pass the already-fetched tier so buildResponse doesn't make a second DB call.
-  return await buildResponse(byCustom, ownerToken, tier)
+  return await buildResponse(byCustom, tier)
 }
 
-async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awaited<ReturnType<typeof getUserTierById>>) {
+async function buildResponse(album: FullAlbum, cachedTier?: Awaited<ReturnType<typeof getUserTierById>>) {
   // Owner tier drives both the upload cap returned to the client AND the
   // password-enforcement decision. Use the cached value when available (custom-slug
   // path already fetched it) to save a DB round-trip on every album load.
@@ -133,7 +134,11 @@ async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awa
     }
   }
 
-  const hasValidOwnerToken = ownerToken ? timingSafeEqual(ownerToken, album.owner_token) : false
+  // Read the owner token from the HttpOnly cookie (set by /api/album/owner-login).
+  // Always call timingSafeEqual — no ternary short-circuit that leaks token presence via timing.
+  const cookieStore = await cookies()
+  const ownerCookie = (cookieStore.get(`hushare_owner_${album.id}`)?.value ?? '').trim()
+  const hasValidOwnerToken = timingSafeEqual(ownerCookie, album.owner_token)
 
   // Reveal gate — guests see a countdown until reveal_at; verified owners bypass it.
   if (album.reveal_at && !hasValidOwnerToken && new Date(album.reveal_at) > new Date()) {

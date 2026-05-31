@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -19,6 +20,15 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
+  // Per-IP rate limit: prevents token brute-forcing even from many albums simultaneously.
+  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_login'), 300, 10)
+  if (!ipRl.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please wait before trying again.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(ipRl.retryAfterSeconds) } },
+    )
+  }
+
   let body: { slug?: string; owner_token?: string }
   try {
     body = await req.json()
@@ -30,6 +40,15 @@ export async function POST(req: Request) {
   const token = String(body.owner_token ?? '').trim()
   if (!slug || !token) {
     return NextResponse.json({ error: 'Missing slug or owner_token' }, { status: 400, headers: NO_STORE })
+  }
+
+  // Per-slug rate limit: caps attempts against a specific album from distributed IPs.
+  const slugRl = await checkRateLimit(`owner_login_slug:${slug}`, 300, 20)
+  if (!slugRl.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts on this album. Please wait.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(slugRl.retryAfterSeconds) } },
+    )
   }
 
   const access = await verifyAlbumOwnerAccess(slug, token)

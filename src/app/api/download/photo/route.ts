@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { cookieNameForAlbum, verifyAccessToken } from '@/lib/album-password'
 import { stripExifFromJpeg } from '@/lib/exif'
 
 export const runtime = 'nodejs'
@@ -19,9 +22,33 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const rawUrl = searchParams.get('url') ?? ''
   const name = searchParams.get('name') ?? 'download'
+  const albumId = searchParams.get('album_id') ?? ''
 
   if (!rawUrl) {
     return NextResponse.json({ error: 'Missing url' }, { status: 400 })
+  }
+
+  // If an album_id is provided, verify the requester can access the album
+  // (password-protected albums require the session cookie set by /api/album/password/verify).
+  if (albumId) {
+    const admin = createAdminClient()
+    const { data: album } = await admin
+      .from('albums')
+      .select('id, password_hash')
+      .eq('id', albumId)
+      .maybeSingle<{ id: string; password_hash: string | null }>()
+
+    if (!album) {
+      return NextResponse.json({ error: 'Album not found' }, { status: 404 })
+    }
+    if (album.password_hash) {
+      const cookieStore = await cookies()
+      const cookie = cookieStore.get(cookieNameForAlbum(album.id))?.value
+      const verified = cookie != null && await verifyAccessToken(cookie, album.password_hash, album.id)
+      if (!verified) {
+        return NextResponse.json({ error: 'Password required to download from this album' }, { status: 403 })
+      }
+    }
   }
 
   let parsed: URL

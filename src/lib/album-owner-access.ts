@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { timingSafeEqual } from '@/lib/timing-safe'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 type AlbumOwnerBase = {
   id: string
@@ -81,4 +82,19 @@ export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwn
   }
 
   return { ok: true, album, userId: user?.id ?? null }
+}
+
+// Rate-limited wrapper for settings endpoints. Adds 30 req/min per IP before calling
+// verifyAlbumOwnerAccess so no settings route can be DoS'd or used for token enumeration.
+export async function verifyOwnerWithRateLimit(
+  req: Request,
+  slug: string,
+  token: string,
+  extraColumns?: string,
+) {
+  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_settings'), 60, 30)
+  if (!ipRl.ok) {
+    return { ok: false as const, status: 429, error: 'Too many requests. Please slow down.', reason: 'rate_limited' as const }
+  }
+  return verifyAlbumOwnerAccess(slug, token, extraColumns)
 }

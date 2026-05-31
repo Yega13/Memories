@@ -9,9 +9,8 @@ function applySecurityHeaders(response: NextResponse, request: NextRequest) {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
-  if (process.env.NODE_ENV === 'production' || request.nextUrl.protocol === 'https:') {
-    response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
-  }
+  // HSTS is set unconditionally in next.config.ts headers() which covers all routes including
+  // static assets that bypass middleware. Do not duplicate it here.
   return response
 }
 
