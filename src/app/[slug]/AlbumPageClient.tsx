@@ -148,39 +148,45 @@ export default function AlbumPageClient() {
 
     setAlbum(data)
 
-    try {
-      const authRes = await fetch('/api/album/auth', {
+    // Run auth check and photo fetch in parallel — they are independent.
+    const [authRes] = await Promise.all([
+      fetch('/api/album/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug: data.slug }),
-      })
-      const result = (await authRes.json()) as { isOwner?: boolean; accessDenied?: boolean }
-      setIsOwner(!!result.isOwner)
-      if (result.accessDenied) setOwnerAccessDenied(true)
+      }).catch(() => null),
+      fetchPhotos(data.id),
+    ])
 
-      if (result.isOwner) {
-        try {
-          const tierRes = await fetch('/api/me/tier', { cache: 'no-store' })
-          const tierJson = (await tierRes.json()) as { tier?: Tier }
-          if (tierJson.tier) setUserTier(tierJson.tier)
-        } catch {
+    if (authRes) {
+      try {
+        const result = (await authRes.json()) as { isOwner?: boolean; accessDenied?: boolean }
+        setIsOwner(!!result.isOwner)
+        if (result.accessDenied) setOwnerAccessDenied(true)
+
+        if (result.isOwner) {
+          // Tier fetch is non-blocking — UI renders before it resolves.
+          fetch('/api/me/tier', { cache: 'no-store' })
+            .then((r) => r.json() as Promise<{ tier?: Tier }>)
+            .then((j) => { if (j.tier) setUserTier(j.tier) })
+            .catch(() => {})
         }
+      } catch {
+        setIsOwner(false)
       }
-    } catch {
-      setIsOwner(false)
     }
 
-    await fetchPhotos(data.id)
     setLoading(false)
   }, [slug, ownerTokenReady])
 
   const fetchPhotos = async (albumId: string) => {
     const { data } = await supabase
       .from('photos')
-      .select('*')
+      .select('id, album_id, storage_path, storage_backend, url, caption, author_name, created_at, media_type, poster_path, poster_url, stream_uid, stream_iframe_url, stream_thumbnail_url, mirror_path, mirror_url, thumb_path, thumb_url, duration_seconds, display_radius, display_filter, sort_order')
       .eq('album_id', albumId)
       .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
+      .limit(500)
 
     setPhotos(data || [])
   }

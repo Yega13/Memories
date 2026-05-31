@@ -68,5 +68,5 @@ export type Photo = {
   display_radius: number | null
   display_filter: MediaDisplayFilter | null
   sort_order: number | null
-  face_ids: string[] | null
+  face_ids?: string[] | null
 }

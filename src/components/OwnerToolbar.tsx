@@ -68,8 +68,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showShare, setShowShare] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
-  const [zipping, setZipping] = useState(false)
-  const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -476,108 +474,14 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  async function downloadZip() {
+  function downloadZip() {
     if (photos.length === 0) return
-    setZipping(true)
-    setZipProgress({ done: 0, total: photos.length, failed: 0 })
-    const [{ default: JSZip }, { saveAs }] = await Promise.all([import('jszip'), import('file-saver')])
-    const zip = new JSZip()
-    const folder = zip.folder(album.title) || zip
-
-    // Build all jobs up-front so a concurrent worker pool can drain them. Storing the resolved
-    // blob (or skip flag) at the photo's index keeps zip entries in album order without locking
-    // the sequential fetch we had before — which is what made the 200-photo download take 5+
-    // minutes.
-    type FileJob = { index: number; name: string; blob: Blob }
-    type Result = FileJob | { index: number; skipped: true }
-
-    // Fetch the photo bytes. Try direct fetch first (fastest — no Worker round-trip). If that
-    // fails — intermittent CORS, mobile carrier proxy, transient 5xx, etc. — fall back through
-    // our same-origin /api/download/photo proxy which the Worker handles with explicit allow-
-    // listing for our storage hosts. This is the answer to "some photos sometimes fetch-error":
-    // the proxy fallback gives every photo a second chance via a completely different code
-    // path before we count it as skipped.
-    async function fetchPhotoBlob(sourceUrl: string): Promise<Blob> {
-      try {
-        const res = await fetch(sourceUrl)
-        if (res.ok) return await res.blob()
-        throw new Error(`HTTP ${res.status}`)
-      } catch (directErr) {
-        try {
-          const proxyRes = await fetch(`/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=photo`)
-          if (!proxyRes.ok) throw new Error(`Proxy HTTP ${proxyRes.status}`)
-          return await proxyRes.blob()
-        } catch (proxyErr) {
-          // Bubble up the combined reason so a future "failed N items" toast can include detail.
-          throw new Error(`direct=${directErr instanceof Error ? directErr.message : String(directErr)}; proxy=${proxyErr instanceof Error ? proxyErr.message : String(proxyErr)}`)
-        }
-      }
-    }
-
-    const jobs: Array<() => Promise<Result>> = photos.map((photo, i) => async () => {
-      try {
-        const sourceUrl = photo.storage_backend === 'stream' ? photo.mirror_url : photo.url
-        if (!sourceUrl) {
-          // Stream-backed video without an R2 mirror yet — count as skipped, don't fail batch.
-          return { index: i, skipped: true }
-        }
-        const blob = await fetchPhotoBlob(sourceUrl)
-        const storagePath = photo.storage_backend === 'stream' ? photo.mirror_path ?? photo.storage_path : photo.storage_path
-        const pathExt = storagePath.split('.').pop()?.toLowerCase()
-        const urlExt = sourceUrl.split('.').pop()?.split('?')[0]?.toLowerCase()
-        const ext = pathExt || urlExt || (photo.media_type === 'video' ? 'mp4' : 'jpg')
-        const prefix = photo.media_type === 'video' ? 'video' : 'photo'
-        const name = photo.caption
-          ? `${i + 1}-${photo.caption.replace(/[^a-z0-9]/gi, '_')}.${ext}`
-          : `${prefix}-${i + 1}.${ext}`
-        return { index: i, name, blob }
-      } catch (e) {
-        console.warn('[zip] skipping photo', photo.id, e instanceof Error ? e.message : String(e))
-        return { index: i, skipped: true }
-      }
-    })
-
-    // Concurrency 6 ≈ what most browsers allow per origin; enough to keep the network busy
-    // without thrashing the device. ZIP entries are added in result order, then a final sort-by
-    // -index pass guarantees on-disk order matches album order.
-    const CONCURRENCY = 6
-    let cursor = 0
-    let done = 0
-    let failed = 0
-    const collected: Result[] = []
-
-    async function worker() {
-      while (true) {
-        const my = cursor
-        cursor += 1
-        if (my >= jobs.length) return
-        const result = await jobs[my]()
-        collected.push(result)
-        done += 1
-        if ('skipped' in result) failed += 1
-        setZipProgress({ done, total: photos.length, failed })
-      }
-    }
-
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, () => worker()))
-
-    if (failed === photos.length) {
-      setZipping(false)
-      setZipProgress(null)
-      showAppToast('Could not download album files.', 'error')
-      return
-    }
-
-    collected
-      .filter((r): r is FileJob => !('skipped' in r))
-      .sort((a, b) => a.index - b.index)
-      .forEach(({ name, blob }) => folder.file(name, blob))
-
-    const content = await zip.generateAsync({ type: 'blob' })
-    saveAs(content, `${album.title}.zip`)
-    setZipping(false)
-    showAppToast(failed > 0 ? `Download ready. ${failed} file${failed === 1 ? '' : 's'} skipped.` : 'Download ready.')
-    setTimeout(() => setZipProgress(null), 2500)
+    const a = document.createElement('a')
+    a.href = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    showAppToast('Preparing download…')
   }
 
   async function deleteAlbum() {
@@ -1082,10 +986,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ background: '#254F22', color: '#FDFAF5' }}
                       onClick={downloadZip}
-                      disabled={zipping || photos.length === 0}
+                      disabled={photos.length === 0}
                     >
                       <Download className="w-4 h-4" />
-                      {zipping ? 'Zipping...' : `Download all (${photos.length})`}
+                      {`Download all (${photos.length})`}
                     </button>
                   </div>
                 )}
@@ -1431,26 +1335,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         />
       )}
     </div>
-    {/* Floating ZIP progress banner. Lifted out of the toolbar flex so a growing
-        "Downloading 199/200 - 50 skipped" label can't reshape the toolbar and push the settings
-        button off-screen. Fixed bottom-right is visible on mobile + desktop without overlapping
-        the upload area. */}
-    {zipProgress && (
-      <div
-        className="fixed z-40 text-xs rounded-lg px-3 py-2 shadow-sm"
-        style={{
-          right: 'max(12px, env(safe-area-inset-right, 12px))',
-          bottom: 'max(12px, env(safe-area-inset-bottom, 12px))',
-          background: '#FFFFFF',
-          border: '1px solid #DDD5C5',
-          color: '#7C5C3E',
-          maxWidth: 'calc(100vw - 24px)',
-        }}
-      >
-        Downloading {zipProgress.done}/{zipProgress.total}
-        {zipProgress.failed > 0 ? ` - ${zipProgress.failed} skipped` : ''}
-      </div>
-    )}
     </>
   )
 }

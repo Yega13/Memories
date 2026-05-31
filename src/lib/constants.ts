@@ -47,15 +47,17 @@ export const AUTO_SCROLL_MAX_PX_FRAME = 30
 // XHR timeout for a single (non-multipart) R2 upload request.
 export const R2_SINGLE_UPLOAD_TIMEOUT_MS = 120_000
 
-// XHR timeout per multipart/stream chunk. Five minutes to accommodate slow mobile data
-// uploading a 5 MB chunk before the retry kicks in.
-export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 300_000
+// XHR timeout per multipart/stream chunk. 10 minutes to accommodate slow mobile data
+// (5 MB chunk at 100 Kbps ≈ 400 s; 600 s gives ample margin before retry kicks in).
+export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 600_000
 
 // Maximum concurrent upload worker slots by device input class.
 // Mobile gets 2 — cellular carriers drop burst connections when 3+ simultaneous
 // XHRs hit the same host, causing fast "failed to fetch" failures on mobile.
+// Desktop gets 3 — reduced from 5 to avoid saturating the 6-connection-per-host
+// HTTP/1.1 limit to supabase.co, which caused every 6th upload to stall.
 export const UPLOAD_CONCURRENCY_MOBILE = 2
-export const UPLOAD_CONCURRENCY_DESKTOP = 5
+export const UPLOAD_CONCURRENCY_DESKTOP = 3
 
 // Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency
 // above — these run inside a single video's uploadVideoMultipart call.

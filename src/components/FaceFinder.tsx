@@ -136,6 +136,7 @@ export default function FaceFinder({ albumSlug, photos, onClose }: Props) {
           await fetch('/api/album/face-index', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ slug: albumSlug, photoId: ids[i] }),
             signal,
           })
