@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ensureCollection, indexPhotoFaces } from '@/lib/rekognition'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
-import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
+import { getUserTierById } from '@/lib/subscriptions'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -15,29 +16,10 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 const SLUG_RE = /^[a-zA-Z0-9._-]{1,200}$/
 function isValidSlug(s: string): boolean { return SLUG_RE.test(s) }
 
-// In-memory rate limiter — 300 index requests per 5 minutes per IP.
-// 5 concurrent FaceFinder workers × ~5s Rekognition latency = ~60 req/min natural max.
-// 300/5min matches that throughput for a 500-photo album while blocking tight loops.
-const RL_MAX = 300
-const RL_WINDOW_MS = 5 * 60_000
-const rlMap = new Map<string, { count: number; windowStart: number }>()
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now()
-  const entry = rlMap.get(ip)
-  if (!entry || now - entry.windowStart > RL_WINDOW_MS) {
-    rlMap.set(ip, { count: 1, windowStart: now })
-    if (rlMap.size > 5000) {
-      for (const [k, v] of rlMap) {
-        if (now - v.windowStart > RL_WINDOW_MS * 2) rlMap.delete(k)
-      }
-    }
-    return false
-  }
-  if (entry.count >= RL_MAX) return true
-  entry.count++
-  return false
-}
+// Rekognition calls cost money, so rate limits must be shared across Worker instances.
+const INDEX_WINDOW_SECONDS = 10 * 60
+const INDEX_IP_MAX = 600
+const INDEX_ALBUM_MAX = 1000
 
 // Rekognition rejects images > 5 MB via the direct-bytes API, and even smaller multi-MB
 // originals burn Cloudflare Worker CPU during fetch + base64 + signing. Convert the standard
@@ -65,26 +47,37 @@ async function resolveAlbum(slug: string) {
   const admin = createAdminClient()
   const { data: album } = await admin
     .from('albums')
-    .select('id')
+    .select('id, user_id')
     .or(`slug.eq.${slug},custom_slug.eq.${slug}`)
-    .maybeSingle<{ id: string }>()
+    .maybeSingle<{ id: string; user_id: string | null }>()
   return { admin, album }
+}
+
+async function isStudioAlbum(album: { user_id: string | null }): Promise<boolean> {
+  return (await getUserTierById(album.user_id)) === 'studio'
+}
+
+function rateLimitResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: 'Too many requests. Please wait a few minutes and try again.' },
+    { status: 429, headers: { ...NO_STORE, 'Retry-After': String(retryAfterSeconds) } },
+  )
 }
 
 // GET: returns all unindexed photo IDs so the client can distribute work across concurrent workers
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const slug = url.searchParams.get('slug')?.trim() ?? ''
-  const ownerToken = url.searchParams.get('owner_token')?.trim() ?? ''
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
-  // Face indexing triggers AWS Rekognition calls that cost money; require ownership proof.
-  if (!ownerToken) return NextResponse.json({ error: 'Owner token required' }, { status: 401, headers: NO_STORE })
-  const access = await verifyAlbumOwnerAccess(slug, ownerToken)
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index_list'), 60, 30)
+  if (!ipLimit.ok) return rateLimitResponse(ipLimit.retryAfterSeconds)
 
   const { admin, album } = await resolveAlbum(slug)
   if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  if (!await isStudioAlbum(album)) {
+    return NextResponse.json({ error: 'Face Finder is not enabled for this album' }, { status: 403, headers: NO_STORE })
+  }
 
   await ensureCollection(album.id)
 
@@ -121,7 +114,7 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
-  let body: { slug?: string; photoId?: string; owner_token?: string }
+  let body: { slug?: string; photoId?: string }
   try {
     body = await req.json()
   } catch {
@@ -129,24 +122,19 @@ async function handlePost(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
-  const ownerToken = String(body.owner_token ?? '').trim()
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
-  // Require ownership: face indexing triggers paid Rekognition API calls.
-  if (!ownerToken) return NextResponse.json({ error: 'Owner token required' }, { status: 401, headers: NO_STORE })
-  const access = await verifyAlbumOwnerAccess(slug, ownerToken)
-  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
-
-  const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
-  if (isRateLimited(ip)) {
-    return NextResponse.json(
-      { error: 'Too many requests. Please wait a few minutes and try again.' },
-      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(Math.ceil(RL_WINDOW_MS / 1000)) } },
-    )
-  }
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index'), INDEX_WINDOW_SECONDS, INDEX_IP_MAX)
+  if (!ipLimit.ok) return rateLimitResponse(ipLimit.retryAfterSeconds)
 
   const { admin, album } = await resolveAlbum(slug)
   if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  if (!await isStudioAlbum(album)) {
+    return NextResponse.json({ error: 'Face Finder is not enabled for this album' }, { status: 403, headers: NO_STORE })
+  }
+
+  const albumLimit = await checkRateLimit(`face_index_album:${album.id}`, INDEX_WINDOW_SECONDS, INDEX_ALBUM_MAX)
+  if (!albumLimit.ok) return rateLimitResponse(albumLimit.retryAfterSeconds)
 
   const photoId = body.photoId ? String(body.photoId).trim() : null
 

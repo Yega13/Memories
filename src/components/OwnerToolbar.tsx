@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import { type Album, type Photo } from '@/lib/supabase'
-import { DEFAULT_SLIDESHOW_INTERVAL_MS, MAX_SLIDESHOW_INTERVAL_MS, MIN_SLIDESHOW_INTERVAL_MS, MEDIA_DISPLAY_FILTER_OPTIONS, MEDIA_HOVER_EFFECT_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, SLIDESHOW_ANIMATION_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
+import { DEFAULT_SLIDESHOW_INTERVAL_MS, MAX_SLIDESHOW_INTERVAL_MS, MIN_SLIDESHOW_INTERVAL_MS, MEDIA_DISPLAY_FILTER_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, SLIDESHOW_ANIMATION_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
 import { formatFileSize } from '@/lib/utils'
 import { showAppToast, storeAppToast } from '@/components/AppToast'
@@ -114,7 +114,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
 
   const publicSlug = album.custom_slug ?? album.slug
   const shareUrl = `${window.location.origin}/${publicSlug}`
-  const ownerUrl = `${window.location.origin}/${album.slug}?owner=${ownerToken}`
+  const ownerUrl = `${window.location.origin}/${album.slug}#owner=${ownerToken}`
   const canCustomize = userTier === 'pro' || userTier === 'studio'
   const canUseCollections = userTier === 'studio'
   const bgChoice = album.background_theme ?? DEFAULT_BG

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { searchFacesByImage } from '@/lib/rekognition'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { getUserTierById } from '@/lib/subscriptions'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -12,30 +14,10 @@ const MAX_SELFIE_BYTES = 5 * 1024 * 1024
 const SLUG_RE = /^[a-zA-Z0-9._-]{1,200}$/
 function isValidSlug(s: string): boolean { return SLUG_RE.test(s) }
 
-// In-memory rate limiter — 10 searches per IP per 60 seconds.
-// Per-isolate, not globally consistent, but Cloudflare's consistent-hash routing sends
-// a single IP to the same isolate repeatedly, making this effective against looping abuse.
-const RL_MAX = 10
-const RL_WINDOW_MS = 60_000
-const rlMap = new Map<string, { count: number; windowStart: number }>()
-
-function isRateLimited(ip: string): boolean {
-  const now = Date.now()
-  const entry = rlMap.get(ip)
-  if (!entry || now - entry.windowStart > RL_WINDOW_MS) {
-    rlMap.set(ip, { count: 1, windowStart: now })
-    // Prune stale entries occasionally to avoid unbounded map growth.
-    if (rlMap.size > 5000) {
-      for (const [k, v] of rlMap) {
-        if (now - v.windowStart > RL_WINDOW_MS * 2) rlMap.delete(k)
-      }
-    }
-    return false
-  }
-  if (entry.count >= RL_MAX) return true
-  entry.count++
-  return false
-}
+// Rekognition calls cost money, so rate limits must be shared across Worker instances.
+const SEARCH_WINDOW_SECONDS = 60
+const SEARCH_IP_MAX = 10
+const SEARCH_ALBUM_MAX = 60
 
 export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
@@ -58,11 +40,11 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
-  const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for') ?? 'unknown'
-  if (isRateLimited(ip)) {
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_search'), SEARCH_WINDOW_SECONDS, SEARCH_IP_MAX)
+  if (!ipLimit.ok) {
     return NextResponse.json(
       { error: 'Too many searches. Please wait a minute and try again.' },
-      { status: 429, headers: { ...NO_STORE, 'Retry-After': '60' } },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(ipLimit.retryAfterSeconds) } },
     )
   }
 
@@ -92,12 +74,23 @@ async function handlePost(req: Request) {
 
   const { data: album } = await admin
     .from('albums')
-    .select('id')
+    .select('id, user_id')
     .or(`slug.eq.${slug},custom_slug.eq.${slug}`)
-    .maybeSingle<{ id: string }>()
+    .maybeSingle<{ id: string; user_id: string | null }>()
 
   if (!album) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  }
+  if ((await getUserTierById(album.user_id)) !== 'studio') {
+    return NextResponse.json({ error: 'Face Finder is not enabled for this album' }, { status: 403, headers: NO_STORE })
+  }
+
+  const albumLimit = await checkRateLimit(`face_search_album:${album.id}`, SEARCH_WINDOW_SECONDS, SEARCH_ALBUM_MAX)
+  if (!albumLimit.ok) {
+    return NextResponse.json(
+      { error: 'Too many searches. Please wait a minute and try again.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(albumLimit.retryAfterSeconds) } },
+    )
   }
 
   // Verify there are indexed photos — otherwise collection may not exist yet

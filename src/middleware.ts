@@ -10,7 +10,7 @@ function applySecurityHeaders(response: NextResponse, request: NextRequest) {
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()')
   if (process.env.NODE_ENV === 'production' || request.nextUrl.protocol === 'https:') {
-    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   }
   return response
 }

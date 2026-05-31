@@ -57,7 +57,7 @@ export default function HomeHeroInteractive() {
         setLoading(false)
         return
       }
-      router.push(`/${body.slug}?owner=${body.owner_token}`)
+      router.push(`/${body.slug}#owner=${body.owner_token}`)
     } catch {
       setError('Something went wrong. Please try again.')
       setLoading(false)

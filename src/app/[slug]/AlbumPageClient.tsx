@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useSearchParams, notFound as triggerNotFound } from 'next/navigation'
 import Link from 'next/link'
 import { supabase, type Album, type Photo } from '@/lib/supabase'
@@ -48,12 +48,14 @@ function albumBackgroundStyle(bg: string): React.CSSProperties {
 export default function AlbumPageClient() {
   const { slug } = useParams<{ slug: string }>()
   const searchParams = useSearchParams()
-  const ownerToken = searchParams.get('owner')
+  const queryOwnerToken = searchParams.get('owner')
 
   const [album, setAlbum] = useState<Album | null>(null)
   const [photos, setPhotos] = useState<Photo[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
+  const [ownerToken, setOwnerToken] = useState<string | null>(queryOwnerToken)
+  const [ownerTokenReady, setOwnerTokenReady] = useState(false)
   const [ownerAccessDenied, setOwnerAccessDenied] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [userTier, setUserTier] = useState<Tier>('free')
@@ -64,8 +66,46 @@ export default function AlbumPageClient() {
   const [arrangeMode, setArrangeMode] = useState(false)
   const [showFaceFinder, setShowFaceFinder] = useState(false)
   const [revealGate, setRevealGate] = useState<{ revealAt: string; summary: { id: string; slug: string; title: string } } | null>(null)
+  const ownerTokenSlugRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash
+    const hashOwnerToken = new URLSearchParams(hash).get('owner')
+    const nextOwnerToken = hashOwnerToken || queryOwnerToken
+
+    if (!nextOwnerToken) {
+      if (ownerTokenSlugRef.current !== slug) setOwnerToken(null)
+      ownerTokenSlugRef.current = slug
+      setOwnerTokenReady(true)
+      return () => { cancelled = true }
+    }
+
+    ownerTokenSlugRef.current = slug
+    setOwnerToken(nextOwnerToken)
+    setOwnerTokenReady(false)
+
+    void (async () => {
+      try {
+        await fetch('/api/album/owner-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, owner_token: nextOwnerToken }),
+        })
+      } catch {
+      } finally {
+        if (!cancelled) {
+          window.history.replaceState(window.history.state, '', `${window.location.pathname}#owner=${encodeURIComponent(nextOwnerToken)}`)
+          setOwnerTokenReady(true)
+        }
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [slug, queryOwnerToken])
 
   const fetchAlbum = useCallback(async () => {
+    if (!ownerTokenReady) return
     setPasswordGate(null)
     setRevealGate(null)
     setOwnerAccessDenied(false)
@@ -133,7 +173,7 @@ export default function AlbumPageClient() {
 
     await fetchPhotos(data.id)
     setLoading(false)
-  }, [slug, ownerToken])
+  }, [slug, ownerToken, ownerTokenReady])
 
   const fetchPhotos = async (albumId: string) => {
     const { data } = await supabase

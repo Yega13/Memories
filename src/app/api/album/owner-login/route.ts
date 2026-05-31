@@ -12,8 +12,9 @@ const OWNER_COOKIE_MAX_AGE = 60 * 60 * 24 * 7 // 7 days
 // then redirects to the album. This prevents the token from living in browser history,
 // server access logs, or Referer headers sent to third-party analytics.
 //
-// Usage: the album page detects ?owner=TOKEN on first load, POSTs here, then replaces
-// the URL with the clean slug path. Future loads read the HttpOnly cookie instead.
+// Usage: the album page detects an owner token on first load and POSTs here.
+// The client normalizes legacy query-token links into fragment-token links so the
+// token is not sent in future HTTP requests or referrer headers.
 export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden

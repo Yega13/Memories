@@ -45,13 +45,14 @@ type FullAlbum = {
   created_at: string
   retired_at: string | null
   user_id: string | null
+  owner_token: string
   password_hash: string | null
 }
 
-type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at' | 'cover_photo_id'> & { cover_photo_id: string | null }
+type PublicAlbum = Omit<FullAlbum, 'user_id' | 'owner_token' | 'password_hash' | 'retired_at' | 'cover_photo_id'> & { cover_photo_id: string | null }
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, reveal_at, created_at, retired_at, user_id, password_hash'
-const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, reveal_at, created_at, retired_at, user_id, owner_token, password_hash'
+const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, owner_token, password_hash'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -111,14 +112,9 @@ async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awa
   const ownerTier = cachedTier ?? await getUserTierById(album.user_id)
   const upload_caps = uploadCapsForTier(ownerTier)
 
-  // Password enforcement is conditional on the OWNER's tier - if they've
-  // lapsed below Pro, the password "is removed" (per the FAQ promise) and
-  // the album becomes openly viewable again. We still keep the hash on the
-  // row so re-upgrading restores it.
-  let passwordEnforced = false
-  if (album.password_hash && ownerTier !== 'free') {
-    passwordEnforced = true
-  }
+  // Once a password exists, enforce it regardless of the owner's current tier.
+  // Downgrading a paid account must not silently expose a protected album.
+  const passwordEnforced = !!album.password_hash
 
   if (passwordEnforced && album.password_hash) {
     const cookieStore = await cookies()
@@ -137,8 +133,10 @@ async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awa
     }
   }
 
-  // Reveal gate — guests see a countdown until reveal_at; owners bypass it.
-  if (album.reveal_at && !ownerToken && new Date(album.reveal_at) > new Date()) {
+  const hasValidOwnerToken = ownerToken ? timingSafeEqual(ownerToken, album.owner_token) : false
+
+  // Reveal gate — guests see a countdown until reveal_at; verified owners bypass it.
+  if (album.reveal_at && !hasValidOwnerToken && new Date(album.reveal_at) > new Date()) {
     return NextResponse.json(
       {
         album: null,

@@ -18,6 +18,7 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 // (10 tries is generous), but a brute-force attempt still gets locked out fast.
 const WINDOW_SECONDS = 5 * 60        // sliding window we count failures in
 const MAX_FAILURES_PER_WINDOW = 10   // >= this many failed guesses -> lockout
+const MAX_ALBUM_FAILURES_PER_WINDOW = 60
 const LOCKOUT_SECONDS = 5 * 60       // how long the gate stays closed
 
 // Verify a guest-supplied password. Sets an HttpOnly per-album access cookie
@@ -70,6 +71,26 @@ export async function POST(req: Request) {
   }
 
   const since = new Date(Date.now() - WINDOW_SECONDS * 1000).toISOString()
+  const { count: recentAlbumFailures } = await admin
+    .from('album_password_attempts')
+    .select('id', { count: 'exact', head: true })
+    .eq('album_id', album.id)
+    .eq('succeeded', false)
+    .gte('created_at', since)
+
+  if (recentAlbumFailures != null && recentAlbumFailures >= MAX_ALBUM_FAILURES_PER_WINDOW) {
+    return NextResponse.json(
+      {
+        error: 'Too many attempts. Please try again in a few minutes.',
+        retry_after_seconds: LOCKOUT_SECONDS,
+      },
+      {
+        status: 429,
+        headers: { ...NO_STORE, 'Retry-After': String(LOCKOUT_SECONDS) },
+      },
+    )
+  }
+
   const { count: recentFailures } = await admin
     .from('album_password_attempts')
     .select('id', { count: 'exact', head: true })
