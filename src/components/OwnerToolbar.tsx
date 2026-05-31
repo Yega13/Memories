@@ -69,7 +69,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
-  const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number; generating?: boolean } | null>(null)
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -480,7 +480,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     if (photos.length === 0) return
     setZipping(true)
     setZipProgress({ done: 0, total: photos.length, failed: 0 })
-    const { saveAs } = await import('file-saver')
+    const [{ default: JSZip }, { saveAs }] = await Promise.all([import('jszip'), import('file-saver')])
+    const zip = new JSZip()
+    const folder = zip.folder(album.title) || zip
 
     // Build all jobs up-front so a concurrent worker pool can drain them. Storing the resolved
     // blob (or skip flag) at the photo's index keeps zip entries in album order without locking
@@ -566,23 +568,12 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       return
     }
 
-    // Stream the collected blobs into a STORE-only zip. client-zip reads each blob lazily via
-    // blob.stream() as it writes output — it never holds all files in RAM at once. The previous
-    // code did `Promise.all(blob.arrayBuffer())`, forcing all 159 files fully into memory
-    // simultaneously, which OOM-froze mobile right at "159/159". STORE = no compression CPU
-    // (photos/videos are already compressed), so there's no heavy main-thread work either.
-    setZipProgress({ done, total: photos.length, failed, generating: true })
-
-    const { downloadZip } = await import('client-zip')
-
-    const sortedFiles = collected
+    collected
       .filter((r): r is FileJob => !('skipped' in r))
       .sort((a, b) => a.index - b.index)
+      .forEach(({ name, blob }) => folder.file(name, blob))
 
-    const content = await downloadZip(
-      sortedFiles.map(({ name, blob }) => ({ name, input: blob, lastModified: new Date() })),
-    ).blob()
-
+    const content = await zip.generateAsync({ type: 'blob' })
     saveAs(content, `${album.title}.zip`)
     setZipping(false)
     showAppToast(failed > 0 ? `Download ready. ${failed} file${failed === 1 ? '' : 's'} skipped.` : 'Download ready.')
@@ -1456,10 +1447,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
           maxWidth: 'calc(100vw - 24px)',
         }}
       >
-        {zipProgress.generating
-          ? 'Preparing download…'
-          : `Downloading ${zipProgress.done}/${zipProgress.total}${zipProgress.failed > 0 ? ` — ${zipProgress.failed} skipped` : ''}`
-        }
+        Downloading {zipProgress.done}/{zipProgress.total}
+        {zipProgress.failed > 0 ? ` - ${zipProgress.failed} skipped` : ''}
       </div>
     )}
     </>
