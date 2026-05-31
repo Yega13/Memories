@@ -566,44 +566,22 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       return
     }
 
-    // Convert blobs to transferable ArrayBuffers, then hand them off to a Web Worker.
-    // JSZip's generateAsync blocks the main thread while assembling the final Uint8Array
-    // (happens after the onUpdate hits 100%, before the Promise resolves). For 159 photos
-    // that's 10-30 s of frozen UI on mobile. The Worker runs on a separate thread so the
-    // page stays responsive while the zip is built.
+    // Stream the collected blobs into a STORE-only zip. client-zip reads each blob lazily via
+    // blob.stream() as it writes output — it never holds all files in RAM at once. The previous
+    // code did `Promise.all(blob.arrayBuffer())`, forcing all 159 files fully into memory
+    // simultaneously, which OOM-froze mobile right at "159/159". STORE = no compression CPU
+    // (photos/videos are already compressed), so there's no heavy main-thread work either.
     setZipProgress({ done, total: photos.length, failed, generating: true })
+
+    const { downloadZip } = await import('client-zip')
 
     const sortedFiles = collected
       .filter((r): r is FileJob => !('skipped' in r))
       .sort((a, b) => a.index - b.index)
 
-    const fileBuffers = await Promise.all(
-      sortedFiles.map(async ({ name, blob }) => ({ name, buffer: await blob.arrayBuffer() })),
-    )
-
-    const content = await new Promise<Blob>((resolve, reject) => {
-      const zipWorker = new Worker(new URL('./zip.worker.ts', import.meta.url))
-      zipWorker.onmessage = (e: MessageEvent<{ type: string; percent?: number; blob?: Blob }>) => {
-        if (e.data.type === 'progress' && e.data.percent != null) {
-          setZipProgress({
-            done: Math.round((e.data.percent / 100) * photos.length),
-            total: photos.length,
-            failed,
-            generating: true,
-          })
-        } else if (e.data.type === 'complete' && e.data.blob) {
-          zipWorker.terminate()
-          resolve(e.data.blob)
-        }
-      }
-      zipWorker.onerror = (err) => {
-        zipWorker.terminate()
-        reject(new Error(err.message))
-      }
-      // Transfer ownership (zero-copy) so the ArrayBuffers move to the worker thread
-      // and the main thread can free them immediately.
-      zipWorker.postMessage({ files: fileBuffers, title: album.title }, fileBuffers.map((f) => f.buffer))
-    })
+    const content = await downloadZip(
+      sortedFiles.map(({ name, blob }) => ({ name, input: blob, lastModified: new Date() })),
+    ).blob()
 
     saveAs(content, `${album.title}.zip`)
     setZipping(false)
@@ -1479,7 +1457,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         }}
       >
         {zipProgress.generating
-          ? `Preparing download… ${zipProgress.done}/${zipProgress.total}`
+          ? 'Preparing download…'
           : `Downloading ${zipProgress.done}/${zipProgress.total}${zipProgress.failed > 0 ? ` — ${zipProgress.failed} skipped` : ''}`
         }
       </div>
