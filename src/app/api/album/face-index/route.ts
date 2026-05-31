@@ -65,7 +65,9 @@ function rateLimitResponse(retryAfterSeconds: number) {
   )
 }
 
-// GET: returns all unindexed photo IDs so the client can distribute work across concurrent workers
+// GET: returns all unindexed photo IDs so the client can distribute work across concurrent workers.
+// No owner auth required — this is a read-only list operation with no cost. Only the POST
+// (which triggers paid Rekognition calls) enforces owner-cookie auth.
 export async function GET(req: Request) {
   const url = new URL(req.url)
   const slug = url.searchParams.get('slug')?.trim() ?? ''
@@ -73,10 +75,6 @@ export async function GET(req: Request) {
 
   const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index_list'), 60, 30)
   if (!ipLimit.ok) return rateLimitResponse(ipLimit.retryAfterSeconds)
-
-  // Face indexing triggers paid Rekognition API calls — verify the requester owns this album.
-  const ownerAccess = await verifyOwnerViaCookie(slug)
-  if (!ownerAccess.ok) return NextResponse.json({ error: ownerAccess.error }, { status: ownerAccess.status, headers: NO_STORE })
 
   const { admin, album } = await resolveAlbum(slug)
   if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })

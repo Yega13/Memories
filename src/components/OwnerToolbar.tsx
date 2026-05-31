@@ -69,7 +69,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
-  const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number } | null>(null)
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number; failed: number; generating?: boolean } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -574,7 +574,17 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       .sort((a, b) => a.index - b.index)
       .forEach(({ name, blob }) => folder.file(name, blob))
 
-    const content = await zip.generateAsync({ type: 'blob' })
+    // Switch to generating phase so the banner shows progress instead of freezing.
+    setZipProgress({ done, total: photos.length, failed, generating: true })
+
+    // STORE skips DEFLATE — images and videos are already compressed, so re-compressing just
+    // wastes CPU and causes the browser to appear frozen for large albums.
+    const content = await zip.generateAsync(
+      { type: 'blob', compression: 'STORE' },
+      (meta) => {
+        setZipProgress({ done: Math.round((meta.percent / 100) * photos.length), total: photos.length, failed, generating: true })
+      },
+    )
     saveAs(content, `${album.title}.zip`)
     setZipping(false)
     showAppToast(failed > 0 ? `Download ready. ${failed} file${failed === 1 ? '' : 's'} skipped.` : 'Download ready.')
@@ -1448,8 +1458,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
           maxWidth: 'calc(100vw - 24px)',
         }}
       >
-        Downloading {zipProgress.done}/{zipProgress.total}
-        {zipProgress.failed > 0 ? ` - ${zipProgress.failed} skipped` : ''}
+        {zipProgress.generating
+          ? `Preparing download… ${zipProgress.done}/${zipProgress.total}`
+          : `Downloading ${zipProgress.done}/${zipProgress.total}${zipProgress.failed > 0 ? ` — ${zipProgress.failed} skipped` : ''}`
+        }
       </div>
     )}
     </>
