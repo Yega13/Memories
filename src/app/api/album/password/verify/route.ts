@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from '@/lib/album-password'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -54,12 +55,26 @@ export async function POST(req: Request) {
   // Lockout check BEFORE running PBKDF2 (which is 100+ ms of CPU). If the
   // album is locked, we want to fail fast and not give the attacker free
   // hashing work either.
+  //
+  // Two-layer rate limiting:
+  //   1. Global per-IP — prevents one IP from attacking many albums (50 failures/5min across all albums).
+  //   2. Composite (album_id, IP) — prevents distributed attackers each getting 10 guesses on the same album.
   const ip = clientIp(req)
+
+  const globalRl = await checkRateLimit(clientIpKey(req, 'pw_verify_global'), 5 * 60, 20)
+  if (!globalRl.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please try again in a few minutes.', retry_after_seconds: LOCKOUT_SECONDS },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(LOCKOUT_SECONDS) } },
+    )
+  }
+
   const since = new Date(Date.now() - WINDOW_SECONDS * 1000).toISOString()
   const { count: recentFailures } = await admin
     .from('album_password_attempts')
     .select('id', { count: 'exact', head: true })
     .eq('album_id', album.id)
+    .eq('ip', ip)
     .eq('succeeded', false)
     .gte('created_at', since)
 

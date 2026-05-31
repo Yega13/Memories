@@ -54,15 +54,31 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const { data: album } = await admin
     .from('albums')
-    .select('id, user_id, title, slug, custom_slug, last_notification_at')
+    .select('id, user_id, title, slug, custom_slug, last_notification_at, guest_uploads_enabled')
     .eq('id', albumId)
-    .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null; last_notification_at: string | null }>()
+    .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null; last_notification_at: string | null; guest_uploads_enabled: boolean | null }>()
   if (!album) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
 
+  // guest_uploads_enabled defaults to true (see migration 20260531_albums_guest_uploads_enabled.sql).
+  // null treated as true for rows predating the migration.
+  if (album.guest_uploads_enabled === false) {
+    return NextResponse.json({ error: 'Guest uploads are not enabled for this album' }, { status: 403, headers: NO_STORE })
+  }
+
+  // Per-album rate limit: caps total uploads regardless of how many IPs are attacking.
+  // Prevents a distributed attacker from flooding one album from many IPs.
+  const albumRl = await checkRateLimit(`photo_upload_album:${albumId}`, 60 * 60, 500)
+  if (!albumRl.ok) {
+    return NextResponse.json(
+      { error: 'Album upload limit reached. Please try again later.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(albumRl.retryAfterSeconds) } },
+    )
+  }
+
   // 120 upload batches per 10 min per IP (~2/sec sustained — well above any real user,
-  // low enough to stop a scripted flood). Fail-open if rate_limit_events table missing.
+  // low enough to stop a scripted flood).
   const rl = await checkRateLimit(clientIpKey(req, `photo_upload:${albumId}`), 10 * 60, 120)
   if (!rl.ok) {
     return NextResponse.json(
@@ -237,8 +253,10 @@ async function maybeNotifyOwner(
   if (Date.now() - lastSent < NOTIFICATION_COOLDOWN_MS) return
 
   try {
-    // Conditional update: only succeeds if no other concurrent request already stamped the row.
-    // .maybeSingle() returns null when 0 rows matched (another request won the race) → bail out.
+    // Atomic race-free update: the UPDATE ... WHERE ... RETURNING is a single Postgres operation.
+    // Only one concurrent request will match the WHERE clause and update last_notification_at.
+    // .maybeSingle() returns null when 0 rows were updated (another request won the race) → bail.
+    // This eliminates the classic check-then-act race without needing a Redis lock.
     const threshold = new Date(Date.now() - NOTIFICATION_COOLDOWN_MS).toISOString()
     const { data: won } = await admin
       .from('albums')

@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.googletagservices.com https://partner.googleadservices.com https://tpc.googlesyndication.com https://adservice.google.com https://challenges.cloudflare.com https://static.cloudflareinsights.com",
+  "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://pagead2.googlesyndication.com https://www.googletagservices.com https://partner.googleadservices.com https://tpc.googlesyndication.com https://adservice.google.com https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",

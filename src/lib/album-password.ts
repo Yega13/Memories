@@ -46,7 +46,17 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return timingSafeEqualBytes(actual, expected)
 }
 
-export async function deriveAccessToken(passwordHash: string, albumId: string): Promise<string> {
+// Tokens are bound to a 30-day time bucket. A stolen cookie is valid only within
+// the bucket it was issued plus the previous one — at most ~60 days, never forever.
+// Changing the album password always produces a new hash, which changes all bucket tokens.
+const TOKEN_BUCKET_SECONDS = 60 * 60 * 24 * 30
+
+function currentTimeBucket(): number {
+  return Math.floor(Date.now() / 1000 / TOKEN_BUCKET_SECONDS)
+}
+
+export async function deriveAccessToken(passwordHash: string, albumId: string, bucket?: number): Promise<string> {
+  const b = bucket ?? currentTimeBucket()
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(passwordHash),
@@ -54,8 +64,21 @@ export async function deriveAccessToken(passwordHash: string, albumId: string): 
     false,
     ['sign'],
   )
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(albumId))
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${albumId}:${b}`))
   return toBase64(new Uint8Array(sig))
+}
+
+export async function verifyAccessToken(cookie: string, passwordHash: string, albumId: string): Promise<boolean> {
+  const now = currentTimeBucket()
+  const [current, previous] = await Promise.all([
+    deriveAccessToken(passwordHash, albumId, now),
+    deriveAccessToken(passwordHash, albumId, now - 1),
+  ])
+  const cookieBytes = new TextEncoder().encode(cookie)
+  return (
+    timingSafeEqualBytes(cookieBytes, new TextEncoder().encode(current)) ||
+    timingSafeEqualBytes(cookieBytes, new TextEncoder().encode(previous))
+  )
 }
 
 // Legacy: kept only for verifying old hmac-sha256-v1 hashes already in the DB.

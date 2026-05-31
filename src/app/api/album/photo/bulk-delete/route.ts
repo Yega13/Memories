@@ -6,6 +6,7 @@ import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 import { deleteFaces } from '@/lib/rekognition'
 import { deleteStreamVideo } from '@/lib/cloudflare-stream'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -53,6 +54,16 @@ export async function POST(req: Request) {
   const access = await verifyAlbumOwnerAccess(slug, token)
   if (!access.ok) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
+  }
+
+  // Per-album rate limit: 10 batches per 10 minutes prevents a runaway loop or
+  // a compromised token from deleting an entire album in seconds.
+  const rl = await checkRateLimit(`bulk_delete:${access.album.id}`, 10 * 60, 10)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many delete requests. Please wait a few minutes.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(rl.retryAfterSeconds) } },
+    )
   }
 
   const admin = createAdminClient()

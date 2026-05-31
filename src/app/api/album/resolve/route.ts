@@ -3,9 +3,10 @@ import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { MediaDisplayFilter, MediaHoverEffect, MobileGridColumns, SlideshowAnimation } from '@/lib/media-display'
 import { getUserTierById } from '@/lib/subscriptions'
-import { cookieNameForAlbum, deriveAccessToken } from '@/lib/album-password'
+import { cookieNameForAlbum, verifyAccessToken } from '@/lib/album-password'
 import { uploadCapsForTier } from '@/lib/media'
 import { timingSafeEqual } from '@/lib/timing-safe'
+import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -47,7 +48,7 @@ type FullAlbum = {
   password_hash: string | null
 }
 
-type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at'>
+type PublicAlbum = Omit<FullAlbum, 'user_id' | 'password_hash' | 'retired_at' | 'cover_photo_id'> & { cover_photo_id: string | null }
 
 const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, reveal_at, created_at, retired_at, user_id, password_hash'
 const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, password_hash'
@@ -58,6 +59,15 @@ export async function GET(req: Request) {
   const ownerToken = (searchParams.get('owner_token') ?? '').trim()
   if (!slug) {
     return NextResponse.json({ error: 'Missing slug' }, { status: 400, headers: NO_STORE })
+  }
+
+  // Prevent slug enumeration: limits resolution attempts per IP.
+  const rl = await checkRateLimit(clientIpKey(req, 'album_resolve'), 60, 30)
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please slow down.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(rl.retryAfterSeconds) } },
+    )
   }
 
   const admin = createAdminClient()
@@ -113,8 +123,7 @@ async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awa
   if (passwordEnforced && album.password_hash) {
     const cookieStore = await cookies()
     const cookie = cookieStore.get(cookieNameForAlbum(album.id))?.value
-    const expectedToken = await deriveAccessToken(album.password_hash, album.id)
-    const verified = cookie != null && timingSafeEqual(cookie, expectedToken)
+    const verified = cookie != null && await verifyAccessToken(cookie, album.password_hash, album.id)
 
     if (!verified) {
       return NextResponse.json(
@@ -140,7 +149,11 @@ async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awa
     )
   }
 
-  const safe: PublicAlbum & { password_protected: boolean; upload_caps: typeof upload_caps; reveal_at: string | null; face_finder_enabled: boolean } = {
+  // password_protected is intentionally omitted from the public response.
+  // Guests who need to know a password is required will receive { password_required: true }
+  // from the gate above. Exposing the boolean to all callers leaks album security posture
+  // and aids enumeration of which albums are worth attacking.
+  const safe: PublicAlbum & { upload_caps: typeof upload_caps; reveal_at: string | null; face_finder_enabled: boolean } = {
     id: album.id,
     slug: album.slug,
     custom_slug: album.custom_slug,
@@ -158,7 +171,6 @@ async function buildResponse(album: FullAlbum, ownerToken = '', cachedTier?: Awa
     reveal_at: album.reveal_at ?? null,
     face_finder_enabled: ownerTier === 'studio',
     created_at: album.created_at,
-    password_protected: !!album.password_hash,
     upload_caps,
   }
   // Fire-and-forget — the response shouldn't wait on this best-effort DB write.

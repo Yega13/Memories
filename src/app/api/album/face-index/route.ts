@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { ensureCollection, indexPhotoFaces } from '@/lib/rekognition'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
+import { verifyAlbumOwnerAccess } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -72,8 +73,15 @@ async function resolveAlbum(slug: string) {
 
 // GET: returns all unindexed photo IDs so the client can distribute work across concurrent workers
 export async function GET(req: Request) {
-  const slug = new URL(req.url).searchParams.get('slug')?.trim() ?? ''
+  const url = new URL(req.url)
+  const slug = url.searchParams.get('slug')?.trim() ?? ''
+  const ownerToken = url.searchParams.get('owner_token')?.trim() ?? ''
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
+
+  // Face indexing triggers AWS Rekognition calls that cost money; require ownership proof.
+  if (!ownerToken) return NextResponse.json({ error: 'Owner token required' }, { status: 401, headers: NO_STORE })
+  const access = await verifyAlbumOwnerAccess(slug, ownerToken)
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
 
   const { admin, album } = await resolveAlbum(slug)
   if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
@@ -113,7 +121,7 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
-  let body: { slug?: string; photoId?: string }
+  let body: { slug?: string; photoId?: string; owner_token?: string }
   try {
     body = await req.json()
   } catch {
@@ -121,7 +129,13 @@ async function handlePost(req: Request) {
   }
 
   const slug = String(body.slug ?? '').trim()
+  const ownerToken = String(body.owner_token ?? '').trim()
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
+
+  // Require ownership: face indexing triggers paid Rekognition API calls.
+  if (!ownerToken) return NextResponse.json({ error: 'Owner token required' }, { status: 401, headers: NO_STORE })
+  const access = await verifyAlbumOwnerAccess(slug, ownerToken)
+  if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
 
   const ip = req.headers.get('cf-connecting-ip') ?? req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
   if (isRateLimited(ip)) {

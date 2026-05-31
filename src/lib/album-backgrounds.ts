@@ -71,7 +71,19 @@ export function canonicalStockAlbumBackgroundValue(value: string): string | null
   return STOCK_ALBUM_BACKGROUND_STORAGE_BY_VALUE.get(value) ?? null
 }
 
+// Only URLs from these origins are allowed as custom album backgrounds.
+// An arbitrary user-stored 'image:...' value is injected into a CSS url() expression,
+// so we must reject anything not in this allowlist to prevent CSS injection.
+const ALLOWED_BG_URL_PREFIXES = [
+  'https://images.pexels.com/',
+  'https://zleajzevvhugkwlqlolt.supabase.co/storage/v1/object/public/',
+]
+
 export function resolveAlbumBackgroundImage(value: string): string {
   if (value.startsWith('stock:')) return STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value) ?? ''
-  return STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value) ?? value.slice('image:'.length)
+  const mapped = STOCK_ALBUM_BACKGROUND_SRC_BY_VALUE.get(value)
+  if (mapped) return mapped
+  const raw = value.slice('image:'.length)
+  if (!ALLOWED_BG_URL_PREFIXES.some((prefix) => raw.startsWith(prefix))) return ''
+  return raw
 }
