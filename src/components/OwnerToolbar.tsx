@@ -480,9 +480,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     if (photos.length === 0) return
     setZipping(true)
     setZipProgress({ done: 0, total: photos.length, failed: 0 })
-    const [{ default: JSZip }, { saveAs }] = await Promise.all([import('jszip'), import('file-saver')])
-    const zip = new JSZip()
-    const folder = zip.folder(album.title) || zip
+    const { saveAs } = await import('file-saver')
 
     // Build all jobs up-front so a concurrent worker pool can drain them. Storing the resolved
     // blob (or skip flag) at the photo's index keeps zip entries in album order without locking
@@ -568,23 +566,45 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       return
     }
 
-    // Add to zip in album order (collected is racey because of the worker pool).
-    collected
-      .filter((r): r is FileJob => !('skipped' in r))
-      .sort((a, b) => a.index - b.index)
-      .forEach(({ name, blob }) => folder.file(name, blob))
-
-    // Switch to generating phase so the banner shows progress instead of freezing.
+    // Convert blobs to transferable ArrayBuffers, then hand them off to a Web Worker.
+    // JSZip's generateAsync blocks the main thread while assembling the final Uint8Array
+    // (happens after the onUpdate hits 100%, before the Promise resolves). For 159 photos
+    // that's 10-30 s of frozen UI on mobile. The Worker runs on a separate thread so the
+    // page stays responsive while the zip is built.
     setZipProgress({ done, total: photos.length, failed, generating: true })
 
-    // STORE skips DEFLATE — images and videos are already compressed, so re-compressing just
-    // wastes CPU and causes the browser to appear frozen for large albums.
-    const content = await zip.generateAsync(
-      { type: 'blob', compression: 'STORE' },
-      (meta) => {
-        setZipProgress({ done: Math.round((meta.percent / 100) * photos.length), total: photos.length, failed, generating: true })
-      },
+    const sortedFiles = collected
+      .filter((r): r is FileJob => !('skipped' in r))
+      .sort((a, b) => a.index - b.index)
+
+    const fileBuffers = await Promise.all(
+      sortedFiles.map(async ({ name, blob }) => ({ name, buffer: await blob.arrayBuffer() })),
     )
+
+    const content = await new Promise<Blob>((resolve, reject) => {
+      const zipWorker = new Worker(new URL('./zip.worker.ts', import.meta.url))
+      zipWorker.onmessage = (e: MessageEvent<{ type: string; percent?: number; blob?: Blob }>) => {
+        if (e.data.type === 'progress' && e.data.percent != null) {
+          setZipProgress({
+            done: Math.round((e.data.percent / 100) * photos.length),
+            total: photos.length,
+            failed,
+            generating: true,
+          })
+        } else if (e.data.type === 'complete' && e.data.blob) {
+          zipWorker.terminate()
+          resolve(e.data.blob)
+        }
+      }
+      zipWorker.onerror = (err) => {
+        zipWorker.terminate()
+        reject(new Error(err.message))
+      }
+      // Transfer ownership (zero-copy) so the ArrayBuffers move to the worker thread
+      // and the main thread can free them immediately.
+      zipWorker.postMessage({ files: fileBuffers, title: album.title }, fileBuffers.map((f) => f.buffer))
+    })
+
     saveAs(content, `${album.title}.zip`)
     setZipping(false)
     showAppToast(failed > 0 ? `Download ready. ${failed} file${failed === 1 ? '' : 's'} skipped.` : 'Download ready.')
