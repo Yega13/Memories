@@ -73,8 +73,8 @@ function centralDirRecord(nameBytes: Uint8Array, crc: number, size: number, loca
   u32le(v, 0, 0x02014b50)
   u16le(v, 4, 20)                      // version made by
   u16le(v, 6, 20)                      // version needed
-  u16le(v, 8, 0x0008)                  // bit 3
-  // compression = 0
+  u16le(v, 8, 0)                       // bit flag = 0 (must match local file header)
+  // compression = 0 (STORE), mod time/date = 0
   u32le(v, 16, crc)
   u32le(v, 20, size)
   u32le(v, 24, size)

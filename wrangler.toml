@@ -2,9 +2,8 @@
 main = "worker.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
-
-[limits]
-cpu_ms = 30000
+# [limits]
+# cpu_ms = 30000  ← uncomment after upgrading to Workers Paid plan ($5/month)
 
 [assets]
 directory = ".open-next/assets"
