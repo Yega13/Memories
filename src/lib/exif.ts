@@ -5,9 +5,27 @@
 //   APP3..APP15 (0xE3..0xEF) — IPTC, Photoshop info, Adobe metadata, vendor extras
 //   COM (0xFE) — JPEG comments
 // Keeps APP0 (JFIF) for compatibility. Structural markers (DQT, DHT, SOFn, SOS, EOI) are kept.
+// Minimal 18-byte JFIF APP0 marker (SOI already written separately).
+// Some browsers/decoders require either APP0 (JFIF) or APP1 (EXIF) to be present.
+// HEIC→JPEG conversions often have only APP1; after stripping it the JPEG has neither,
+// causing createImageBitmap to throw "unreadable image file" on re-upload.
+const JFIF_APP0 = new Uint8Array([
+  0xff, 0xe0, 0x00, 0x10, // APP0 marker + length = 16
+  0x4a, 0x46, 0x49, 0x46, 0x00, // "JFIF\0"
+  0x01, 0x01, // version 1.1
+  0x00,       // units = 0 (no units)
+  0x00, 0x01, // Xdensity = 1
+  0x00, 0x01, // Ydensity = 1
+  0x00, 0x00, // no thumbnail
+])
+
 export function stripExifFromJpeg(bytes: Uint8Array): Uint8Array {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return bytes
+  // Check whether original has APP0 (JFIF/JFXX). If not, inject one after stripping so
+  // the output always has a valid introductory marker.
+  const hasApp0 = bytes.length > 3 && bytes[2] === 0xff && bytes[3] === 0xe0
   const keep: Uint8Array[] = [bytes.subarray(0, 2)]
+  if (!hasApp0) keep.push(JFIF_APP0)
   let i = 2
   while (i < bytes.length - 1) {
     while (i < bytes.length - 1 && bytes[i] === 0xff && bytes[i + 1] === 0xff) i++

@@ -80,7 +80,8 @@ async function* photoEntries(photos: PhotoInfo[], folder: string) {
       yield {
         name: buildFilename(photos[i], i, folder),
         input: res,
-        lastModified: new Date(0),
+        // lastModified omitted — client-zip defaults to current date.
+        // new Date(0) = 1970 underflows the MS-DOS date format (min 1980) → wraps to 2098.
       }
     }
 

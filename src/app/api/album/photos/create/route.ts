@@ -52,20 +52,34 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  const { data: album } = await admin
+  // Select without guest_uploads_enabled — the column was added in migration
+  // 20260531_albums_guest_uploads_enabled.sql which may not be applied on all envs yet.
+  // guest_uploads_enabled defaults to true per migration; check it separately below.
+  const { data: album, error: albumErr } = await admin
     .from('albums')
-    .select('id, user_id, title, slug, custom_slug, last_notification_at, guest_uploads_enabled')
+    .select('id, user_id, title, slug, custom_slug, last_notification_at')
     .eq('id', albumId)
-    .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null; last_notification_at: string | null; guest_uploads_enabled: boolean | null }>()
+    .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null; last_notification_at: string | null }>()
+  if (albumErr) {
+    console.error('[photos/create] album lookup error:', albumErr.message, 'albumId:', albumId)
+    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  }
   if (!album) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
 
-  // guest_uploads_enabled defaults to true (see migration 20260531_albums_guest_uploads_enabled.sql).
-  // null treated as true for rows predating the migration.
-  if (album.guest_uploads_enabled === false) {
-    return NextResponse.json({ error: 'Guest uploads are not enabled for this album' }, { status: 403, headers: NO_STORE })
-  }
+  // Check guest_uploads_enabled separately so a missing column (migration not yet applied)
+  // degrades gracefully to the default (true) instead of blocking all uploads.
+  try {
+    const { data: gRow } = await admin
+      .from('albums')
+      .select('guest_uploads_enabled')
+      .eq('id', albumId)
+      .maybeSingle<{ guest_uploads_enabled: boolean | null }>()
+    if (gRow?.guest_uploads_enabled === false) {
+      return NextResponse.json({ error: 'Guest uploads are not enabled for this album' }, { status: 403, headers: NO_STORE })
+    }
+  } catch { /* column may not exist yet — default is true */ }
 
   // Per-album rate limit: caps total uploads regardless of how many IPs are attacking.
   // Prevents a distributed attacker from flooding one album from many IPs.
