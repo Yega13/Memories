@@ -30,5 +30,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ isOwner: false }, { headers: NO_STORE })
   }
 
-  return NextResponse.json({ isOwner: true }, { headers: NO_STORE })
+  return NextResponse.json({ isOwner: true, ownerToken: access.album.owner_token }, { headers: NO_STORE })
 }

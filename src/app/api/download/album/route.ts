@@ -52,25 +52,18 @@ function updateCrc32(crc: number, data: Uint8Array): number {
 function u16le(view: DataView, offset: number, value: number) { view.setUint16(offset, value, true) }
 function u32le(view: DataView, offset: number, value: number) { view.setUint32(offset, value, true) }
 
-function localFileHeader(nameBytes: Uint8Array): Uint8Array {
+function localFileHeader(nameBytes: Uint8Array, crc: number, size: number): Uint8Array {
   const buf = new Uint8Array(30 + nameBytes.length)
   const v = new DataView(buf.buffer)
   u32le(v, 0, 0x04034b50)   // signature
   u16le(v, 4, 20)            // version needed (2.0)
-  u16le(v, 6, 0x0008)        // bit 3: data descriptor follows
-  // compression = 0 (STORE), mod time/date = 0, crc/sizes = 0 (in data descriptor)
+  // bit flag = 0: CRC and sizes are known and written in header (no data descriptor)
+  // compression = 0 (STORE), mod time/date = 0
+  u32le(v, 14, crc)
+  u32le(v, 18, size)         // compressed size
+  u32le(v, 22, size)         // uncompressed size
   u16le(v, 26, nameBytes.length)
   buf.set(nameBytes, 30)
-  return buf
-}
-
-function dataDescriptor(crc: number, size: number): Uint8Array {
-  const buf = new Uint8Array(16)
-  const v = new DataView(buf.buffer)
-  u32le(v, 0, 0x08074b50)  // optional signature
-  u32le(v, 4, crc)
-  u32le(v, 8, size)
-  u32le(v, 12, size)        // same for STORE
   return buf
 }
 
@@ -146,10 +139,10 @@ async function fillZip(
     const nameBytes = new TextEncoder().encode(buildFilename(photo, i, folder))
     const localOffset = offset
 
-    const header = localFileHeader(nameBytes)
-    await writer.write(header)
-    offset += header.length
-
+    // Buffer this photo so we know CRC32 and size before writing the local file header.
+    // ZIP requires these values in the header (bit 3 / data descriptor is not supported
+    // by iOS Files app and many Android zip tools).
+    const chunks: Uint8Array[] = []
     let crc = 0xFFFFFFFF
     let fileSize = 0
 
@@ -162,19 +155,24 @@ async function fillZip(
           if (done) break
           crc = updateCrc32(crc, value)
           fileSize += value.length
-          await writer.write(value)
-          offset += value.length
+          chunks.push(value)
         }
       }
     } catch (err) {
       if ((err as { name?: string }).name === 'AbortError') break
-      // Network error on one photo — write an empty entry so the zip is still valid.
+      // Network error on one photo — include a zero-byte entry so the zip is still valid.
     }
 
     crc = (crc ^ 0xFFFFFFFF) >>> 0
-    const desc = dataDescriptor(crc, fileSize)
-    await writer.write(desc)
-    offset += desc.length
+
+    const header = localFileHeader(nameBytes, crc, fileSize)
+    await writer.write(header)
+    offset += header.length
+
+    for (const chunk of chunks) {
+      await writer.write(chunk)
+      offset += chunk.length
+    }
 
     entries.push({ nameBytes, crc, size: fileSize, offset: localOffset })
   }

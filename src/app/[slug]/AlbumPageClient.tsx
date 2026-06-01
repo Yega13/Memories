@@ -74,11 +74,8 @@ export default function AlbumPageClient() {
     const hashOwnerToken = new URLSearchParams(hash).get('owner')
     const nextOwnerToken = hashOwnerToken || queryOwnerToken
 
-    const lsKey = `hush_owner_${slug}`
-
     if (!nextOwnerToken) {
-      const stored = (() => { try { return localStorage.getItem(lsKey) } catch { return null } })()
-      if (ownerTokenSlugRef.current !== slug) setOwnerToken(stored)
+      if (ownerTokenSlugRef.current !== slug) setOwnerToken(null)
       ownerTokenSlugRef.current = slug
       setOwnerTokenReady(true)
       return () => { cancelled = true }
@@ -86,7 +83,6 @@ export default function AlbumPageClient() {
 
     ownerTokenSlugRef.current = slug
     setOwnerToken(nextOwnerToken)
-    try { localStorage.setItem(lsKey, nextOwnerToken) } catch {}
     setOwnerTokenReady(false)
 
     void (async () => {
@@ -164,9 +160,10 @@ export default function AlbumPageClient() {
 
     if (authRes) {
       try {
-        const result = (await authRes.json()) as { isOwner?: boolean; accessDenied?: boolean }
+        const result = (await authRes.json()) as { isOwner?: boolean; accessDenied?: boolean; ownerToken?: string }
         setIsOwner(!!result.isOwner)
         if (result.accessDenied) setOwnerAccessDenied(true)
+        if (result.ownerToken) setOwnerToken(result.ownerToken)
 
         if (result.isOwner) {
           // Tier fetch is non-blocking — UI renders before it resolves.
