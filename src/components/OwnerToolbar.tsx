@@ -68,6 +68,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showShare, setShowShare] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
+  const [zipping, setZipping] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -474,14 +475,36 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  function downloadZip() {
-    if (photos.length === 0) return
-    const a = document.createElement('a')
-    a.href = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+  async function downloadZip() {
+    if (photos.length === 0 || zipping) return
+    setZipping(true)
     showAppToast('Preparing download…')
+    try {
+      const res = await fetch(`/api/download/album?slug=${encodeURIComponent(album.slug)}`)
+      if (!res.ok) {
+        showAppToast(
+          res.status >= 500
+            ? 'Album too large for the current plan. Upgrade to Workers Paid to download all photos.'
+            : `Download failed (${res.status}).`,
+          'error',
+        )
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${album.title}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showAppToast('Download ready.')
+    } catch {
+      showAppToast('Download failed. Please try again.', 'error')
+    } finally {
+      setZipping(false)
+    }
   }
 
   async function deleteAlbum() {
@@ -986,10 +1009,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ background: '#254F22', color: '#FDFAF5' }}
                       onClick={downloadZip}
-                      disabled={photos.length === 0}
+                      disabled={zipping || photos.length === 0}
                     >
                       <Download className="w-4 h-4" />
-                      {`Download all (${photos.length})`}
+                      {zipping ? 'Preparing…' : `Download all (${photos.length})`}
                     </button>
                   </div>
                 )}
