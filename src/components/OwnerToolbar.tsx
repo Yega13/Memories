@@ -69,6 +69,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -478,23 +479,49 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   async function downloadZip() {
     if (photos.length === 0 || zipping) return
     setZipping(true)
-    showAppToast('Preparing download…')
+    setZipProgress({ done: 0, total: photos.length })
+
     try {
-      const res = await fetch(`/api/download/album?slug=${encodeURIComponent(album.slug)}`)
-      if (!res.ok) {
-        showAppToast(
-          res.status >= 500
-            ? 'Album too large for the current plan. Upgrade to Workers Paid to download all photos.'
-            : `Download failed (${res.status}).`,
-          'error',
-        )
-        return
-      }
-      const blob = await res.blob()
+      const worker = new Worker(
+        new URL('./owner-toolbar/zip.worker.ts', import.meta.url),
+      )
+
+      const folder = (album.title ?? album.slug).replace(/[/\\:<>"|?*]/g, '-').slice(0, 100)
+      const photoData = photos.map((p) => ({
+        url: p.url,
+        storage_path: p.storage_path,
+        storage_backend: p.storage_backend,
+        media_type: p.media_type,
+        mirror_url: p.mirror_url ?? null,
+        mirror_path: p.mirror_path ?? null,
+        caption: p.caption ?? null,
+      }))
+
+      const chunks: ArrayBuffer[] = []
+
+      await new Promise<void>((resolve, reject) => {
+        worker.onmessage = (e: MessageEvent) => {
+          if (e.data.type === 'chunk') {
+            chunks.push(e.data.data as ArrayBuffer)
+          } else if (e.data.type === 'progress') {
+            setZipProgress({ done: e.data.done as number, total: e.data.total as number })
+          } else if (e.data.type === 'done') {
+            resolve()
+          } else if (e.data.type === 'error') {
+            reject(new Error(e.data.message as string))
+          }
+        }
+        worker.onerror = (err) => reject(new Error(err.message))
+        worker.postMessage({ photos: photoData, folder })
+      })
+
+      worker.terminate()
+
+      const blob = new Blob(chunks, { type: 'application/zip' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${album.title}.zip`
+      a.download = `${album.title ?? album.slug}.zip`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -504,6 +531,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       showAppToast('Download failed. Please try again.', 'error')
     } finally {
       setZipping(false)
+      setZipProgress(null)
     }
   }
 
@@ -1012,7 +1040,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       disabled={zipping || photos.length === 0}
                     >
                       <Download className="w-4 h-4" />
-                      {zipping ? 'Preparing…' : `Download all (${photos.length})`}
+                      {zipProgress
+                        ? `Downloading ${zipProgress.done}/${zipProgress.total}…`
+                        : zipping
+                          ? 'Starting…'
+                          : `Download all (${photos.length})`}
                     </button>
                   </div>
                 )}
