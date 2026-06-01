@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server'
-import archiver from 'archiver'
-import { PassThrough } from 'stream'
-import type { Readable } from 'stream'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
+// Only fetch from our own storage hosts to prevent SSRF.
 const ALLOWED_HOSTS = new Set([
   'zleajzevvhugkwlqlolt.supabase.co',
   'videos.hushare.space',
@@ -30,6 +28,82 @@ type PhotoRow = {
   caption: string | null
 }
 
+// ─── CRC-32 (pure JS) ─────────────────────────────────────────────────────────
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256)
+  for (let i = 0; i < 256; i++) {
+    let c = i
+    for (let j = 0; j < 8; j++) c = (c & 1) ? 0xEDB88320 ^ (c >>> 1) : c >>> 1
+    t[i] = c
+  }
+  return t
+})()
+
+function updateCrc32(crc: number, data: Uint8Array): number {
+  for (let i = 0; i < data.length; i++) {
+    crc = CRC_TABLE[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8)
+  }
+  return crc
+}
+
+// ─── ZIP helpers (STORE + data descriptor) ────────────────────────────────────
+
+function u16le(view: DataView, offset: number, value: number) { view.setUint16(offset, value, true) }
+function u32le(view: DataView, offset: number, value: number) { view.setUint32(offset, value, true) }
+
+function localFileHeader(nameBytes: Uint8Array): Uint8Array {
+  const buf = new Uint8Array(30 + nameBytes.length)
+  const v = new DataView(buf.buffer)
+  u32le(v, 0, 0x04034b50)   // signature
+  u16le(v, 4, 20)            // version needed (2.0)
+  u16le(v, 6, 0x0008)        // bit 3: data descriptor follows
+  // compression = 0 (STORE), mod time/date = 0, crc/sizes = 0 (in data descriptor)
+  u16le(v, 26, nameBytes.length)
+  buf.set(nameBytes, 30)
+  return buf
+}
+
+function dataDescriptor(crc: number, size: number): Uint8Array {
+  const buf = new Uint8Array(16)
+  const v = new DataView(buf.buffer)
+  u32le(v, 0, 0x08074b50)  // optional signature
+  u32le(v, 4, crc)
+  u32le(v, 8, size)
+  u32le(v, 12, size)        // same for STORE
+  return buf
+}
+
+function centralDirRecord(nameBytes: Uint8Array, crc: number, size: number, localHeaderOffset: number): Uint8Array {
+  const buf = new Uint8Array(46 + nameBytes.length)
+  const v = new DataView(buf.buffer)
+  u32le(v, 0, 0x02014b50)
+  u16le(v, 4, 20)                      // version made by
+  u16le(v, 6, 20)                      // version needed
+  u16le(v, 8, 0x0008)                  // bit 3
+  // compression = 0
+  u32le(v, 16, crc)
+  u32le(v, 20, size)
+  u32le(v, 24, size)
+  u16le(v, 28, nameBytes.length)
+  u32le(v, 42, localHeaderOffset)
+  buf.set(nameBytes, 46)
+  return buf
+}
+
+function endOfCentralDir(entryCount: number, cdSize: number, cdOffset: number): Uint8Array {
+  const buf = new Uint8Array(22)
+  const v = new DataView(buf.buffer)
+  u32le(v, 0, 0x06054b50)
+  u16le(v, 8, entryCount)
+  u16le(v, 10, entryCount)
+  u32le(v, 12, cdSize)
+  u32le(v, 16, cdOffset)
+  return buf
+}
+
+// ─── URL / filename helpers ───────────────────────────────────────────────────
+
 function resolveDownloadUrl(photo: PhotoRow): string | null {
   const url = photo.storage_backend === 'stream' ? photo.mirror_url : photo.url
   if (!url) return null
@@ -42,24 +116,83 @@ function resolveDownloadUrl(photo: PhotoRow): string | null {
 }
 
 function buildFilename(photo: PhotoRow, index: number, folder: string): string {
-  const storagePath =
-    photo.storage_backend === 'stream'
-      ? (photo.mirror_path ?? photo.storage_path ?? '')
-      : (photo.storage_path ?? '')
-  const rawUrl =
-    photo.storage_backend === 'stream'
-      ? (photo.mirror_url ?? photo.url ?? '')
-      : (photo.url ?? '')
-  const ext =
-    storagePath.split('.').pop()?.toLowerCase() ||
-    rawUrl.split('.').pop()?.split('?')[0]?.toLowerCase() ||
-    (photo.media_type === 'video' ? 'mp4' : 'jpg')
+  const sp = photo.storage_backend === 'stream' ? (photo.mirror_path ?? photo.storage_path ?? '') : (photo.storage_path ?? '')
+  const rawUrl = photo.storage_backend === 'stream' ? (photo.mirror_url ?? photo.url ?? '') : (photo.url ?? '')
+  const ext = sp.split('.').pop()?.toLowerCase() || rawUrl.split('.').pop()?.split('?')[0]?.toLowerCase() || (photo.media_type === 'video' ? 'mp4' : 'jpg')
   const prefix = photo.media_type === 'video' ? 'video' : 'photo'
   const base = photo.caption
     ? `${index + 1}-${photo.caption.replace(/[^a-z0-9]/gi, '_').slice(0, 50)}.${ext}`
     : `${prefix}-${index + 1}.${ext}`
   return `${folder}/${base}`
 }
+
+// ─── Main fill loop ───────────────────────────────────────────────────────────
+
+async function fillZip(
+  writer: WritableStreamDefaultWriter<Uint8Array>,
+  photos: PhotoRow[],
+  folder: string,
+  signal: AbortSignal,
+): Promise<void> {
+  const entries: { nameBytes: Uint8Array; crc: number; size: number; offset: number }[] = []
+  let offset = 0
+
+  for (let i = 0; i < photos.length; i++) {
+    if (signal.aborted) break
+    const photo = photos[i]
+    const url = resolveDownloadUrl(photo)
+    if (!url) continue
+
+    const nameBytes = new TextEncoder().encode(buildFilename(photo, i, folder))
+    const localOffset = offset
+
+    const header = localFileHeader(nameBytes)
+    await writer.write(header)
+    offset += header.length
+
+    let crc = 0xFFFFFFFF
+    let fileSize = 0
+
+    try {
+      const res = await fetch(url, { signal })
+      if (res.ok && res.body) {
+        const reader = res.body.getReader()
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          crc = updateCrc32(crc, value)
+          fileSize += value.length
+          await writer.write(value)
+          offset += value.length
+        }
+      }
+    } catch (err) {
+      if ((err as { name?: string }).name === 'AbortError') break
+      // Network error on one photo — write an empty entry so the zip is still valid.
+    }
+
+    crc = (crc ^ 0xFFFFFFFF) >>> 0
+    const desc = dataDescriptor(crc, fileSize)
+    await writer.write(desc)
+    offset += desc.length
+
+    entries.push({ nameBytes, crc, size: fileSize, offset: localOffset })
+  }
+
+  // Central directory
+  const cdOffset = offset
+  let cdSize = 0
+  for (const e of entries) {
+    const rec = centralDirRecord(e.nameBytes, e.crc, e.size, e.offset)
+    await writer.write(rec)
+    cdSize += rec.length
+  }
+
+  await writer.write(endOfCentralDir(entries.length, cdSize, cdOffset))
+  await writer.close()
+}
+
+// ─── Route handler ────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
   const slug = new URL(req.url).searchParams.get('slug')?.trim() ?? ''
@@ -87,68 +220,14 @@ export async function GET(req: Request) {
   const albumTitle = access.album.title ?? slug
   const folder = albumTitle.replace(/[/\\:<>"|?*]/g, '-').slice(0, 100)
 
-  const zip = archiver('zip', { store: true })
-  zip.on('error', (err) => console.error('[download/album] archiver error:', err.message))
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
+  const writer = writable.getWriter()
 
-  // Wrap the Node.js Readable (archiver) as a Web ReadableStream so it can be
-  // returned directly as the Response body and streamed to the browser.
-  const responseBody = new ReadableStream<Uint8Array>({
-    start(ctrl) {
-      const r = zip as unknown as Readable
-      r.on('data', (chunk: Buffer) => ctrl.enqueue(new Uint8Array(chunk)))
-      r.on('end', () => ctrl.close())
-      r.on('error', (e) => ctrl.error(e))
-    },
-    cancel() {
-      zip.abort()
-    },
+  void fillZip(writer, photos as PhotoRow[], folder, req.signal).catch(async (err) => {
+    try { await writer.abort(err) } catch {}
   })
 
-  // Fetch photos one at a time and pipe into the zip stream. Runs in the background
-  // after the Response is returned so the browser starts receiving zip headers immediately.
-  void (async () => {
-    for (let i = 0; i < photos.length; i++) {
-      const photo = photos[i] as PhotoRow
-      const url = resolveDownloadUrl(photo)
-      if (!url) continue
-
-      // PassThrough bridges the fetch ReadableStream with archiver's entry queue.
-      const pass = new PassThrough()
-      // Register the end-of-entry promise BEFORE we start fetching, to avoid
-      // a race where the stream could close before we await it.
-      const entryDone = new Promise<void>((resolve) => {
-        pass.once('end', resolve)
-        pass.once('error', resolve)
-      })
-
-      zip.append(pass, { name: buildFilename(photo, i, folder) })
-
-      try {
-        const res = await fetch(url, { signal: req.signal })
-        if (res.ok && res.body) {
-          const reader = res.body.getReader()
-          for (;;) {
-            const { done, value } = await reader.read()
-            if (done) break
-            pass.write(Buffer.from(value))
-          }
-        }
-      } catch (err) {
-        if ((err as { name?: string }).name === 'AbortError') {
-          zip.abort()
-          return
-        }
-        // Network error on a single photo — close its entry and continue.
-      } finally {
-        pass.end()
-      }
-
-      await entryDone
-    }
-    zip.finalize()
-  })()
-
-  return new Response(responseBody, {
+  return new Response(readable, {
     headers: {
       'Content-Type': 'application/zip',
       'Content-Disposition': `attachment; filename="${encodeURIComponent(albumTitle)}.zip"`,

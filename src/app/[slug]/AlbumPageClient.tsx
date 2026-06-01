@@ -74,8 +74,11 @@ export default function AlbumPageClient() {
     const hashOwnerToken = new URLSearchParams(hash).get('owner')
     const nextOwnerToken = hashOwnerToken || queryOwnerToken
 
+    const lsKey = `hush_owner_${slug}`
+
     if (!nextOwnerToken) {
-      if (ownerTokenSlugRef.current !== slug) setOwnerToken(null)
+      const stored = (() => { try { return localStorage.getItem(lsKey) } catch { return null } })()
+      if (ownerTokenSlugRef.current !== slug) setOwnerToken(stored)
       ownerTokenSlugRef.current = slug
       setOwnerTokenReady(true)
       return () => { cancelled = true }
@@ -83,6 +86,7 @@ export default function AlbumPageClient() {
 
     ownerTokenSlugRef.current = slug
     setOwnerToken(nextOwnerToken)
+    try { localStorage.setItem(lsKey, nextOwnerToken) } catch {}
     setOwnerTokenReady(false)
 
     void (async () => {
