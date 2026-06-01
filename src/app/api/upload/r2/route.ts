@@ -99,12 +99,17 @@ export async function POST(req: Request) {
   // Tier-aware per-album cap. The owner's tier dictates the cap for every
   // uploader on the album. Anonymous albums (no user_id) get the free cap.
   const admin = createAdminClient()
-  const { data: ownerRow } = await admin
+  const { data: ownerRow, error: ownerErr } = await admin
     .from('albums')
     .select('user_id')
     .eq('id', albumId)
     .maybeSingle<{ user_id: string | null }>()
+  if (ownerErr) {
+    console.error('[upload/r2] album lookup error:', ownerErr.message, 'albumId:', albumId)
+    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  }
   if (!ownerRow) {
+    console.error('[upload/r2] album not found for id:', albumId)
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
   const ownerTier = await getUserTierById(ownerRow.user_id)

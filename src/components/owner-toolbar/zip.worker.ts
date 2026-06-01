@@ -38,35 +38,54 @@ function buildFilename(photo: PhotoInfo, index: number, folder: string): string 
   return `${folder}/${base}`
 }
 
+async function fetchPhoto(rawUrl: string): Promise<Response | null> {
+  try {
+    const r = await fetch(rawUrl)
+    if (r.ok) return r
+  } catch { /* try proxy */ }
+  try {
+    const r = await fetch(`/api/download/photo?url=${encodeURIComponent(rawUrl)}&name=photo`)
+    if (r.ok) return r
+  } catch { /* skip */ }
+  return null
+}
+
+// Yields entries in album order, but starts up to PREFETCH_COUNT fetches ahead so
+// network bandwidth is kept busy while client-zip processes the previous entry.
 async function* photoEntries(photos: PhotoInfo[], folder: string) {
-  for (let i = 0; i < photos.length; i++) {
-    const photo = photos[i]
-    const rawUrl = resolveDownloadUrl(photo)
-    if (!rawUrl) continue
+  const PREFETCH = 4
+  // Queue of [Promise<Response|null>, photoIndex] — always PREFETCH items ahead of what we yield
+  const queue: Array<Promise<{ res: Response | null; i: number }>> = []
 
-    // Try direct fetch first (fastest). Fall back to our proxy for CORS-blocked origins.
-    let res: Response | null = null
-    try {
-      const r = await fetch(rawUrl)
-      if (r.ok) res = r
-    } catch { /* try proxy */ }
+  let nextFetch = 0
+  let yielded = 0
 
-    if (!res) {
-      try {
-        const r = await fetch(`/api/download/photo?url=${encodeURIComponent(rawUrl)}&name=photo`)
-        if (r.ok) res = r
-      } catch { /* skip */ }
+  function enqueue() {
+    while (queue.length < PREFETCH && nextFetch < photos.length) {
+      const i = nextFetch++
+      const rawUrl = resolveDownloadUrl(photos[i])
+      queue.push(
+        (rawUrl ? fetchPhoto(rawUrl) : Promise.resolve(null)).then((res) => ({ res, i })),
+      )
+    }
+  }
+
+  enqueue()
+
+  while (queue.length > 0) {
+    const { res, i } = await queue.shift()!
+    enqueue() // start next fetch as soon as we dequeue one
+
+    if (res) {
+      yield {
+        name: buildFilename(photos[i], i, folder),
+        input: res,
+        lastModified: new Date(0),
+      }
     }
 
-    if (!res) continue
-
-    yield {
-      name: buildFilename(photo, i, folder),
-      input: res,
-      lastModified: new Date(0),
-    }
-
-    self.postMessage({ type: 'progress', done: i + 1, total: photos.length })
+    yielded++
+    self.postMessage({ type: 'progress', done: yielded, total: photos.length })
   }
 }
 

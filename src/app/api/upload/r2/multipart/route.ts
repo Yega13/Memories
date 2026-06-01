@@ -55,9 +55,16 @@ export async function POST(req: Request) {
 
     // Tier-aware size cap
     const admin = createAdminClient()
-    const { data: ownerRow } = await admin
+    const { data: ownerRow, error: ownerErr } = await admin
       .from('albums').select('user_id').eq('id', albumId).maybeSingle<{ user_id: string | null }>()
-    if (!ownerRow) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+    if (ownerErr) {
+      console.error('[upload/r2/multipart] album lookup error:', ownerErr.message, 'albumId:', albumId)
+      return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+    }
+    if (!ownerRow) {
+      console.error('[upload/r2/multipart] album not found for id:', albumId)
+      return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+    }
     const tier = await getUserTierById(ownerRow.user_id)
     const caps = uploadCapsForTier(tier)
     if (totalSize > caps.video) {
