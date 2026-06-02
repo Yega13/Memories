@@ -585,21 +585,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       })
 
       // Fetch directly from Supabase / R2 — no server proxy.
-      // For Supabase images, try the CDN-side image transform first: Supabase resizes
-      // to 2000px at quality 85 on their edge, reducing ~4 MB originals to ~1–1.5 MB
-      // each (no CPU work in the browser, 3× faster to download, no CORS issues).
-      // Falls back to the raw URL if transforms are unavailable on the current plan.
+      // Uses the exact stored file: already a valid JPEG (UploadZone strips EXIF and
+      // validates via createImageBitmap before storing), so re-uploading always works.
       async function fetchBlob(url: string): Promise<Blob> {
-        if (url.includes('/storage/v1/object/public/')) {
-          const base = url.split('?')[0]
-          const transformUrl = base.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + '?width=2000&quality=85&format=origin'
-          try {
-            const res = await fetch(transformUrl)
-            if (res.ok) return res.blob()
-          } catch {
-            // Transform not available (CORS / plan) — fall through to raw URL
-          }
-        }
         const res = await fetch(url)
         if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
         return res.blob()
