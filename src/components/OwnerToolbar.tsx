@@ -584,19 +584,20 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         return { sourceUrl, filename }
       })
 
-      // Fetch a file. Tries the origin URL directly first — Supabase public buckets ship
-      // CORS headers so this is the fastest path. Falls back to the server proxy only when
-      // the direct fetch fails (e.g. R2 without CORS configured).
+      // Fetch a file.
+      // JPEGs always go through the server proxy — it strips EXIF (embedded previews,
+      // GPS, maker notes) which reduces typical smartphone JPEGs by 2–4×.
+      // Videos and non-JPEG images fetch directly — faster, no EXIF to strip.
       async function fetchBlob(url: string, filename: string): Promise<Blob> {
-        let directRes: Response | null = null
-        try {
-          directRes = await fetch(url)
-        } catch {
-          // CORS preflight rejected or network error — fall through to proxy
-        }
-        if (directRes?.ok) return directRes.blob()
+        const lower = url.split('?')[0].toLowerCase()
+        const isJpeg = lower.endsWith('.jpg') || lower.endsWith('.jpeg')
 
-        // Proxy fallback: the server fetches on our behalf, bypassing CORS.
+        if (!isJpeg) {
+          let directRes: Response | null = null
+          try { directRes = await fetch(url) } catch { /* fall through to proxy */ }
+          if (directRes?.ok) return directRes.blob()
+        }
+
         const proxyUrl = `/api/download/photo?url=${encodeURIComponent(url)}&name=${encodeURIComponent(filename)}`
         const proxyRes = await fetch(proxyUrl)
         if (!proxyRes.ok) throw new Error(`Download failed (HTTP ${proxyRes.status})`)
