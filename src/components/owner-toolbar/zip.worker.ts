@@ -1,7 +1,7 @@
-// Runs off the main thread. Fetches photos one at a time, streams them through
-// client-zip, and transfers each zip chunk back to the main thread as it's ready.
-// This avoids both: (1) blocking the browser main thread with CRC32 computation,
-// and (2) holding all photo data in memory at once.
+// Runs off the main thread. Fetches photos, fully buffers their bodies in parallel,
+// then streams them through client-zip, transferring each zip chunk back to the main
+// thread as it's ready. Bodies are downloaded PREFETCH-at-a-time so client-zip only
+// waits on CPU (CRC32), never on the network.
 
 import { downloadZip } from 'client-zip'
 
@@ -38,24 +38,30 @@ function buildFilename(photo: PhotoInfo, index: number, folder: string): string 
   return `${folder}/${base}`
 }
 
-async function fetchPhoto(rawUrl: string): Promise<Response | null> {
-  try {
-    const r = await fetch(rawUrl)
-    if (r.ok) return r
-  } catch { /* try proxy */ }
-  try {
-    const r = await fetch(`/api/download/photo?url=${encodeURIComponent(rawUrl)}&name=photo`)
-    if (r.ok) return r
-  } catch { /* skip */ }
-  return null
+// Fetches and fully buffers a photo body so callers get a Uint8Array, not a stream.
+// This lets PREFETCH concurrent bodies download in true parallel — client-zip then
+// only does CPU work (CRC32) with no network stall between entries.
+async function fetchBuffer(rawUrl: string): Promise<Uint8Array | null> {
+  const tryFetch = async (url: string) => {
+    try {
+      const r = await fetch(url)
+      if (r.ok) return new Uint8Array(await r.arrayBuffer())
+    } catch { /* fall through */ }
+    return null
+  }
+  return (
+    (await tryFetch(rawUrl)) ??
+    (await tryFetch(`/api/download/photo?url=${encodeURIComponent(rawUrl)}&name=photo`))
+  )
 }
 
-// Yields entries in album order, but starts up to PREFETCH_COUNT fetches ahead so
-// network bandwidth is kept busy while client-zip processes the previous entry.
+// Yields entries in album order. Up to PREFETCH body downloads run concurrently so
+// client-zip never stalls on the network — it only waits on CPU (CRC32 + framing).
 async function* photoEntries(photos: PhotoInfo[], folder: string) {
-  const PREFETCH = 4
-  // Queue of [Promise<Response|null>, photoIndex] — always PREFETCH items ahead of what we yield
-  const queue: Array<Promise<{ res: Response | null; i: number }>> = []
+  // Each in-flight slot downloads a full body into a Uint8Array before client-zip
+  // asks for it. Memory cost: PREFETCH × avg_photo_size (e.g. 8 × 5 MB = 40 MB).
+  const PREFETCH = 8
+  const queue: Array<Promise<{ buf: Uint8Array | null; i: number }>> = []
 
   let nextFetch = 0
   let yielded = 0
@@ -65,7 +71,7 @@ async function* photoEntries(photos: PhotoInfo[], folder: string) {
       const i = nextFetch++
       const rawUrl = resolveDownloadUrl(photos[i])
       queue.push(
-        (rawUrl ? fetchPhoto(rawUrl) : Promise.resolve(null)).then((res) => ({ res, i })),
+        (rawUrl ? fetchBuffer(rawUrl) : Promise.resolve(null)).then((buf) => ({ buf, i })),
       )
     }
   }
@@ -73,13 +79,13 @@ async function* photoEntries(photos: PhotoInfo[], folder: string) {
   enqueue()
 
   while (queue.length > 0) {
-    const { res, i } = await queue.shift()!
+    const { buf, i } = await queue.shift()!
     enqueue() // start next fetch as soon as we dequeue one
 
-    if (res) {
+    if (buf) {
       yield {
         name: buildFilename(photos[i], i, folder),
-        input: res,
+        input: buf,
         // lastModified omitted — client-zip defaults to current date.
         // new Date(0) = 1970 underflows the MS-DOS date format (min 1980) → wraps to 2098.
       }
