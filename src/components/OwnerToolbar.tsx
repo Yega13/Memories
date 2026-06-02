@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Loader2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, MAX_SLIDESHOW_INTERVAL_MS, MIN_SLIDESHOW_INTERVAL_MS, MEDIA_DISPLAY_FILTER_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, SLIDESHOW_ANIMATION_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
 import type { Tier } from '@/lib/subscriptions'
@@ -69,7 +69,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
-  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -476,35 +475,22 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  async function downloadZip() {
+  function downloadZip() {
     if (photos.length === 0 || zipping) return
     setZipping(true)
-    setZipProgress({ done: 0, total: photos.length })
 
-    try {
-      const res = await fetch(`/api/download/album?slug=${encodeURIComponent(album.slug)}`)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(body.error ?? 'Download failed')
-      }
+    // Direct browser download — the browser streams the ZIP to disk without
+    // buffering it in JS memory, so this works on mobile regardless of album size.
+    const a = document.createElement('a')
+    a.href = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
+    a.download = `${album.title ?? album.slug}.zip`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
 
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${album.title ?? album.slug}.zip`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      showAppToast('Download ready.')
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Download failed. Please try again.'
-      showAppToast(msg, 'error')
-    } finally {
-      setZipping(false)
-      setZipProgress(null)
-    }
+    // The download runs independently in the browser; reset the button after a
+    // short delay so the spinner doesn't stay on forever.
+    setTimeout(() => setZipping(false), 1500)
   }
 
   async function deleteAlbum() {
@@ -1011,12 +997,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       onClick={downloadZip}
                       disabled={zipping || photos.length === 0}
                     >
-                      <Download className="w-4 h-4" />
-                      {zipProgress
-                        ? `Generating zip (${zipProgress.total} files)…`
-                        : zipping
-                          ? 'Starting…'
-                          : `Download all (${photos.length})`}
+                      {zipping
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : <Download className="w-4 h-4" />}
+                      {zipping ? 'Preparing download…' : `Download all (${photos.length})`}
                     </button>
                   </div>
                 )}
