@@ -9,9 +9,9 @@ import UploadZone from '@/components/UploadZone'
 import PhotoGrid from '@/components/PhotoGrid'
 import AlbumHeader from '@/components/AlbumHeader'
 import OwnerToolbar from '@/components/OwnerToolbar'
+import GuestActionsBar from '@/components/GuestActionsBar'
 import PasswordGate from '@/components/PasswordGate'
 import RevealCountdown from '@/components/RevealCountdown'
-import GuestShareButton from '@/components/GuestShareButton'
 import FaceFinder from '@/components/FaceFinder'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
@@ -421,29 +421,17 @@ export default function AlbumPageClient() {
         />
       )}
 
-      <div className="hush-container pb-12">
+      {!effectiveIsOwner && (
+        <GuestActionsBar
+          album={album}
+          photos={photos}
+          shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/${album.custom_slug ?? album.slug}`}
+          onOpenSlideshow={() => setSlideshowRequestId((id) => id + 1)}
+          onOpenFaceFinder={() => setShowFaceFinder(true)}
+        />
+      )}
 
-        {!effectiveIsOwner && (
-          <div className="flex items-center justify-end gap-2 mb-4 mt-5">
-            {album.face_finder_enabled && photos.some((p) => p.media_type !== 'video') && (
-              <button
-                onClick={() => setShowFaceFinder(true)}
-                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold transition hover:opacity-80"
-                style={{ color: '#254F22', background: 'rgba(253,250,245,0.84)', border: '1px solid #DDD5C5' }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                  <path d="M11 8a3 3 0 1 0 0 6"/>
-                </svg>
-                Find my photos
-              </button>
-            )}
-            <GuestShareButton
-              shareUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/${album.custom_slug ?? album.slug}`}
-              albumTitle={album.title}
-            />
-          </div>
-        )}
+      <div className="hush-container pb-12">
 
         {showFaceFinder && (
           <ErrorBoundary>

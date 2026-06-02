@@ -146,6 +146,20 @@ export async function addAlbumToCollectionRequest(
   return { ok: true, slug: body.collection.slug }
 }
 
+export async function saveGuestDownloadsRequest(
+  slug: string,
+  allowGuestDownloads: boolean,
+): Promise<{ ok: true; allow_guest_downloads: boolean } | { ok: false; error: string }> {
+  const res = await fetch('/api/album/guest-downloads', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug, allow_guest_downloads: allowGuestDownloads }),
+  })
+  const body = await jsonBody<{ error?: string; allow_guest_downloads?: boolean }>(res)
+  if (!res.ok) return { ok: false, error: body.error ?? `Save failed (${res.status})` }
+  return { ok: true, allow_guest_downloads: body.allow_guest_downloads ?? allowGuestDownloads }
+}
+
 export async function deleteAlbumRequest(
   slug: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

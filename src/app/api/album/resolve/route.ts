@@ -47,11 +47,12 @@ type FullAlbum = {
   user_id: string | null
   owner_token: string
   password_hash: string | null
+  allow_guest_downloads: boolean
 }
 
 type PublicAlbum = Omit<FullAlbum, 'user_id' | 'owner_token' | 'password_hash' | 'retired_at' | 'cover_photo_id'> & { cover_photo_id: string | null }
 
-const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, reveal_at, created_at, retired_at, user_id, owner_token, password_hash'
+const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, reveal_at, created_at, retired_at, user_id, owner_token, password_hash, allow_guest_downloads'
 const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, owner_token, password_hash'
 
 export async function GET(req: Request) {
@@ -173,6 +174,7 @@ async function buildResponse(album: FullAlbum, cachedTier?: Awaited<ReturnType<t
     cover_photo_id: album.cover_photo_id ?? null,
     reveal_at: album.reveal_at ?? null,
     face_finder_enabled: ownerTier === 'studio',
+    allow_guest_downloads: album.allow_guest_downloads ?? true,
     created_at: album.created_at,
     upload_caps,
   }
@@ -196,7 +198,7 @@ async function lookupAlbum(
 
   // Backward compatibility for deployments where the app has updated before
   // the media display migration has reached Supabase.
-  if (error.message.includes('media_radius') || error.message.includes('video_autoplay') || error.message.includes('media_filter') || error.message.includes('media_hover') || error.message.includes('mobile_grid_columns') || error.message.includes('slideshow_interval_ms') || error.message.includes('slideshow_animation')) {
+  if (error.message.includes('media_radius') || error.message.includes('video_autoplay') || error.message.includes('media_filter') || error.message.includes('media_hover') || error.message.includes('mobile_grid_columns') || error.message.includes('slideshow_interval_ms') || error.message.includes('slideshow_animation') || error.message.includes('allow_guest_downloads')) {
     console.warn('[album/resolve] media settings columns missing; using legacy album projection')
     const { data: legacy, error: legacyError } = await admin
       .from('albums')
@@ -207,7 +209,7 @@ async function lookupAlbum(
       console.error('[album/resolve] legacy album lookup failed:', legacyError.message)
       return null
     }
-    return legacy ? { ...legacy, media_radius: 12, video_autoplay: true, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade', reveal_at: null } : null
+    return legacy ? { ...legacy, media_radius: 12, video_autoplay: true, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade', reveal_at: null, allow_guest_downloads: true } : null
   }
 
   console.error('[album/resolve] album lookup failed:', error.message)

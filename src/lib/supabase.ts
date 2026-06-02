@@ -32,6 +32,7 @@ export type Album = {
   password_protected: boolean
   upload_caps: UploadCaps
   face_finder_enabled: boolean
+  allow_guest_downloads: boolean
   created_at: string
 }
 

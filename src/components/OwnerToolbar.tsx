@@ -1,8 +1,7 @@
 'use client'
 
-import JSZip from 'jszip'
-import { saveAs } from 'file-saver'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useZipDownload } from '@/components/photo-grid/useZipDownload'
 import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Loader2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, MAX_SLIDESHOW_INTERVAL_MS, MIN_SLIDESHOW_INTERVAL_MS, MEDIA_DISPLAY_FILTER_OPTIONS, MOBILE_GRID_COLUMN_OPTIONS, SLIDESHOW_ANIMATION_OPTIONS, type MediaDisplayFilter, type MediaHoverEffect, type MobileGridColumns, type SlideshowAnimation } from '@/lib/media-display'
@@ -18,6 +17,7 @@ import {
   fetchCollections,
   saveBackgroundRequest,
   saveCustomUrlRequest,
+  saveGuestDownloadsRequest,
   saveMediaSettingsRequest,
   savePasswordRequest,
   uploadBackgroundRequest,
@@ -113,9 +113,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [revealError, setRevealError] = useState('')
   const [revealSaved, setRevealSaved] = useState(false)
 
-  const [zipping, setZipping] = useState(false)
-  const [zipDone, setZipDone] = useState(0)
-  const [zipTotal, setZipTotal] = useState(0)
+  const { zipping, zipDone, zipTotal, downloadZip } = useZipDownload(photos, album.title ?? '')
+
+  const [allowGuestDownloads, setAllowGuestDownloads] = useState(album.allow_guest_downloads !== false)
 
   const shareRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -181,6 +181,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setMediaRadiusEditing(false)
       setSavedMediaRadius(album.media_radius ?? 12)
       setVideoAutoplay(!!album.video_autoplay)
+      setAllowGuestDownloads(album.allow_guest_downloads !== false)
       setMediaFilter(album.media_filter ?? 'none')
       setSavedMediaFilter(album.media_filter ?? 'none')
       setMediaHover(album.media_hover ?? 'none')
@@ -195,7 +196,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       setDeleteConfirm(false)
       setDeleteError('')
     }
-  }, [album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.mobile_grid_columns, album.reveal_at, album.slideshow_animation, album.slideshow_interval_ms, album.video_autoplay, showSettings])
+  }, [album.allow_guest_downloads, album.custom_slug, album.media_filter, album.media_hover, album.media_radius, album.mobile_grid_columns, album.reveal_at, album.slideshow_animation, album.slideshow_interval_ms, album.video_autoplay, showSettings])
 
   useEffect(() => {
     if (showSettings && canUseCollections) void loadCollections()
@@ -547,79 +548,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       showAppToast(message, 'error')
     } finally {
       setRevealSaving(false)
-    }
-  }
-
-  async function downloadZip() {
-    // Stream-backed videos are only downloadable once the R2 mirror is ready.
-    const downloadable = photos.filter(
-      (p) => p.storage_backend !== 'stream' || !!p.mirror_url,
-    )
-    if (downloadable.length === 0) {
-      showAppToast('No downloadable files in this album yet.', 'error')
-      return
-    }
-
-    setZipping(true)
-    setZipDone(0)
-    setZipTotal(downloadable.length)
-
-    try {
-      const zip = new JSZip()
-      const usedNames = new Set<string>()
-
-      // Build stable filenames before any network activity.
-      const tasks = downloadable.map((photo) => {
-        const sourceUrl = photo.storage_backend === 'stream' ? photo.mirror_url! : photo.url
-        const rawExt = sourceUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? ''
-        const ext = rawExt.length <= 5 && rawExt.length > 0 ? rawExt : (photo.media_type === 'video' ? 'mp4' : 'jpg')
-        const base =
-          photo.caption?.trim() ||
-          (photo.created_at ? new Date(photo.created_at).toISOString().slice(0, 10) : '') ||
-          (photo.media_type === 'video' ? 'video' : 'photo')
-        let filename = `${base}.${ext}`
-        let counter = 1
-        while (usedNames.has(filename)) filename = `${base}_${counter++}.${ext}`
-        usedNames.add(filename)
-        return { sourceUrl, filename }
-      })
-
-      // Fetch directly from Supabase / R2 — no server proxy.
-      // Uses the exact stored file: already a valid JPEG (UploadZone strips EXIF and
-      // validates via createImageBitmap before storing), so re-uploading always works.
-      async function fetchBlob(url: string): Promise<Blob> {
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
-        return res.blob()
-      }
-
-      const CONCURRENCY = 16
-      let nextIdx = 0
-
-      async function runWorker() {
-        while (true) {
-          const idx = nextIdx++
-          if (idx >= tasks.length) break
-          const { sourceUrl, filename } = tasks[idx]
-          const blob = await fetchBlob(sourceUrl)
-          // STORE compression — photos are already compressed, re-compressing wastes CPU.
-          zip.file(filename, blob, { compression: 'STORE' })
-          setZipDone((d) => d + 1)
-        }
-      }
-
-      await Promise.all(Array.from({ length: CONCURRENCY }, runWorker))
-
-      const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' })
-      const albumTitle = (album.title?.trim() || 'album').replace(/[/\\:*?"<>|]/g, '_')
-      saveAs(zipBlob, `${albumTitle}.zip`)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Download failed'
-      showAppToast(msg, 'error')
-    } finally {
-      setZipping(false)
-      setZipDone(0)
-      setZipTotal(0)
     }
   }
 
@@ -1071,6 +999,29 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                         </>
                       )}
                     </button>
+
+                    <label className="flex items-center justify-between gap-4 rounded-xl px-3 py-3" style={{ background: '#FDFAF5', border: '1px solid #DDD5C5', cursor: 'pointer' }}>
+                      <span>
+                        <span className="block text-sm font-semibold" style={{ color: '#254F22' }}>Allow guest downloads</span>
+                        <span className="block text-xs" style={{ color: '#7C5C3E' }}>Guests can download all photos as a zip file.</span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={allowGuestDownloads}
+                        onChange={async (e) => {
+                          const next = e.target.checked
+                          setAllowGuestDownloads(next)
+                          onAlbumUpdated({ allow_guest_downloads: next })
+                          const result = await saveGuestDownloadsRequest(album.slug, next)
+                          if (!result.ok) {
+                            showAppToast(result.error, 'error')
+                            setAllowGuestDownloads(!next)
+                            onAlbumUpdated({ allow_guest_downloads: !next })
+                          }
+                        }}
+                        className="h-4 w-4"
+                      />
+                    </label>
                   </div>
                 )}
               </section>
