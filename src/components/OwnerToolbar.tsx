@@ -2,6 +2,7 @@
 
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
+import { stripExifFromJpeg } from '@/lib/exif'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Loader2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -584,24 +585,29 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         return { sourceUrl, filename }
       })
 
-      // Fetch a file.
-      // JPEGs always go through the server proxy — it strips EXIF (embedded previews,
-      // GPS, maker notes) which reduces typical smartphone JPEGs by 2–4×.
-      // Videos and non-JPEG images fetch directly — faster, no EXIF to strip.
-      async function fetchBlob(url: string, filename: string): Promise<Blob> {
+      // Fetch a file directly from Supabase / R2 — no server proxy.
+      // Supabase public buckets ship Access-Control-Allow-Origin: * so cross-origin
+      // browser fetches work without any server involvement.
+      // EXIF is stripped in-browser so the zip size matches the proxy-stripped version.
+      async function fetchBlob(url: string): Promise<Blob> {
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
+
         const lower = url.split('?')[0].toLowerCase()
         const isJpeg = lower.endsWith('.jpg') || lower.endsWith('.jpeg')
-
-        if (!isJpeg) {
-          let directRes: Response | null = null
-          try { directRes = await fetch(url) } catch { /* fall through to proxy */ }
-          if (directRes?.ok) return directRes.blob()
+        if (isJpeg) {
+          const buf = await res.arrayBuffer()
+          try {
+            const stripped = stripExifFromJpeg(new Uint8Array(buf))
+            const out = new ArrayBuffer(stripped.byteLength)
+            new Uint8Array(out).set(stripped)
+            return new Blob([out], { type: 'image/jpeg' })
+          } catch {
+            return new Blob([buf], { type: 'image/jpeg' })
+          }
         }
 
-        const proxyUrl = `/api/download/photo?url=${encodeURIComponent(url)}&name=${encodeURIComponent(filename)}`
-        const proxyRes = await fetch(proxyUrl)
-        if (!proxyRes.ok) throw new Error(`Download failed (HTTP ${proxyRes.status})`)
-        return proxyRes.blob()
+        return res.blob()
       }
 
       const CONCURRENCY = 6
@@ -612,7 +618,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
           const idx = nextIdx++
           if (idx >= tasks.length) break
           const { sourceUrl, filename } = tasks[idx]
-          const blob = await fetchBlob(sourceUrl, filename)
+          const blob = await fetchBlob(sourceUrl)
           // STORE compression — photos are already compressed, re-compressing wastes CPU.
           zip.file(filename, blob, { compression: 'STORE' })
           setZipDone((d) => d + 1)
