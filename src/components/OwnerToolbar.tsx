@@ -592,7 +592,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       async function fetchBlob(url: string): Promise<Blob> {
         if (url.includes('/storage/v1/object/public/')) {
           const base = url.split('?')[0]
-          const transformUrl = base.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + '?width=2000&quality=85'
+          const transformUrl = base.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + '?width=2000&quality=85&format=origin'
           try {
             const res = await fetch(transformUrl)
             if (res.ok) return res.blob()
