@@ -68,24 +68,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showShare, setShowShare] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
-  const [zipping, setZipping] = useState(false)
-  const [zipWordIdx, setZipWordIdx] = useState(0)
-  const [zipDots, setZipDots] = useState('')
-
-  const ZIP_WORDS = ['Downloading', 'Packaging', 'Compressing', 'Saving']
-  useEffect(() => {
-    if (!zipping) { setZipWordIdx(0); setZipDots(''); return }
-    // Cycle the action word every 1.4 s
-    const wordId = setInterval(() => setZipWordIdx(n => (n + 1) % ZIP_WORDS.length), 1400)
-    // Build up dots 0→3 every 380 ms for a "typewriter" feel
-    let count = 0
-    const dotsId = setInterval(() => {
-      count = (count + 1) % 4
-      setZipDots('·'.repeat(count)) // · middle dot
-    }, 380)
-    return () => { clearInterval(wordId); clearInterval(dotsId) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zipping])
 
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
@@ -128,6 +110,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [revealSaving, setRevealSaving] = useState(false)
   const [revealError, setRevealError] = useState('')
   const [revealSaved, setRevealSaved] = useState(false)
+
+  const [zipping, setZipping] = useState(false)
+  const [zipDone, setZipDone] = useState(0)
+  const [zipTotal, setZipTotal] = useState(0)
 
   const shareRef = useRef<HTMLDivElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
@@ -493,53 +479,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  async function downloadZip() {
-    if (photos.length === 0 || zipping) return
-    setZipping(true)
-
-    const url = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
-    const filename = `${album.title ?? album.slug}.zip`
-
-    // Use fetch() streaming for both desktop and mobile.
-    // <a href> native download was tried for mobile but iOS Safari consistently
-    // cuts streaming responses at ~23% of the file without a Content-Length header.
-    // Buffering in JS memory (fetch + blob) avoids that iOS limitation.
-    try {
-      const res = await fetch(url)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(body.error ?? 'Download failed')
-      }
-
-      const chunks: Uint8Array<ArrayBuffer>[] = []
-      if (res.body) {
-        const reader = res.body.getReader()
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          chunks.push(value as Uint8Array<ArrayBuffer>)
-        }
-      } else {
-        chunks.push(new Uint8Array(await res.arrayBuffer()) as Uint8Array<ArrayBuffer>)
-      }
-
-      const blob = new Blob(chunks, { type: 'application/zip' })
-      const objectUrl = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = objectUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(objectUrl)
-      showAppToast('Download ready.')
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Download failed. Please try again.'
-      showAppToast(msg, 'error')
-    } finally {
-      setZipping(false)
-    }
-  }
 
   async function deleteAlbum() {
     if (!deleteConfirm) {
@@ -606,6 +545,77 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       showAppToast(message, 'error')
     } finally {
       setRevealSaving(false)
+    }
+  }
+
+  async function downloadZip() {
+    // Stream-backed videos are only downloadable once the R2 mirror is ready.
+    const downloadable = photos.filter(
+      (p) => p.storage_backend !== 'stream' || !!p.mirror_url,
+    )
+    if (downloadable.length === 0) {
+      showAppToast('No downloadable files in this album yet.', 'error')
+      return
+    }
+
+    setZipping(true)
+    setZipDone(0)
+    setZipTotal(downloadable.length)
+
+    try {
+      const JSZip = (await import('jszip')).default
+      const { saveAs } = await import('file-saver')
+      const zip = new JSZip()
+      const usedNames = new Set<string>()
+
+      // Build stable filenames up front so duplicates are resolved before any fetching.
+      const tasks = downloadable.map((photo) => {
+        const sourceUrl = photo.storage_backend === 'stream' ? photo.mirror_url! : photo.url
+        const rawExt = sourceUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? ''
+        const ext = rawExt.length <= 5 && rawExt.length > 0 ? rawExt : (photo.media_type === 'video' ? 'mp4' : 'jpg')
+        const base =
+          photo.caption?.trim() ||
+          (photo.created_at ? new Date(photo.created_at).toISOString().slice(0, 10) : '') ||
+          (photo.media_type === 'video' ? 'video' : 'photo')
+        let filename = `${base}.${ext}`
+        let counter = 1
+        while (usedNames.has(filename)) filename = `${base}_${counter++}.${ext}`
+        usedNames.add(filename)
+        return { sourceUrl, filename }
+      })
+
+      // Fetch each file through the existing download proxy to avoid CORS.
+      // Each call is a separate fetch to the route — no Cloudflare subrequest stacking.
+      const CONCURRENCY = 6
+      let nextIdx = 0
+
+      async function runWorker() {
+        while (true) {
+          const idx = nextIdx++
+          if (idx >= tasks.length) break
+          const { sourceUrl, filename } = tasks[idx]
+          const proxyUrl = `/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=${encodeURIComponent(filename)}`
+          const res = await fetch(proxyUrl)
+          if (!res.ok) throw new Error(`Could not download ${filename} (${res.status})`)
+          const blob = await res.blob()
+          // STORE = no re-compression; photos/videos are already compressed.
+          zip.file(filename, blob, { compression: 'STORE' })
+          setZipDone((d) => d + 1)
+        }
+      }
+
+      await Promise.all(Array.from({ length: CONCURRENCY }, runWorker))
+
+      const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' })
+      const albumTitle = (album.title?.trim() || 'album').replace(/[/\\:*?"<>|]/g, '_')
+      saveAs(zipBlob, `${albumTitle}.zip`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Download failed'
+      showAppToast(msg, 'error')
+    } finally {
+      setZipping(false)
+      setZipDone(0)
+      setZipTotal(0)
     }
   }
 
@@ -1040,19 +1050,22 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                 {openSection === 'files' && (
                   <div className="px-4 pb-4 space-y-3">
                     <button
-                      className="hush-press w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 font-semibold rounded-xl py-3 text-sm transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                       style={{ background: '#254F22', color: '#FDFAF5' }}
-                      onClick={downloadZip}
                       disabled={zipping || photos.length === 0}
+                      onClick={downloadZip}
                     >
-                      {zipping
-                        ? <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
-                        : <Download className="w-4 h-4 flex-shrink-0" />}
-                      <span className={zipping ? 'animate-pulse' : ''}>
-                        {zipping
-                          ? `${ZIP_WORDS[zipWordIdx]}${zipDots}`
-                          : `Download all (${photos.length})`}
-                      </span>
+                      {zipping ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          {zipDone < zipTotal ? `Downloading ${zipDone} / ${zipTotal}…` : 'Creating zip…'}
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          Download all ({photos.length})
+                        </>
+                      )}
                     </button>
                   </div>
                 )}
