@@ -69,7 +69,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
-  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null)
+  const [zipWordIdx, setZipWordIdx] = useState(0)
+
+  const ZIP_WORDS = ['Downloading', 'Packaging', 'Compressing', 'Saving']
+  useEffect(() => {
+    if (!zipping) { setZipWordIdx(0); return }
+    const id = setInterval(() => setZipWordIdx(n => (n + 1) % ZIP_WORDS.length), 1200)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zipping])
+
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -479,7 +488,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   async function downloadZip() {
     if (photos.length === 0 || zipping) return
     setZipping(true)
-    setZipProgress(null)
 
     const url = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
     const filename = `${album.title ?? album.slug}.zip`
@@ -495,8 +503,12 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
-      showAppToast('Download started — check your downloads folder.')
-      setZipping(false)
+      // Keep the animation visible for 2 s so the user sees feedback,
+      // then reset — the actual download runs in the browser's download manager.
+      setTimeout(() => {
+        setZipping(false)
+        showAppToast('Download started.')
+      }, 2000)
       return
     }
 
@@ -507,9 +519,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         throw new Error(body.error ?? 'Download failed')
       }
 
-      // X-Photo-Count lets us show "downloading N photos" while the stream runs.
-      const photoCount = parseInt(res.headers.get('x-photo-count') ?? '0', 10) || photos.length
-      setZipProgress({ done: 0, total: photoCount })
+      // X-Photo-Count is available if needed for future progress display.
+      // Currently we use the cycling word animation for feedback.
 
       const chunks: Uint8Array<ArrayBuffer>[] = []
       if (res.body) {
@@ -538,7 +549,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       showAppToast(msg, 'error')
     } finally {
       setZipping(false)
-      setZipProgress(null)
     }
   }
 
@@ -1049,11 +1059,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       {zipping
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <Download className="w-4 h-4" />}
-                      {zipProgress
-                        ? `Downloading ${zipProgress.total} photos…`
-                        : zipping
-                          ? `Preparing download…`
-                          : `Download all (${photos.length})`}
+                      {zipping ? `${ZIP_WORDS[zipWordIdx]}…` : `Download all (${photos.length})`}
                     </button>
                   </div>
                 )}
