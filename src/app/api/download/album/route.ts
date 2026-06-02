@@ -124,21 +124,17 @@ function buildFilename(photo: PhotoRow, index: number, folder: string): string {
 // Fully buffers a photo body so CRC32 and size are known before writing the ZIP
 // local file header (data descriptor / bit-3 format is not supported by iOS Files
 // app or most Android zip tools).
-// Each fetch gets its own 30-second timeout so a single slow photo can't stall the
-// whole zip, but we deliberately do NOT propagate req.signal here — Cloudflare fires
-// that signal as a soft timeout on slow connections before the client actually
-// disconnects, which was causing partial zips on mobile.
+// No signal is passed — we deliberately do NOT propagate req.signal because Cloudflare
+// fires it as a soft timeout on slow connections before the client actually disconnects,
+// which caused partial zips on mobile. Cloudflare's own outbound fetch timeout (5 min)
+// guards against hangs; the zip Worker has maxDuration = 300 s as an outer bound.
 async function fetchBuffer(url: string): Promise<Uint8Array | null> {
-  const ac = new AbortController()
-  const timer = setTimeout(() => ac.abort(), 30_000)
   try {
-    const res = await fetch(url, { signal: ac.signal })
+    const res = await fetch(url)
     if (!res.ok) return null
     return new Uint8Array(await res.arrayBuffer())
   } catch {
     return null
-  } finally {
-    clearTimeout(timer)
   }
 }
 

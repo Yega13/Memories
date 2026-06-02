@@ -69,6 +69,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
+  const [zipMB, setZipMB] = useState<number | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -475,22 +476,66 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     }
   }
 
-  function downloadZip() {
+  async function downloadZip() {
     if (photos.length === 0 || zipping) return
     setZipping(true)
+    setZipMB(null)
 
-    // Direct browser download — the browser streams the ZIP to disk without
-    // buffering it in JS memory, so this works on mobile regardless of album size.
-    const a = document.createElement('a')
-    a.href = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
-    a.download = `${album.title ?? album.slug}.zip`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    const url = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
+    const filename = `${album.title ?? album.slug}.zip`
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0
 
-    // The download runs independently in the browser; reset the button after a
-    // short delay so the spinner doesn't stay on forever.
-    setTimeout(() => setZipping(false), 1500)
+    if (!isMobile) {
+      // Desktop: let the browser handle the download natively — streams to disk,
+      // zero JS memory, browser shows its own byte-level progress bar.
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => setZipping(false), 1500)
+      return
+    }
+
+    // Mobile: fetch + stream reader so we can show live MB progress and save the
+    // blob ourselves (iOS Safari handles <a href> streaming unreliably).
+    try {
+      const res = await fetch(url)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(body.error ?? 'Download failed')
+      }
+
+      const reader = res.body!.getReader()
+      const chunks: Uint8Array<ArrayBuffer>[] = []
+      let received = 0
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+        received += value.length
+        setZipMB(Math.round(received / 1024 / 1024))
+      }
+
+      const blob = new Blob(chunks, { type: 'application/zip' })
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(objectUrl)
+      showAppToast('Download ready.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Download failed. Please try again.'
+      showAppToast(msg, 'error')
+    } finally {
+      setZipping(false)
+      setZipMB(null)
+    }
   }
 
   async function deleteAlbum() {
@@ -1000,7 +1045,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       {zipping
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <Download className="w-4 h-4" />}
-                      {zipping ? 'Preparing download…' : `Download all (${photos.length})`}
+                      {zipMB !== null
+                        ? `Downloading ${zipMB} MB…`
+                        : zipping
+                          ? 'Preparing download…'
+                          : `Download all (${photos.length})`}
                     </button>
                   </div>
                 )}
