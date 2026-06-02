@@ -2,6 +2,7 @@
 
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
+import { stripExifFromJpeg } from '@/lib/exif'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Loader2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -569,15 +570,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       const usedNames = new Set<string>()
 
       // Build stable filenames before any network activity.
-      // Images use thumb_url (web-quality, ~1–2 MB) for fast download; falls back to
-      // full-res url when no thumbnail exists. Videos use the R2 mirror.
       const tasks = downloadable.map((photo) => {
-        let sourceUrl: string
-        if (photo.storage_backend === 'stream') {
-          sourceUrl = photo.mirror_url!
-        } else {
-          sourceUrl = (photo.media_type === 'image' ? (photo.thumb_url ?? photo.url) : photo.url)
-        }
+        const sourceUrl = photo.storage_backend === 'stream' ? photo.mirror_url! : photo.url
         const rawExt = sourceUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? ''
         const ext = rawExt.length <= 5 && rawExt.length > 0 ? rawExt : (photo.media_type === 'video' ? 'mp4' : 'jpg')
         const base =
@@ -594,10 +588,24 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       // Fetch directly from Supabase / R2 — no server proxy.
       // Supabase public buckets ship Access-Control-Allow-Origin: * so cross-origin
       // browser fetches work without any server involvement.
+      // JPEG detection uses the response Content-Type header (same method the proxy uses),
+      // not the URL path — Supabase URLs may omit the file extension.
       async function fetchBlob(url: string): Promise<Blob> {
         const res = await fetch(url)
         if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
-        return res.blob()
+        const buf = await res.arrayBuffer()
+        const contentType = res.headers.get('content-type') ?? ''
+        if (/jpe?g/i.test(contentType)) {
+          try {
+            const stripped = stripExifFromJpeg(new Uint8Array(buf))
+            const out = new ArrayBuffer(stripped.byteLength)
+            new Uint8Array(out).set(stripped)
+            return new Blob([out], { type: 'image/jpeg' })
+          } catch {
+            return new Blob([buf], { type: 'image/jpeg' })
+          }
+        }
+        return new Blob([buf])
       }
 
       const CONCURRENCY = 6
