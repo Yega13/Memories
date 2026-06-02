@@ -1,5 +1,7 @@
 'use client'
 
+import JSZip from 'jszip'
+import { saveAs } from 'file-saver'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Loader2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -563,12 +565,10 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setZipTotal(downloadable.length)
 
     try {
-      const JSZip = (await import('jszip')).default
-      const { saveAs } = await import('file-saver')
       const zip = new JSZip()
       const usedNames = new Set<string>()
 
-      // Build stable filenames up front so duplicates are resolved before any fetching.
+      // Build stable filenames before any network activity.
       const tasks = downloadable.map((photo) => {
         const sourceUrl = photo.storage_backend === 'stream' ? photo.mirror_url! : photo.url
         const rawExt = sourceUrl.split('?')[0].split('.').pop()?.toLowerCase() ?? ''
@@ -584,8 +584,25 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         return { sourceUrl, filename }
       })
 
-      // Fetch each file through the existing download proxy to avoid CORS.
-      // Each call is a separate fetch to the route — no Cloudflare subrequest stacking.
+      // Fetch a file. Tries the origin URL directly first — Supabase public buckets ship
+      // CORS headers so this is the fastest path. Falls back to the server proxy only when
+      // the direct fetch fails (e.g. R2 without CORS configured).
+      async function fetchBlob(url: string, filename: string): Promise<Blob> {
+        let directRes: Response | null = null
+        try {
+          directRes = await fetch(url)
+        } catch {
+          // CORS preflight rejected or network error — fall through to proxy
+        }
+        if (directRes?.ok) return directRes.blob()
+
+        // Proxy fallback: the server fetches on our behalf, bypassing CORS.
+        const proxyUrl = `/api/download/photo?url=${encodeURIComponent(url)}&name=${encodeURIComponent(filename)}`
+        const proxyRes = await fetch(proxyUrl)
+        if (!proxyRes.ok) throw new Error(`Download failed (HTTP ${proxyRes.status})`)
+        return proxyRes.blob()
+      }
+
       const CONCURRENCY = 6
       let nextIdx = 0
 
@@ -594,11 +611,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
           const idx = nextIdx++
           if (idx >= tasks.length) break
           const { sourceUrl, filename } = tasks[idx]
-          const proxyUrl = `/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=${encodeURIComponent(filename)}`
-          const res = await fetch(proxyUrl)
-          if (!res.ok) throw new Error(`Could not download ${filename} (${res.status})`)
-          const blob = await res.blob()
-          // STORE = no re-compression; photos/videos are already compressed.
+          const blob = await fetchBlob(sourceUrl, filename)
+          // STORE compression — photos are already compressed, re-compressing wastes CPU.
           zip.file(filename, blob, { compression: 'STORE' })
           setZipDone((d) => d + 1)
         }
