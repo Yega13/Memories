@@ -484,6 +484,22 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     const url = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
     const filename = `${album.title ?? album.slug}.zip`
 
+    // Mobile uses a native browser download (<a href>) — streams directly to disk
+    // with no JS memory buffer, so large albums work regardless of device RAM.
+    // Desktop uses fetch() streaming so we can animate the button while it downloads.
+    const isMobile = window.matchMedia('(pointer: coarse)').matches
+    if (isMobile) {
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      showAppToast('Download started — check your downloads folder.')
+      setZipping(false)
+      return
+    }
+
     try {
       const res = await fetch(url)
       if (!res.ok) {
@@ -491,29 +507,19 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         throw new Error(body.error ?? 'Download failed')
       }
 
-      // Server sends Content-Length (from HEAD pre-pass) so we can show
-      // an accurate "X / N photos" counter instead of raw MB.
-      const contentLength = parseInt(res.headers.get('content-length') ?? '0', 10)
-      const totalPhotos = photos.length
-      const chunks: Uint8Array<ArrayBuffer>[] = []
-      let received = 0
+      // X-Photo-Count lets us show "downloading N photos" while the stream runs.
+      const photoCount = parseInt(res.headers.get('x-photo-count') ?? '0', 10) || photos.length
+      setZipProgress({ done: 0, total: photoCount })
 
+      const chunks: Uint8Array<ArrayBuffer>[] = []
       if (res.body) {
         const reader = res.body.getReader()
         for (;;) {
           const { done, value } = await reader.read()
           if (done) break
           chunks.push(value as Uint8Array<ArrayBuffer>)
-          received += value.length
-          if (contentLength > 0) {
-            setZipProgress({
-              done: Math.min(Math.round((received / contentLength) * totalPhotos), totalPhotos),
-              total: totalPhotos,
-            })
-          }
         }
       } else {
-        // Fallback for browsers that don't expose a readable body stream.
         chunks.push(new Uint8Array(await res.arrayBuffer()) as Uint8Array<ArrayBuffer>)
       }
 
@@ -1044,9 +1050,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <Download className="w-4 h-4" />}
                       {zipProgress
-                        ? `Downloading ${zipProgress.done} / ${zipProgress.total} photos…`
+                        ? `Downloading ${zipProgress.total} photos…`
                         : zipping
-                          ? `Preparing ${photos.length} photos…`
+                          ? `Preparing download…`
                           : `Download all (${photos.length})`}
                     </button>
                   </div>
