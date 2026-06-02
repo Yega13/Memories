@@ -70,12 +70,20 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
   const [zipWordIdx, setZipWordIdx] = useState(0)
+  const [zipDots, setZipDots] = useState('')
 
   const ZIP_WORDS = ['Downloading', 'Packaging', 'Compressing', 'Saving']
   useEffect(() => {
-    if (!zipping) { setZipWordIdx(0); return }
-    const id = setInterval(() => setZipWordIdx(n => (n + 1) % ZIP_WORDS.length), 1200)
-    return () => clearInterval(id)
+    if (!zipping) { setZipWordIdx(0); setZipDots(''); return }
+    // Cycle the action word every 1.4 s
+    const wordId = setInterval(() => setZipWordIdx(n => (n + 1) % ZIP_WORDS.length), 1400)
+    // Build up dots 0→3 every 380 ms for a "typewriter" feel
+    let count = 0
+    const dotsId = setInterval(() => {
+      count = (count + 1) % 4
+      setZipDots('·'.repeat(count)) // · middle dot
+    }, 380)
+    return () => { clearInterval(wordId); clearInterval(dotsId) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zipping])
 
@@ -492,35 +500,16 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     const url = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
     const filename = `${album.title ?? album.slug}.zip`
 
-    // Mobile uses a native browser download (<a href>) — streams directly to disk
-    // with no JS memory buffer, so large albums work regardless of device RAM.
-    // Desktop uses fetch() streaming so we can animate the button while it downloads.
-    const isMobile = window.matchMedia('(pointer: coarse)').matches
-    if (isMobile) {
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      // Keep the animation visible for 2 s so the user sees feedback,
-      // then reset — the actual download runs in the browser's download manager.
-      setTimeout(() => {
-        setZipping(false)
-        showAppToast('Download started.')
-      }, 2000)
-      return
-    }
-
+    // Use fetch() streaming for both desktop and mobile.
+    // <a href> native download was tried for mobile but iOS Safari consistently
+    // cuts streaming responses at ~23% of the file without a Content-Length header.
+    // Buffering in JS memory (fetch + blob) avoids that iOS limitation.
     try {
       const res = await fetch(url)
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: string }
         throw new Error(body.error ?? 'Download failed')
       }
-
-      // X-Photo-Count is available if needed for future progress display.
-      // Currently we use the cycling word animation for feedback.
 
       const chunks: Uint8Array<ArrayBuffer>[] = []
       if (res.body) {
@@ -1057,9 +1046,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       disabled={zipping || photos.length === 0}
                     >
                       {zipping
-                        ? <Loader2 className="w-4 h-4 animate-spin" />
-                        : <Download className="w-4 h-4" />}
-                      {zipping ? `${ZIP_WORDS[zipWordIdx]}…` : `Download all (${photos.length})`}
+                        ? <Loader2 className="w-5 h-5 animate-spin flex-shrink-0" />
+                        : <Download className="w-4 h-4 flex-shrink-0" />}
+                      <span className={zipping ? 'animate-pulse' : ''}>
+                        {zipping
+                          ? `${ZIP_WORDS[zipWordIdx]}${zipDots}`
+                          : `Download all (${photos.length})`}
+                      </span>
                     </button>
                   </div>
                 )}
