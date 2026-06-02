@@ -482,42 +482,13 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
     setZipProgress({ done: 0, total: photos.length })
 
     try {
-      const worker = new Worker(
-        new URL('./owner-toolbar/zip.worker.ts', import.meta.url),
-      )
+      const res = await fetch(`/api/download/album?slug=${encodeURIComponent(album.slug)}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(body.error ?? 'Download failed')
+      }
 
-      const folder = (album.title ?? album.slug).replace(/[/\\:<>"|?*]/g, '-').slice(0, 100)
-      const photoData = photos.map((p) => ({
-        url: p.url,
-        storage_path: p.storage_path,
-        storage_backend: p.storage_backend,
-        media_type: p.media_type,
-        mirror_url: p.mirror_url ?? null,
-        mirror_path: p.mirror_path ?? null,
-        caption: p.caption ?? null,
-      }))
-
-      const chunks: ArrayBuffer[] = []
-
-      await new Promise<void>((resolve, reject) => {
-        worker.onmessage = (e: MessageEvent) => {
-          if (e.data.type === 'chunk') {
-            chunks.push(e.data.data as ArrayBuffer)
-          } else if (e.data.type === 'progress') {
-            setZipProgress({ done: e.data.done as number, total: e.data.total as number })
-          } else if (e.data.type === 'done') {
-            resolve()
-          } else if (e.data.type === 'error') {
-            reject(new Error(e.data.message as string))
-          }
-        }
-        worker.onerror = (err) => reject(new Error(err.message))
-        worker.postMessage({ photos: photoData, folder })
-      })
-
-      worker.terminate()
-
-      const blob = new Blob(chunks, { type: 'application/zip' })
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -527,8 +498,9 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       showAppToast('Download ready.')
-    } catch {
-      showAppToast('Download failed. Please try again.', 'error')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Download failed. Please try again.'
+      showAppToast(msg, 'error')
     } finally {
       setZipping(false)
       setZipProgress(null)
@@ -1041,7 +1013,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                     >
                       <Download className="w-4 h-4" />
                       {zipProgress
-                        ? `Downloading ${zipProgress.done}/${zipProgress.total}…`
+                        ? `Generating zip (${zipProgress.total} files)…`
                         : zipping
                           ? 'Starting…'
                           : `Download all (${photos.length})`}

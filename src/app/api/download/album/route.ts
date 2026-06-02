@@ -121,60 +121,66 @@ function buildFilename(photo: PhotoRow, index: number, folder: string): string {
 
 // ─── Main fill loop ───────────────────────────────────────────────────────────
 
+// Fully buffers a photo body so CRC32 and size are known before writing the ZIP
+// local file header (data descriptor / bit-3 format is not supported by iOS Files
+// app or most Android zip tools).
+async function fetchBuffer(url: string, signal: AbortSignal): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(url, { signal })
+    if (!res.ok) return null
+    return new Uint8Array(await res.arrayBuffer())
+  } catch {
+    return null
+  }
+}
+
 async function fillZip(
   writer: WritableStreamDefaultWriter<Uint8Array>,
   photos: PhotoRow[],
   folder: string,
   signal: AbortSignal,
 ): Promise<void> {
+  // Up to PREFETCH photo bodies download concurrently on the server's internal network
+  // while the previous entry's CRC32 is computed — photos never wait on each other.
+  const PREFETCH = 8
+  const queue: Array<Promise<{ buf: Uint8Array | null; i: number }>> = []
+  let nextFetch = 0
+
+  function enqueue() {
+    while (queue.length < PREFETCH && nextFetch < photos.length) {
+      const i = nextFetch++
+      const url = resolveDownloadUrl(photos[i])
+      queue.push(
+        (url ? fetchBuffer(url, signal) : Promise.resolve(null)).then((buf) => ({ buf, i })),
+      )
+    }
+  }
+
+  enqueue()
+
   const entries: { nameBytes: Uint8Array; crc: number; size: number; offset: number }[] = []
   let offset = 0
 
-  for (let i = 0; i < photos.length; i++) {
+  while (queue.length > 0) {
     if (signal.aborted) break
-    const photo = photos[i]
-    const url = resolveDownloadUrl(photo)
-    if (!url) continue
+    const { buf, i } = await queue.shift()!
+    enqueue()
 
+    const photo = photos[i]
     const nameBytes = new TextEncoder().encode(buildFilename(photo, i, folder))
     const localOffset = offset
 
-    // Buffer this photo so we know CRC32 and size before writing the local file header.
-    // ZIP requires these values in the header (bit 3 / data descriptor is not supported
-    // by iOS Files app and many Android zip tools).
-    const chunks: Uint8Array[] = []
+    // Failed fetch → 0-byte entry keeps the zip valid and file count intact.
+    const data = buf ?? new Uint8Array(0)
     let crc = 0xFFFFFFFF
-    let fileSize = 0
-
-    try {
-      const res = await fetch(url, { signal })
-      if (res.ok && res.body) {
-        const reader = res.body.getReader()
-        for (;;) {
-          const { done, value } = await reader.read()
-          if (done) break
-          crc = updateCrc32(crc, value)
-          fileSize += value.length
-          chunks.push(value)
-        }
-      }
-    } catch (err) {
-      if ((err as { name?: string }).name === 'AbortError') break
-      // Network error on one photo — include a zero-byte entry so the zip is still valid.
-    }
-
+    crc = updateCrc32(crc, data)
     crc = (crc ^ 0xFFFFFFFF) >>> 0
 
-    const header = localFileHeader(nameBytes, crc, fileSize)
+    const header = localFileHeader(nameBytes, crc, data.length)
     await writer.write(header)
-    offset += header.length
-
-    for (const chunk of chunks) {
-      await writer.write(chunk)
-      offset += chunk.length
-    }
-
-    entries.push({ nameBytes, crc, size: fileSize, offset: localOffset })
+    if (data.length > 0) await writer.write(data)
+    offset += header.length + data.length
+    entries.push({ nameBytes, crc, size: data.length, offset: localOffset })
   }
 
   // Central directory
