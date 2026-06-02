@@ -124,13 +124,21 @@ function buildFilename(photo: PhotoRow, index: number, folder: string): string {
 // Fully buffers a photo body so CRC32 and size are known before writing the ZIP
 // local file header (data descriptor / bit-3 format is not supported by iOS Files
 // app or most Android zip tools).
-async function fetchBuffer(url: string, signal: AbortSignal): Promise<Uint8Array | null> {
+// Each fetch gets its own 30-second timeout so a single slow photo can't stall the
+// whole zip, but we deliberately do NOT propagate req.signal here — Cloudflare fires
+// that signal as a soft timeout on slow connections before the client actually
+// disconnects, which was causing partial zips on mobile.
+async function fetchBuffer(url: string): Promise<Uint8Array | null> {
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), 30_000)
   try {
-    const res = await fetch(url, { signal })
+    const res = await fetch(url, { signal: ac.signal })
     if (!res.ok) return null
     return new Uint8Array(await res.arrayBuffer())
   } catch {
     return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -138,7 +146,6 @@ async function fillZip(
   writer: WritableStreamDefaultWriter<Uint8Array>,
   photos: PhotoRow[],
   folder: string,
-  signal: AbortSignal,
 ): Promise<void> {
   // Up to PREFETCH photo bodies download concurrently on the server's internal network
   // while the previous entry's CRC32 is computed — photos never wait on each other.
@@ -151,7 +158,7 @@ async function fillZip(
       const i = nextFetch++
       const url = resolveDownloadUrl(photos[i])
       queue.push(
-        (url ? fetchBuffer(url, signal) : Promise.resolve(null)).then((buf) => ({ buf, i })),
+        (url ? fetchBuffer(url) : Promise.resolve(null)).then((buf) => ({ buf, i })),
       )
     }
   }
@@ -162,7 +169,6 @@ async function fillZip(
   let offset = 0
 
   while (queue.length > 0) {
-    if (signal.aborted) break
     const { buf, i } = await queue.shift()!
     enqueue()
 
@@ -227,7 +233,7 @@ export async function GET(req: Request) {
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>()
   const writer = writable.getWriter()
 
-  void fillZip(writer, photos as PhotoRow[], folder, req.signal).catch(async (err) => {
+  void fillZip(writer, photos as PhotoRow[], folder).catch(async (err) => {
     try { await writer.abort(err) } catch {}
   })
 

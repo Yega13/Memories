@@ -626,6 +626,7 @@ async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: st
 
 type Props = {
   album: Album
+  onPhotosUploaded?: () => void
 }
 
 type PendingItem = {
@@ -912,7 +913,7 @@ async function uploadToSupabaseStorage(
   throw lastError
 }
 
-export default function UploadZone({ album }: Props) {
+export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [preparing, setPreparing] = useState(false)
@@ -1232,6 +1233,7 @@ export default function UploadZone({ album }: Props) {
           const result = await saveUploadedRows(successRows.slice(i, i + 100))
           serverRejectedCount += result.rejected
         }
+        onPhotosUploaded?.()
       } catch (e) {
         const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded files'}`
         setUploadError(message)

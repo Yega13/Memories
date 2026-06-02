@@ -277,6 +277,19 @@ export default function AlbumPageClient() {
   // Realtime INSERT subscription handles new photos — no manual refetch needed here.
   // Calling fetchPhotos on each upload caused concurrent DB fetches that raced each other
   // and overwrote state, making newly-uploaded photos disappear until page refresh.
+  //
+  // Exception: on mobile, the Realtime WebSocket drops on cellular and INSERT events
+  // are never delivered. handlePhotosUploaded fires after DB rows are saved and waits
+  // 3 s to give Realtime a chance — if the count already matches, the refetch is skipped.
+  const handlePhotosUploaded = useCallback(() => {
+    if (!album) return
+    const albumId = album.id
+    // Wait 3 s to give Realtime a chance to deliver INSERT events first.
+    // If it did, fetchPhotos is a no-op (state already matches DB).
+    // If it didn't (common on mobile cellular), this recovers the missing photos.
+    window.setTimeout(() => void fetchPhotos(albumId), 3_000)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [album?.id])
 
   const handlePhotoDeleted = (photoId: string) => {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId))
@@ -433,7 +446,7 @@ export default function AlbumPageClient() {
             />
           </ErrorBoundary>
         )}
-        <UploadZone album={album} />
+        <UploadZone album={album} onPhotosUploaded={handlePhotosUploaded} />
         <ErrorBoundary>
         <PhotoGrid
           album={album}
