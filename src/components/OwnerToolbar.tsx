@@ -605,7 +605,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         return res.blob()
       }
 
-      const CONCURRENCY = 6
+      const CONCURRENCY = 16
       let nextIdx = 0
 
       async function runWorker() {
