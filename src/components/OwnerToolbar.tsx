@@ -2,7 +2,6 @@
 
 import JSZip from 'jszip'
 import { saveAs } from 'file-saver'
-import { stripExifFromJpeg } from '@/lib/exif'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Clock, Copy, Download, FolderPlus, Images, Link2, Loader2, Lock, LockOpen, Move, Play, Settings, Trash2, X } from 'lucide-react'
 import { type Album, type Photo } from '@/lib/supabase'
@@ -586,26 +585,24 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       })
 
       // Fetch directly from Supabase / R2 — no server proxy.
-      // Supabase public buckets ship Access-Control-Allow-Origin: * so cross-origin
-      // browser fetches work without any server involvement.
-      // JPEG detection uses the response Content-Type header (same method the proxy uses),
-      // not the URL path — Supabase URLs may omit the file extension.
+      // For Supabase images, try the CDN-side image transform first: Supabase resizes
+      // to 2000px at quality 85 on their edge, reducing ~4 MB originals to ~1–1.5 MB
+      // each (no CPU work in the browser, 3× faster to download, no CORS issues).
+      // Falls back to the raw URL if transforms are unavailable on the current plan.
       async function fetchBlob(url: string): Promise<Blob> {
-        const res = await fetch(url)
-        if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
-        const buf = await res.arrayBuffer()
-        const contentType = res.headers.get('content-type') ?? ''
-        if (/jpe?g/i.test(contentType)) {
+        if (url.includes('/storage/v1/object/public/')) {
+          const base = url.split('?')[0]
+          const transformUrl = base.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + '?width=2000&quality=85'
           try {
-            const stripped = stripExifFromJpeg(new Uint8Array(buf))
-            const out = new ArrayBuffer(stripped.byteLength)
-            new Uint8Array(out).set(stripped)
-            return new Blob([out], { type: 'image/jpeg' })
+            const res = await fetch(transformUrl)
+            if (res.ok) return res.blob()
           } catch {
-            return new Blob([buf], { type: 'image/jpeg' })
+            // Transform not available (CORS / plan) — fall through to raw URL
           }
         }
-        return new Blob([buf])
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
+        return res.blob()
       }
 
       const CONCURRENCY = 6
