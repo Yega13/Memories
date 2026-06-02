@@ -69,7 +69,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [showSettings, setShowSettings] = useState(false)
   const [openSection, setOpenSection] = useState<SettingsSection | null>(null)
   const [zipping, setZipping] = useState(false)
-  const [zipMB, setZipMB] = useState<number | null>(null)
+  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deletingAlbum, setDeletingAlbum] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -479,30 +479,11 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   async function downloadZip() {
     if (photos.length === 0 || zipping) return
     setZipping(true)
-    setZipMB(null)
+    setZipProgress(null)
 
     const url = `/api/download/album?slug=${encodeURIComponent(album.slug)}`
     const filename = `${album.title ?? album.slug}.zip`
-    // (pointer: coarse) is true only when the primary pointer is a finger —
-    // phones and tablets. Touch-capable laptops/desktops (Surface, MacBook) have
-    // a mouse as their primary pointer, so this correctly returns false for them.
-    const isMobile = window.matchMedia('(pointer: coarse)').matches
 
-    if (!isMobile) {
-      // Desktop: let the browser handle the download natively — streams to disk,
-      // zero JS memory, browser shows its own byte-level progress bar.
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      setTimeout(() => setZipping(false), 1500)
-      return
-    }
-
-    // Mobile: fetch + stream reader so we can show live MB progress and save the
-    // blob ourselves (iOS Safari handles <a href> streaming unreliably).
     try {
       const res = await fetch(url)
       if (!res.ok) {
@@ -510,23 +491,30 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
         throw new Error(body.error ?? 'Download failed')
       }
 
+      // Server sends Content-Length (from HEAD pre-pass) so we can show
+      // an accurate "X / N photos" counter instead of raw MB.
+      const contentLength = parseInt(res.headers.get('content-length') ?? '0', 10)
+      const totalPhotos = photos.length
       const chunks: Uint8Array<ArrayBuffer>[] = []
       let received = 0
 
       if (res.body) {
-        // Streaming path — shows live MB progress as chunks arrive.
         const reader = res.body.getReader()
         for (;;) {
           const { done, value } = await reader.read()
           if (done) break
           chunks.push(value as Uint8Array<ArrayBuffer>)
           received += value.length
-          setZipMB(Math.round(received / 1024 / 1024))
+          if (contentLength > 0) {
+            setZipProgress({
+              done: Math.min(Math.round((received / contentLength) * totalPhotos), totalPhotos),
+              total: totalPhotos,
+            })
+          }
         }
       } else {
         // Fallback for browsers that don't expose a readable body stream.
-        const buf = new Uint8Array(await res.arrayBuffer()) as Uint8Array<ArrayBuffer>
-        chunks.push(buf)
+        chunks.push(new Uint8Array(await res.arrayBuffer()) as Uint8Array<ArrayBuffer>)
       }
 
       const blob = new Blob(chunks, { type: 'application/zip' })
@@ -544,7 +532,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       showAppToast(msg, 'error')
     } finally {
       setZipping(false)
-      setZipMB(null)
+      setZipProgress(null)
     }
   }
 
@@ -1055,8 +1043,8 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
                       {zipping
                         ? <Loader2 className="w-4 h-4 animate-spin" />
                         : <Download className="w-4 h-4" />}
-                      {zipMB !== null
-                        ? `Downloading ${zipMB} MB… (${photos.length} photos)`
+                      {zipProgress
+                        ? `Downloading ${zipProgress.done} / ${zipProgress.total} photos…`
                         : zipping
                           ? `Preparing ${photos.length} photos…`
                           : `Download all (${photos.length})`}
