@@ -67,6 +67,9 @@ export default function AlbumPageClient() {
   const [showFaceFinder, setShowFaceFinder] = useState(false)
   const [revealGate, setRevealGate] = useState<{ revealAt: string; summary: { id: string; slug: string; title: string } } | null>(null)
   const ownerTokenSlugRef = useRef<string | null>(null)
+  // True only when this page load explicitly carried #owner= or ?owner= in the URL.
+  // Cookie alone doesn't qualify — opening the guest link must show the guest view.
+  const ownerTokenFromUrlRef = useRef<boolean>(!!queryOwnerToken)
 
   useEffect(() => {
     let cancelled = false
@@ -81,6 +84,7 @@ export default function AlbumPageClient() {
       return () => { cancelled = true }
     }
 
+    ownerTokenFromUrlRef.current = true
     ownerTokenSlugRef.current = slug
     setOwnerToken(nextOwnerToken)
     setOwnerTokenReady(false)
@@ -382,6 +386,10 @@ export default function AlbumPageClient() {
 
   const rawBg = album.background_theme ?? DEFAULT_BG
   const bgImageUrl = isImageBackground(rawBg) ? resolveAlbumBackgroundImage(rawBg) : null
+  // Show owner UI only when the owner token was present in the URL for this page load.
+  // Cookie alone (from a previous owner session) doesn't qualify — opening the plain
+  // guest link must show the guest view, even on the owner's own device.
+  const effectiveIsOwner = isOwner && ownerTokenFromUrlRef.current
 
   return (
     <main className="hush-album-page min-h-screen relative isolate" style={albumBackgroundStyle(rawBg)}>
@@ -397,9 +405,9 @@ export default function AlbumPageClient() {
           }}
         />
       )}
-      <AlbumHeader album={album} photoCount={photos.length} isOwner={isOwner} onAlbumUpdated={handleAlbumUpdated} />
+      <AlbumHeader album={album} photoCount={photos.length} isOwner={effectiveIsOwner} onAlbumUpdated={handleAlbumUpdated} />
 
-      {isOwner && (
+      {effectiveIsOwner && (
         <OwnerToolbar
           album={album}
           photos={photos}
@@ -415,7 +423,7 @@ export default function AlbumPageClient() {
 
       <div className="hush-container pb-12">
 
-        {!isOwner && (
+        {!effectiveIsOwner && (
           <div className="flex items-center justify-end gap-2 mb-4 mt-5">
             {album.face_finder_enabled && photos.some((p) => p.media_type !== 'video') && (
               <button
@@ -451,7 +459,7 @@ export default function AlbumPageClient() {
         <PhotoGrid
           album={album}
           photos={photos}
-          isOwner={isOwner}
+          isOwner={effectiveIsOwner}
           slug={album.slug}
           forceGlobalRadius={forceGlobalRadius}
           onRadiusMaxChange={setMediaRadiusMax}
@@ -465,7 +473,7 @@ export default function AlbumPageClient() {
         />
         </ErrorBoundary>
 
-        {!isOwner && (
+        {!effectiveIsOwner && (
           <div className="mt-8 text-center">
             <Link
               href={reportHref}
