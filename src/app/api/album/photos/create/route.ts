@@ -12,6 +12,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' }
 // Supabase storage base URL — all images stored via the supabase backend must come from here.
 // Prevents crafted API calls from storing arbitrary external URLs that render in album viewers.
 const SUPABASE_STORAGE_BASE = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '') + '/storage/v1/object/public/'
+// On-demand image transform endpoint — used as thumb_url for new uploads instead of a
+// separately uploaded thumbnail file. Both prefixes share the same Supabase host.
+const SUPABASE_RENDER_BASE = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '') + '/storage/v1/render/image/public/'
 
 type PhotoRow = {
   storage_path?: string
@@ -211,10 +214,17 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   const rawThumbUrl = row.thumb_url != null ? String(row.thumb_url).trim() : ''
   let thumbPath: string | null = null
   let thumbUrl: string | null = null
-  if (rawThumbPath && rawThumbUrl) {
-    if (rawThumbPath.startsWith(`${albumId}/`) && rawThumbUrl.startsWith(SUPABASE_STORAGE_BASE || 'https://')) {
-      thumbPath = mediaTextOrNull(rawThumbPath, 256)
+  if (rawThumbUrl) {
+    // Accept both uploaded-thumbnail URLs (/object/public/) and on-demand transform
+    // URLs (/render/image/public/) — both are served from the same Supabase host.
+    const isValidThumb = rawThumbUrl.startsWith(SUPABASE_STORAGE_BASE || 'https://')
+      || (SUPABASE_RENDER_BASE && rawThumbUrl.startsWith(SUPABASE_RENDER_BASE))
+    if (isValidThumb) {
       thumbUrl = mediaTextOrNull(rawThumbUrl, 2048)
+      // thumb_path is only present for old-style uploaded thumbnails — preserve it when given.
+      if (rawThumbPath && rawThumbPath.startsWith(`${albumId}/`)) {
+        thumbPath = mediaTextOrNull(rawThumbPath, 256)
+      }
     }
   }
 

@@ -625,21 +625,22 @@ async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: st
 }
 
 // ─── Main-image compression ───────────────────────────────────────────────────
-// Resizes images whose longest side exceeds MAX_UPLOAD_DIM and re-encodes as JPEG.
-// A 48 MP phone photo can be 15–20 MB; after compression it's ~1–2 MB — a 10× upload
-// speedup with no perceptible quality loss at web/screen resolution.
-// If compression fails for any reason the original file is returned unchanged.
+// Resizes images whose longest side exceeds MAX_UPLOAD_DIM and re-encodes.
+// Tries WebP first (30–40% smaller than JPEG at equal quality), falls back to JPEG.
+// Returns { file, didCompress }. When didCompress=true the canvas re-encode already
+// stripped EXIF, so the caller can skip the separate stripExifClientSide step.
+// If anything fails, returns the original file with didCompress=false.
 
 const MAX_UPLOAD_DIM = 2048
 const UPLOAD_COMPRESS_QUALITY = 0.88
 
-async function compressImageForUpload(file: File): Promise<File> {
+async function compressImageForUpload(file: File): Promise<{ file: File; didCompress: boolean }> {
   try {
     const bitmap = await createImageBitmap(file)
     try {
       const { width: w, height: h } = bitmap
       const longest = Math.max(w, h)
-      if (longest <= MAX_UPLOAD_DIM) return file // already fits — skip re-encode overhead
+      if (longest <= MAX_UPLOAD_DIM) return { file, didCompress: false }
       const scale = MAX_UPLOAD_DIM / longest
       const tw = Math.max(1, Math.round(w * scale))
       const th = Math.max(1, Math.round(h * scale))
@@ -653,16 +654,24 @@ async function compressImageForUpload(file: File): Promise<File> {
         canvas = el
       }
       const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
-      if (!ctx) return file
+      if (!ctx) return { file, didCompress: false }
       ctx.drawImage(bitmap, 0, 0, tw, th)
-      const blob = await toBlobWithTimeout(canvas, 'image/jpeg', UPLOAD_COMPRESS_QUALITY)
-      if (!blob || blob.size >= file.size) return file // don't use if it ended up larger
-      return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+      // Prefer WebP — ~35% smaller than JPEG at same quality. Falls back to JPEG for
+      // browsers that support WebP display but not WebP canvas encoding (older iOS).
+      const webpBlob = await toBlobWithTimeout(canvas, 'image/webp', UPLOAD_COMPRESS_QUALITY)
+      if (webpBlob && webpBlob.type === 'image/webp' && webpBlob.size < file.size) {
+        return { file: new File([webpBlob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' }), didCompress: true }
+      }
+      const jpegBlob = await toBlobWithTimeout(canvas, 'image/jpeg', UPLOAD_COMPRESS_QUALITY)
+      if (jpegBlob && jpegBlob.size < file.size) {
+        return { file: new File([jpegBlob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }), didCompress: true }
+      }
+      return { file, didCompress: false }
     } finally {
       bitmap.close()
     }
   } catch {
-    return file
+    return { file, didCompress: false }
   }
 }
 
@@ -1101,14 +1110,14 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       }
     }
 
-    // Strip EXIF from JPEG before upload — removes GPS, device info, timestamps.
-    // Applied after HEIC conversion (HEIC→JPEG already produces clean JPEG from heic2any).
-    if (item.kind === 'image') uploadFile = await stripExifClientSide(uploadFile)
-
-    // Resize + re-encode large images before upload. A modern phone photo can be
-    // 15–20 MB; compressing to ≤2048 px brings it to ~1–2 MB for a 10× speed gain.
-    // Canvas re-encoding also strips any remaining EXIF naturally.
-    if (item.kind === 'image') uploadFile = await compressImageForUpload(uploadFile)
+    if (item.kind === 'image') {
+      // Compress first — if the image is resized, canvas re-encode strips EXIF naturally
+      // so we skip the separate EXIF step. For small images that aren't resized we still
+      // need explicit EXIF stripping.
+      const { file: compressed, didCompress } = await compressImageForUpload(uploadFile)
+      uploadFile = compressed
+      if (!didCompress) uploadFile = await stripExifClientSide(uploadFile)
+    }
 
     const ext = extensionFor(uploadFile, item.kind)
     const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
@@ -1116,32 +1125,20 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
 
     if (item.kind === 'image') {
       const path = `${album.id}/${filename}`
+      await uploadToSupabaseStorage(uploadFile, path, uploadFile.type || undefined)
 
-      // Upload the main image and generate the thumbnail simultaneously — neither depends
-      // on the other finishing first. This shaves ~200-400 ms off each image on the critical
-      // path (thumbnail generation no longer blocks behind the main upload).
-      const [, thumb] = await Promise.all([
-        uploadToSupabaseStorage(uploadFile, path, uploadFile.type || undefined),
-        generateImageThumbnail(uploadFile).catch(() => null),
-      ])
-
-      let thumbPath: string | null = null
-      let thumbUrl: string | null = null
-      if (thumb) {
-        try {
-          const tPath = `${album.id}/thumbs/${baseId}.${thumb.ext}`
-          await uploadToSupabaseStorage(thumb.blob, tPath, thumb.blob.type || undefined)
-          thumbPath = tPath
-          thumbUrl = supabase.storage.from('Photos').getPublicUrl(tPath).data.publicUrl
-        } catch {
-          // silent — thumbnail is best-effort
-        }
-      }
+      const mainUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
+      // Derive thumbnail URL from Supabase's on-demand image transform API — same
+      // infrastructure already used for OG images. Eliminates a separate thumbnail
+      // upload XHR per photo. Falls back to mainUrl in the grid if transform fails.
+      const thumbUrl = mainUrl
+        .replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')
+        + '?width=600&quality=80'
 
       return {
         storage_path: path,
         storage_backend: 'supabase',
-        url: supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl,
+        url: mainUrl,
         caption: item.caption.trim() || null,
         author_name: item.author.trim() || null,
         media_type: 'image',
@@ -1150,7 +1147,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         stream_uid: null,
         stream_iframe_url: null,
         stream_thumbnail_url: null,
-        thumb_path: thumbPath,
+        thumb_path: null,
         thumb_url: thumbUrl,
         duration_seconds: null,
       }
