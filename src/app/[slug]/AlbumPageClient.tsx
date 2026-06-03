@@ -15,6 +15,7 @@ import RevealCountdown from '@/components/RevealCountdown'
 import FaceFinder from '@/components/FaceFinder'
 import ErrorBoundary from '@/components/ErrorBoundary'
 import { resolveAlbumBackgroundImage } from '@/lib/album-backgrounds'
+import AlbumSkeleton from '@/components/AlbumSkeleton'
 
 const DEFAULT_BG = '#FDFAF5'
 const IMAGE_BG_PREFIX = 'image:'
@@ -372,9 +373,7 @@ export default function AlbumPageClient() {
   }, [])
 
   if (loading) {
-    return (
-      <div className="min-h-screen" style={{ background: DEFAULT_BG }} />
-    )
+    return <AlbumSkeleton />
   }
 
   if (passwordGate) {

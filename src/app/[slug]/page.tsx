@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { createAdminClient } from '@/lib/supabase/admin'
 import AlbumPageClient from './AlbumPageClient'
+import AlbumSkeleton from '@/components/AlbumSkeleton'
 
 export const runtime = 'nodejs'
 
@@ -35,20 +36,12 @@ function photoOgUrl(photo: PhotoMeta): string | null {
 
 async function fetchAlbumMeta(slug: string): Promise<AlbumMeta | null> {
   const admin = createAdminClient()
-  // Mirror the resolve route: try random slug first, then custom slug.
-  const { data: bySlug } = await admin
-    .from('albums')
-    .select('id, title, cover_photo_id, reveal_at')
-    .eq('slug', slug)
-    .maybeSingle<AlbumMeta>()
-  if (bySlug) return bySlug
-
-  const { data: byCustom } = await admin
-    .from('albums')
-    .select('id, title, cover_photo_id, reveal_at')
-    .eq('custom_slug', slug)
-    .maybeSingle<AlbumMeta>()
-  return byCustom ?? null
+  // Query both slug and custom_slug in parallel.
+  const [{ data: bySlug }, { data: byCustom }] = await Promise.all([
+    admin.from('albums').select('id, title, cover_photo_id, reveal_at').eq('slug', slug).maybeSingle<AlbumMeta>(),
+    admin.from('albums').select('id, title, cover_photo_id, reveal_at').eq('custom_slug', slug).maybeSingle<AlbumMeta>(),
+  ])
+  return bySlug ?? byCustom ?? null
 }
 
 async function fetchCoverUrl(album: AlbumMeta): Promise<string | null> {
@@ -115,7 +108,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default function AlbumPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen" style={{ background: '#FDFAF5' }} />}>
+    <Suspense fallback={<AlbumSkeleton />}>
       <AlbumPageClient />
     </Suspense>
   )
