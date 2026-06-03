@@ -555,6 +555,20 @@ async function processMirrorQueue(): Promise<void> {
   }
 }
 
+// ─── Decode semaphore ─────────────────────────────────────────────────────────
+// Limits concurrent image decode+encode to 1 at a time regardless of upload concurrency.
+// Prevents OOM from simultaneous large bitmap allocations (e.g. two 50 MP photos decoded
+// simultaneously = 400 MB). Uploads run outside the semaphore so network I/O overlaps
+// with the next photo's CPU work — concurrency 2 still doubles upload throughput.
+let _decodeSemaphore: Promise<void> = Promise.resolve()
+
+function runWithDecodeSemaphore<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = _decodeSemaphore
+  let release!: () => void
+  _decodeSemaphore = new Promise(r => { release = r })
+  return prev.then(() => fn()).finally(release) as Promise<T>
+}
+
 // ─── Image processing pipeline ───────────────────────────────────────────────
 // Single function that handles HEIC conversion, resize, and encode in one pass.
 //
@@ -587,7 +601,7 @@ function encodeToBlob(
 }
 
 async function processImageForUpload(rawFile: File): Promise<File> {
-  // Step 1 — HEIC: try native decode first (iOS Safari 15+), WASM worker fallback.
+  // Step 1 — HEIC: outside the semaphore because it uses its own WASM worker.
   let sourceFile = rawFile
   if (isHeicFile(rawFile)) {
     const nativeBitmap = await createImageBitmap(rawFile).catch(() => null)
@@ -598,73 +612,64 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     }
   }
 
-  // Step 2 — Decode.
-  // createImageBitmap(file) is fastest and runs off-thread on supporting browsers.
-  // It rejects Samsung vendor JPEG profiles, CMYK color spaces, Motion Photos, and
-  // other formats that <img> handles fine. When it fails, load via <img> instead.
-  //
-  // Critically: ctx.drawImage() accepts HTMLImageElement directly — no need to call
-  // createImageBitmap(img) afterward. That intermediate step was itself failing on
-  // some Android Chrome versions.
-  let bitmap: ImageBitmap | null = null
-  let imgElement: HTMLImageElement | null = null
-  let blobUrl: string | null = null
+  // Step 2 — Decode + encode inside the semaphore (1 at a time across all workers).
+  // Uploads run after this returns, outside the semaphore, so two uploads can proceed
+  // concurrently while the next photo is being decoded — CPU and network overlap.
+  return runWithDecodeSemaphore(async () => {
+    let bitmap: ImageBitmap | null = null
+    let imgElement: HTMLImageElement | null = null
+    let blobUrl: string | null = null
 
-  try {
-    bitmap = await createImageBitmap(sourceFile)
-  } catch {
-    blobUrl = URL.createObjectURL(sourceFile)
-    imgElement = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image()
-      el.onload = () => resolve(el)
-      el.onerror = () => reject(new Error('cannot decode image'))
-      el.src = blobUrl!
-    })
-  }
-
-  try {
-    const drawSource = bitmap ?? imgElement!
-    const w = bitmap ? bitmap.width : imgElement!.naturalWidth
-    const h = bitmap ? bitmap.height : imgElement!.naturalHeight
-    const longest = Math.max(w, h)
-
-    // Fast path for already-small images: only available when createImageBitmap
-    // succeeded. When using the <img> fallback, always re-encode through canvas to
-    // normalise vendor-specific formats into clean WebP/JPEG.
-    if (longest <= UPLOAD_MAX_DIM && bitmap) {
-      return stripExifClientSide(sourceFile)
+    try {
+      bitmap = await createImageBitmap(sourceFile)
+    } catch {
+      // createImageBitmap rejects Samsung vendor JPEG profiles, CMYK, Motion Photos, etc.
+      // <img> is more permissive. ctx.drawImage() accepts HTMLImageElement directly —
+      // no createImageBitmap(img) needed (that step itself fails on some Android Chrome).
+      blobUrl = URL.createObjectURL(sourceFile)
+      imgElement = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = () => reject(new Error('cannot decode image'))
+        el.src = blobUrl!
+      })
     }
 
-    const scale = Math.min(1, UPLOAD_MAX_DIM / longest)
-    const tw = Math.max(1, Math.round(w * scale))
-    const th = Math.max(1, Math.round(h * scale))
+    try {
+      const drawSource = bitmap ?? imgElement!
+      const w = bitmap ? bitmap.width : imgElement!.naturalWidth
+      const h = bitmap ? bitmap.height : imgElement!.naturalHeight
+      const longest = Math.max(w, h)
 
-    const canvas: OffscreenCanvas | HTMLCanvasElement = typeof OffscreenCanvas !== 'undefined'
-      ? new OffscreenCanvas(tw, th)
-      : Object.assign(document.createElement('canvas'), { width: tw, height: th })
-
-    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
-    if (!ctx) throw new Error('canvas context unavailable')
-    ctx.drawImage(drawSource, 0, 0, tw, th)
-
-    // Mobile: WebP first — 35% smaller than JPEG, worth the slower encode on slow networks.
-    // Desktop: JPEG first — 5–10× faster to encode; network is fast so size is irrelevant.
-    const mobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    if (mobile) {
-      const webpBlob = await encodeToBlob(canvas, 'image/webp', UPLOAD_QUALITY)
-      if (webpBlob && webpBlob.type === 'image/webp') {
-        return new File([webpBlob], rawFile.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
+      if (longest <= UPLOAD_MAX_DIM && bitmap) {
+        return stripExifClientSide(sourceFile)
       }
+
+      const scale = Math.min(1, UPLOAD_MAX_DIM / longest)
+      const tw = Math.max(1, Math.round(w * scale))
+      const th = Math.max(1, Math.round(h * scale))
+
+      const canvas: OffscreenCanvas | HTMLCanvasElement = typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(tw, th)
+        : Object.assign(document.createElement('canvas'), { width: tw, height: th })
+
+      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
+      if (!ctx) throw new Error('canvas context unavailable')
+      ctx.drawImage(drawSource, 0, 0, tw, th)
+
+      // JPEG on all devices. WebP encodes 5–10× slower than JPEG on mobile CPUs.
+      // WebP saves ~0.2 s on upload (400 KB vs 600 KB at 10 Mbps) but costs ~0.8 s
+      // extra encode time — JPEG wins by ~0.6 s per photo on every device.
+      const jpegBlob = await encodeToBlob(canvas, 'image/jpeg', UPLOAD_QUALITY)
+      if (jpegBlob) {
+        return new File([jpegBlob], rawFile.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+      }
+      throw new Error('canvas encoding returned null blob')
+    } finally {
+      bitmap?.close()
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
-    const jpegBlob = await encodeToBlob(canvas, 'image/jpeg', UPLOAD_QUALITY)
-    if (jpegBlob) {
-      return new File([jpegBlob], rawFile.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
-    }
-    throw new Error('canvas encoding returned null blob')
-  } finally {
-    bitmap?.close()
-    if (blobUrl) URL.revokeObjectURL(blobUrl)
-  }
+  })
 }
 
 // ─── Image decodability check with fallback ───────────────────────────────────
