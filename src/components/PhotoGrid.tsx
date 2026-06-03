@@ -510,7 +510,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
         />
       )}
 
-      {slideshowPickerOpen && isOwner && (
+      {slideshowPickerOpen && (
         <SlideshowPickerModal
           photos={photos}
           selectedIds={slideshowSelectedIds}
