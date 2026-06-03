@@ -624,6 +624,76 @@ async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: st
   }
 }
 
+// ─── Main-image compression ───────────────────────────────────────────────────
+// Resizes images whose longest side exceeds MAX_UPLOAD_DIM and re-encodes as JPEG.
+// A 48 MP phone photo can be 15–20 MB; after compression it's ~1–2 MB — a 10× upload
+// speedup with no perceptible quality loss at web/screen resolution.
+// If compression fails for any reason the original file is returned unchanged.
+
+const MAX_UPLOAD_DIM = 2048
+const UPLOAD_COMPRESS_QUALITY = 0.88
+
+async function compressImageForUpload(file: File): Promise<File> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    try {
+      const { width: w, height: h } = bitmap
+      const longest = Math.max(w, h)
+      if (longest <= MAX_UPLOAD_DIM) return file // already fits — skip re-encode overhead
+      const scale = MAX_UPLOAD_DIM / longest
+      const tw = Math.max(1, Math.round(w * scale))
+      const th = Math.max(1, Math.round(h * scale))
+      const supportsOffscreen = typeof OffscreenCanvas !== 'undefined'
+      let canvas: HTMLCanvasElement | OffscreenCanvas
+      if (supportsOffscreen) {
+        canvas = new OffscreenCanvas(tw, th)
+      } else {
+        const el = document.createElement('canvas')
+        el.width = tw; el.height = th
+        canvas = el
+      }
+      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
+      if (!ctx) return file
+      ctx.drawImage(bitmap, 0, 0, tw, th)
+      const blob = await toBlobWithTimeout(canvas, 'image/jpeg', UPLOAD_COMPRESS_QUALITY)
+      if (!blob || blob.size >= file.size) return file // don't use if it ended up larger
+      return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+    } finally {
+      bitmap.close()
+    }
+  } catch {
+    return file
+  }
+}
+
+// ─── Image decodability check with fallback ───────────────────────────────────
+// createImageBitmap is strict about MIME and structure; <img> is more permissive.
+// Re-downloaded Hushare photos (EXIF-stripped, possibly re-encoded) can fail the
+// bitmap path but display fine via <img>. Try both before rejecting the file.
+
+async function canDecodeImage(file: File): Promise<boolean> {
+  try {
+    const bmp = await createImageBitmap(file)
+    bmp.close()
+    return true
+  } catch {
+    const url = URL.createObjectURL(file)
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve()
+        img.onerror = () => reject()
+        img.src = url
+      })
+      return true
+    } catch {
+      return false
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  }
+}
+
 type Props = {
   album: Album
   onPhotosUploaded?: () => void
@@ -979,10 +1049,8 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       // before they enter the queue and stall mid-upload. HEIC is excluded because
       // createImageBitmap doesn't support it natively; the HEIC worker handles validation.
       if (kind === 'image' && !heic) {
-        try {
-          const bmp = await createImageBitmap(file)
-          bmp.close()
-        } catch {
+        const ok = await canDecodeImage(file)
+        if (!ok) {
           rejected.push(`${file.name}: unreadable image file`)
           continue
         }
@@ -1036,6 +1104,11 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     // Strip EXIF from JPEG before upload — removes GPS, device info, timestamps.
     // Applied after HEIC conversion (HEIC→JPEG already produces clean JPEG from heic2any).
     if (item.kind === 'image') uploadFile = await stripExifClientSide(uploadFile)
+
+    // Resize + re-encode large images before upload. A modern phone photo can be
+    // 15–20 MB; compressing to ≤2048 px brings it to ~1–2 MB for a 10× speed gain.
+    // Canvas re-encoding also strips any remaining EXIF naturally.
+    if (item.kind === 'image') uploadFile = await compressImageForUpload(uploadFile)
 
     const ext = extensionFor(uploadFile, item.kind)
     const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
