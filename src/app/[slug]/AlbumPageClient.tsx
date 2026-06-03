@@ -68,7 +68,7 @@ export default function AlbumPageClient() {
   const [revealGate, setRevealGate] = useState<{ revealAt: string; summary: { id: string; slug: string; title: string } } | null>(null)
   const ownerTokenSlugRef = useRef<string | null>(null)
   const prevGuestDownloadsRef = useRef<boolean | null>(null)
-  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
+  const settingsChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   // True only when this page load explicitly carried #owner= or ?owner= in the URL.
   // Cookie alone doesn't qualify — opening the guest link must show the guest view.
   const ownerTokenFromUrlRef = useRef<boolean>(!!queryOwnerToken)
@@ -218,13 +218,7 @@ export default function AlbumPageClient() {
       if (currentChannel) void supabase.removeChannel(currentChannel)
 
       currentChannel = supabase
-        .channel(`album-photos-${albumId}`, { config: { broadcast: { ack: false } } })
-        .on('broadcast', { event: 'album_settings' }, (payload) => {
-          const data = payload.payload as { allow_guest_downloads?: boolean } | undefined
-          if (data && typeof data.allow_guest_downloads === 'boolean') {
-            setAlbum((prev) => prev ? { ...prev, allow_guest_downloads: data.allow_guest_downloads! } : prev)
-          }
-        })
+        .channel(`album-photos-${albumId}`)
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'photos', filter: `album_id=eq.${albumId}` },
@@ -259,7 +253,6 @@ export default function AlbumPageClient() {
         .subscribe((status, err) => {
           if (!active) return
           if (status === 'SUBSCRIBED') {
-            realtimeChannelRef.current = currentChannel
             if (retryCount > 0) {
               // Events may have been missed during the gap — resync the full photo list.
               void fetchPhotos(albumId)
@@ -268,7 +261,6 @@ export default function AlbumPageClient() {
             return
           }
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-            realtimeChannelRef.current = null
             if (err) console.warn('[realtime] channel issue:', status, (err as Error).message)
             const delay = Math.min(2_000 * (retryCount + 1), 30_000)
             retryCount++
@@ -281,7 +273,6 @@ export default function AlbumPageClient() {
 
     return () => {
       active = false
-      realtimeChannelRef.current = null
       if (retryTimer != null) window.clearTimeout(retryTimer)
       if (currentChannel) void supabase.removeChannel(currentChannel)
     }
@@ -289,9 +280,36 @@ export default function AlbumPageClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [album?.id])
 
-  // When the owner toggles allow_guest_downloads, broadcast the new value so guests on other
-  // devices update their UI immediately without a page refresh.
-  // Uses the already-subscribed channel ref — no new WebSocket handshake needed.
+  // Dedicated broadcast-only channel for album settings updates.
+  // Kept separate from the postgres_changes channel so the two don't interfere.
+  // All visitors (owner + guests) subscribe so they all receive changes.
+  useEffect(() => {
+    if (!album?.id) return
+    const albumId = album.id
+
+    const ch = supabase
+      .channel(`album-settings-${albumId}`)
+      .on('broadcast', { event: 'album_settings' }, (payload) => {
+        const data = payload.payload as { allow_guest_downloads?: boolean } | undefined
+        if (data && typeof data.allow_guest_downloads === 'boolean') {
+          setAlbum((prev) => prev ? { ...prev, allow_guest_downloads: data.allow_guest_downloads! } : prev)
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') settingsChannelRef.current = ch
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          settingsChannelRef.current = null
+        }
+      })
+
+    return () => {
+      settingsChannelRef.current = null
+      void supabase.removeChannel(ch)
+    }
+  }, [album?.id])
+
+  // When the owner toggles allow_guest_downloads, broadcast the new value so all connected
+  // guests update their UI immediately without a page refresh.
   useEffect(() => {
     if (!album || !isOwner || !ownerTokenFromUrlRef.current) return
     if (prevGuestDownloadsRef.current === null) {
@@ -301,7 +319,7 @@ export default function AlbumPageClient() {
     if (prevGuestDownloadsRef.current === album.allow_guest_downloads) return
     prevGuestDownloadsRef.current = album.allow_guest_downloads
 
-    const ch = realtimeChannelRef.current
+    const ch = settingsChannelRef.current
     if (!ch) return
     void ch.send({
       type: 'broadcast',
