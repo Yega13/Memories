@@ -65,6 +65,9 @@ export default function RevealDatePicker({ value, onChange }: Props) {
     else setViewMonth(m => m + 1)
   }
 
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const isPast = (d: number) => new Date(viewYear, viewMonth, d) < todayStart
+
   const isSelected = (d: number) =>
     !!parsed && d === parsed.day && viewMonth === parsed.month && viewYear === parsed.year
   const isToday = (d: number) =>
@@ -74,7 +77,17 @@ export default function RevealDatePicker({ value, onChange }: Props) {
     <div className="rounded-2xl overflow-hidden select-none" style={{ background: 'rgba(253,250,245,0.95)', border: '1px solid #E0D5C5' }}>
       {/* Month header */}
       <div className="flex items-center justify-between px-4 pt-3 pb-2">
-        <button onClick={prevMonth} className="w-7 h-7 rounded-full flex items-center justify-center hover:opacity-70 transition" style={{ color: '#8B6F4E', background: 'rgba(139,111,78,0.08)' }}>
+        <button
+          onClick={prevMonth}
+          disabled={viewYear === today.getFullYear() && viewMonth <= today.getMonth()}
+          className="w-7 h-7 rounded-full flex items-center justify-center transition"
+          style={{
+            color: viewYear === today.getFullYear() && viewMonth <= today.getMonth() ? '#C4B8A8' : '#8B6F4E',
+            background: 'rgba(139,111,78,0.08)',
+            opacity: viewYear === today.getFullYear() && viewMonth <= today.getMonth() ? 0.4 : 1,
+            cursor: viewYear === today.getFullYear() && viewMonth <= today.getMonth() ? 'not-allowed' : 'pointer',
+          }}
+        >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
         <span className="text-sm font-bold tracking-wide" style={{ color: '#3D2B1A', fontFamily: 'var(--font-serif)' }}>
@@ -98,13 +111,15 @@ export default function RevealDatePicker({ value, onChange }: Props) {
           <div key={i} className="flex items-center justify-center">
             {day ? (
               <button
-                onClick={() => pickDay(day)}
-                className="w-8 h-8 rounded-full text-xs flex items-center justify-center transition hover:scale-110"
+                onClick={() => !isPast(day) && pickDay(day)}
+                disabled={isPast(day)}
+                className={`w-8 h-8 rounded-full text-xs flex items-center justify-center transition ${isPast(day) ? 'cursor-not-allowed' : 'hover:scale-110'}`}
                 style={{
-                  background: isSelected(day) ? '#254F22' : isToday(day) ? 'rgba(37,79,34,0.1)' : 'transparent',
-                  color: isSelected(day) ? '#FDFAF5' : isToday(day) ? '#254F22' : '#5C3D1E',
+                  background: isPast(day) ? 'transparent' : isSelected(day) ? '#254F22' : isToday(day) ? 'rgba(37,79,34,0.1)' : 'transparent',
+                  color: isPast(day) ? '#C4B8A8' : isSelected(day) ? '#FDFAF5' : isToday(day) ? '#254F22' : '#5C3D1E',
                   fontWeight: isSelected(day) || isToday(day) ? '700' : '500',
                   boxShadow: isSelected(day) ? '0 2px 8px rgba(37,79,34,0.35)' : 'none',
+                  opacity: isPast(day) ? 0.45 : 1,
                 }}
               >
                 {day}
