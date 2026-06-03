@@ -81,21 +81,28 @@ export function useSlideshow({
     showAppToast('Removed from slideshow.')
   }
 
-  // Open the picker when a slideshow is requested externally (e.g. from the album toolbar).
+  // Open the picker (owner) or start immediately (guest) when a slideshow is requested externally.
   useEffect(() => {
-    if (!slideshowRequestId || !isOwner || handledSlideshowRequestRef.current === slideshowRequestId) return
+    if (!slideshowRequestId || handledSlideshowRequestRef.current === slideshowRequestId) return
     handledSlideshowRequestRef.current = slideshowRequestId
     if (photos.length === 0) {
-      showAppToast('Upload media before creating a slideshow.', 'error')
+      showAppToast('No media to show yet.', 'error')
       return
     }
     if (photos.length < 2) {
       showAppToast('A slideshow needs at least 2 photos or videos.', 'error')
       return
     }
-    setSlideshowSelectedIds(new Set(photos.map((p) => p.id)))
-    setSlideshowPickerOpen(true)
-  }, [isOwner, photos, slideshowRequestId])
+    if (isOwner) {
+      // Owner gets the picker so they can curate which photos to include.
+      setSlideshowSelectedIds(new Set(photos.map((p) => p.id)))
+      setSlideshowPickerOpen(true)
+    } else {
+      // Guests skip the picker — start immediately with all photos.
+      startSlideshow(photos.map((p) => p.id))
+      onSetLightboxIndex(0)
+    }
+  }, [isOwner, onSetLightboxIndex, photos, slideshowRequestId])
 
   return {
     slideshowActive,

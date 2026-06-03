@@ -67,6 +67,7 @@ export default function AlbumPageClient() {
   const [showFaceFinder, setShowFaceFinder] = useState(false)
   const [revealGate, setRevealGate] = useState<{ revealAt: string; summary: { id: string; slug: string; title: string } } | null>(null)
   const ownerTokenSlugRef = useRef<string | null>(null)
+  const prevGuestDownloadsRef = useRef<boolean | null>(null)
   // True only when this page load explicitly carried #owner= or ?owner= in the URL.
   // Cookie alone doesn't qualify — opening the guest link must show the guest view.
   const ownerTokenFromUrlRef = useRef<boolean>(!!queryOwnerToken)
@@ -217,6 +218,12 @@ export default function AlbumPageClient() {
 
       currentChannel = supabase
         .channel(`album-photos-${albumId}`)
+        .on('broadcast', { event: 'album_settings' }, (payload) => {
+          const data = payload.payload as { allow_guest_downloads?: boolean } | undefined
+          if (data && typeof data.allow_guest_downloads === 'boolean') {
+            setAlbum((prev) => prev ? { ...prev, allow_guest_downloads: data.allow_guest_downloads! } : prev)
+          }
+        })
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'photos', filter: `album_id=eq.${albumId}` },
@@ -277,6 +284,29 @@ export default function AlbumPageClient() {
   // album?.id is intentional — reconnecting on every album field change would thrash the subscription
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [album?.id])
+
+  // When the owner toggles allow_guest_downloads, broadcast the new value so guests on other
+  // devices update their UI immediately without a page refresh.
+  useEffect(() => {
+    if (!album || !isOwner || !ownerTokenFromUrlRef.current) return
+    if (prevGuestDownloadsRef.current === null) {
+      prevGuestDownloadsRef.current = album.allow_guest_downloads
+      return
+    }
+    if (prevGuestDownloadsRef.current === album.allow_guest_downloads) return
+    prevGuestDownloadsRef.current = album.allow_guest_downloads
+
+    const allowed = album.allow_guest_downloads
+    const ch = supabase.channel(`album-photos-${album.id}`)
+    ch.subscribe((status) => {
+      if (status !== 'SUBSCRIBED') return
+      void ch.send({
+        type: 'broadcast',
+        event: 'album_settings',
+        payload: { allow_guest_downloads: allowed },
+      }).finally(() => { setTimeout(() => void supabase.removeChannel(ch), 200) })
+    })
+  }, [album?.allow_guest_downloads, album?.id, isOwner])
 
   // Realtime INSERT subscription handles new photos — no manual refetch needed here.
   // Calling fetchPhotos on each upload caused concurrent DB fetches that raced each other
