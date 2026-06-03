@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 type Props = {
@@ -28,6 +28,18 @@ export default function RevealDatePicker({ value, onChange }: Props) {
 
   const [viewYear, setViewYear] = useState(parsed?.year ?? today.getFullYear())
   const [viewMonth, setViewMonth] = useState(parsed?.month ?? today.getMonth())
+  const [openPicker, setOpenPicker] = useState<'hour' | 'minute' | null>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setOpenPicker(null)
+      }
+    }
+    if (openPicker) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [openPicker])
 
   const h24 = parsed?.hour ?? 12
   const minute = parsed?.minute ?? 0
@@ -74,7 +86,7 @@ export default function RevealDatePicker({ value, onChange }: Props) {
     d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
 
   return (
-    <div className="rounded-2xl overflow-hidden select-none" style={{ background: 'rgba(253,250,245,0.95)', border: '1px solid #E0D5C5' }}>
+    <div className="rounded-2xl select-none" style={{ background: 'rgba(253,250,245,0.95)', border: '1px solid #E0D5C5', overflow: 'visible' }}>
       {/* Month header */}
       <div className="flex items-center justify-between px-4 pt-3 pb-2">
         <button
@@ -129,19 +141,85 @@ export default function RevealDatePicker({ value, onChange }: Props) {
         ))}
       </div>
 
-      {/* Time section */}
-      <div style={{ borderTop: '1px solid #EAE0D0', opacity: parsed ? 1 : 0.4, pointerEvents: parsed ? 'auto' : 'none' }}>
-        {/* Time header */}
-        <div className="flex items-center px-3 pt-2.5 pb-1.5 gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-widest flex-1 text-center" style={{ color: '#C4A882' }}>Hour</span>
-          <div style={{ width: 1 }} />
-          <span className="text-[10px] font-semibold uppercase tracking-widest flex-1 text-center" style={{ color: '#C4A882' }}>Min</span>
+      {/* Time row */}
+      <div className="flex items-center gap-2 px-4 py-3" style={{ borderTop: '1px solid #EAE0D0' }} ref={pickerRef}>
+        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#C4A882' }}>Time</span>
+        <div className="flex items-center gap-1.5 ml-auto">
+
+          {/* Hour picker */}
+          <div className="relative">
+            <button
+              onClick={() => parsed && setOpenPicker(openPicker === 'hour' ? null : 'hour')}
+              disabled={!parsed}
+              className="text-xs font-semibold rounded-lg px-2 py-1.5 focus:outline-none"
+              style={{ background: 'rgba(92,61,30,0.07)', color: '#3D2B1A', border: '1px solid #E0D5C5', cursor: parsed ? 'pointer' : 'default', minWidth: 36, textAlign: 'center' }}
+            >
+              {String(h12).padStart(2, '0')}
+            </button>
+            {openPicker === 'hour' && (
+              <div className="absolute bottom-full mb-1.5 left-1/2 z-50 rounded-xl p-2 shadow-xl" style={{ transform: 'translateX(-50%)', background: 'rgba(253,250,245,0.98)', border: '1px solid #E0D5C5', minWidth: 140 }}>
+                <div className="grid grid-cols-4 gap-1">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+                    <button
+                      key={h}
+                      onClick={() => { changeHour(h, isPM); setOpenPicker(null) }}
+                      className="h-7 rounded-lg text-[11px] font-semibold transition hover:scale-105"
+                      style={{
+                        background: h === h12 ? '#254F22' : 'rgba(92,61,30,0.07)',
+                        color: h === h12 ? '#FDFAF5' : '#5C3D1E',
+                        boxShadow: h === h12 ? '0 2px 6px rgba(37,79,34,0.3)' : 'none',
+                      }}
+                    >
+                      {String(h).padStart(2, '0')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <span className="text-xs font-bold" style={{ color: '#C4A882' }}>:</span>
+
+          {/* Minute picker */}
+          <div className="relative">
+            <button
+              onClick={() => parsed && setOpenPicker(openPicker === 'minute' ? null : 'minute')}
+              disabled={!parsed}
+              className="text-xs font-semibold rounded-lg px-2 py-1.5 focus:outline-none"
+              style={{ background: 'rgba(92,61,30,0.07)', color: '#3D2B1A', border: '1px solid #E0D5C5', cursor: parsed ? 'pointer' : 'default', minWidth: 36, textAlign: 'center' }}
+            >
+              {String(minute).padStart(2, '0')}
+            </button>
+            {openPicker === 'minute' && (
+              <div className="absolute bottom-full mb-1.5 right-0 z-50 rounded-xl p-2 shadow-xl" style={{ background: 'rgba(253,250,245,0.98)', border: '1px solid #E0D5C5', minWidth: 120 }}>
+                <div className="grid grid-cols-3 gap-1">
+                  {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => { changeMinute(m); setOpenPicker(null) }}
+                      className="h-7 rounded-lg text-[11px] font-semibold transition hover:scale-105"
+                      style={{
+                        background: m === minute ? '#254F22' : 'rgba(92,61,30,0.07)',
+                        color: m === minute ? '#FDFAF5' : '#5C3D1E',
+                        boxShadow: m === minute ? '0 2px 6px rgba(37,79,34,0.3)' : 'none',
+                      }}
+                    >
+                      :{String(m).padStart(2, '0')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* AM / PM toggle */}
           <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #E0D5C5' }}>
             {(['AM', 'PM'] as const).map(period => (
               <button
                 key={period}
                 onClick={() => changeHour(h12, period === 'PM')}
-                className="text-[11px] px-2.5 py-1 font-bold transition"
+                disabled={!parsed}
+                className="text-[11px] px-2.5 py-1.5 font-bold transition"
                 style={{
                   background: (period === 'PM') === isPM ? '#254F22' : 'rgba(92,61,30,0.07)',
                   color: (period === 'PM') === isPM ? '#FDFAF5' : '#8B6F4E',
@@ -151,53 +229,8 @@ export default function RevealDatePicker({ value, onChange }: Props) {
               </button>
             ))}
           </div>
+
         </div>
-
-        {/* Hour + Minute grids */}
-        <div className="flex gap-2 px-3 pb-3">
-          {/* Hours: 1–12 in 4 cols */}
-          <div className="grid grid-cols-4 gap-1 flex-1">
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
-              <button
-                key={h}
-                onClick={() => changeHour(h, isPM)}
-                className="h-7 rounded-lg text-[11px] font-semibold flex items-center justify-center transition hover:scale-105"
-                style={{
-                  background: h === h12 ? '#254F22' : 'rgba(92,61,30,0.07)',
-                  color: h === h12 ? '#FDFAF5' : '#5C3D1E',
-                  boxShadow: h === h12 ? '0 2px 6px rgba(37,79,34,0.3)' : 'none',
-                }}
-              >
-                {String(h).padStart(2, '0')}
-              </button>
-            ))}
-          </div>
-
-          {/* Divider */}
-          <div style={{ width: 1, background: '#EAE0D0', alignSelf: 'stretch' }} />
-
-          {/* Minutes: 00–55 in 4 cols */}
-          <div className="grid grid-cols-3 gap-1 flex-1">
-            {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
-              <button
-                key={m}
-                onClick={() => changeMinute(m)}
-                className="h-7 rounded-lg text-[11px] font-semibold flex items-center justify-center transition hover:scale-105"
-                style={{
-                  background: m === minute ? '#254F22' : 'rgba(92,61,30,0.07)',
-                  color: m === minute ? '#FDFAF5' : '#5C3D1E',
-                  boxShadow: m === minute ? '0 2px 6px rgba(37,79,34,0.3)' : 'none',
-                }}
-              >
-                :{String(m).padStart(2, '0')}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {!parsed && (
-          <p className="text-center text-[10px] pb-2" style={{ color: '#C4A882' }}>Pick a day first</p>
-        )}
       </div>
     </div>
   )
