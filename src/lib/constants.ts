@@ -57,7 +57,7 @@ export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 600_000
 // Desktop gets 3 — reduced from 5 to avoid saturating the 6-connection-per-host
 // HTTP/1.1 limit to supabase.co, which caused every 6th upload to stall.
 export const UPLOAD_CONCURRENCY_MOBILE = 2
-export const UPLOAD_CONCURRENCY_DESKTOP = 3
+export const UPLOAD_CONCURRENCY_DESKTOP = 4
 
 // Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency
 // above — these run inside a single video's uploadVideoMultipart call.

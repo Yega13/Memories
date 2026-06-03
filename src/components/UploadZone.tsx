@@ -586,6 +586,29 @@ function encodeToBlob(
     : new Promise(res => (canvas as HTMLCanvasElement).toBlob(res, type, quality))
 }
 
+// createImageBitmap(file) rejects vendor-specific JPEG profiles (Samsung CMYK, etc.)
+// and some re-encoded formats. The <img> path is more permissive — once the browser
+// has rendered the image element, createImageBitmap(imgElement) extracts the pixels
+// from its internal raster regardless of the original encoding.
+async function loadBitmap(file: File): Promise<ImageBitmap> {
+  try {
+    return await createImageBitmap(file)
+  } catch {
+    const url = URL.createObjectURL(file)
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new Image()
+        el.onload = () => resolve(el)
+        el.onerror = () => reject(new Error('cannot decode image'))
+        el.src = url
+      })
+      return await createImageBitmap(img)
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+  }
+}
+
 async function processImageForUpload(rawFile: File): Promise<File> {
   // Step 1 — HEIC: try native decode first (iOS Safari 15+), WASM worker fallback.
   let sourceFile = rawFile
@@ -598,8 +621,9 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     }
   }
 
-  // Step 2 — Decode to check dimensions.
-  const bitmap = await createImageBitmap(sourceFile)
+  // Step 2 — Decode. Uses <img> fallback for vendor-specific formats that
+  // createImageBitmap(file) rejects (Samsung CMYK, certain re-encoded JPEGs, etc.)
+  const bitmap = await loadBitmap(sourceFile)
   try {
     const { width: w, height: h } = bitmap
     const longest = Math.max(w, h)
