@@ -631,17 +631,27 @@ async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: st
 // stripped EXIF, so the caller can skip the separate stripExifClientSide step.
 // If anything fails, returns the original file with didCompress=false.
 
-const MAX_UPLOAD_DIM = 2048
-const UPLOAD_COMPRESS_QUALITY = 0.88
+const MAX_UPLOAD_DIM_DESKTOP = 2048
+const MAX_UPLOAD_DIM_MOBILE = 1600
+const UPLOAD_QUALITY_DESKTOP = 0.88
+const UPLOAD_QUALITY_MOBILE = 0.82
+
+function getCompressParams(): { maxDim: number; quality: number } {
+  const mobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  return mobile
+    ? { maxDim: MAX_UPLOAD_DIM_MOBILE, quality: UPLOAD_QUALITY_MOBILE }
+    : { maxDim: MAX_UPLOAD_DIM_DESKTOP, quality: UPLOAD_QUALITY_DESKTOP }
+}
 
 async function compressImageForUpload(file: File): Promise<{ file: File; didCompress: boolean }> {
   try {
+    const { maxDim, quality } = getCompressParams()
     const bitmap = await createImageBitmap(file)
     try {
       const { width: w, height: h } = bitmap
       const longest = Math.max(w, h)
-      if (longest <= MAX_UPLOAD_DIM) return { file, didCompress: false }
-      const scale = MAX_UPLOAD_DIM / longest
+      if (longest <= maxDim) return { file, didCompress: false }
+      const scale = maxDim / longest
       const tw = Math.max(1, Math.round(w * scale))
       const th = Math.max(1, Math.round(h * scale))
       const supportsOffscreen = typeof OffscreenCanvas !== 'undefined'
@@ -658,11 +668,11 @@ async function compressImageForUpload(file: File): Promise<{ file: File; didComp
       ctx.drawImage(bitmap, 0, 0, tw, th)
       // Prefer WebP — ~35% smaller than JPEG at same quality. Falls back to JPEG for
       // browsers that support WebP display but not WebP canvas encoding (older iOS).
-      const webpBlob = await toBlobWithTimeout(canvas, 'image/webp', UPLOAD_COMPRESS_QUALITY)
+      const webpBlob = await toBlobWithTimeout(canvas, 'image/webp', quality)
       if (webpBlob && webpBlob.type === 'image/webp' && webpBlob.size < file.size) {
         return { file: new File([webpBlob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' }), didCompress: true }
       }
-      const jpegBlob = await toBlobWithTimeout(canvas, 'image/jpeg', UPLOAD_COMPRESS_QUALITY)
+      const jpegBlob = await toBlobWithTimeout(canvas, 'image/jpeg', quality)
       if (jpegBlob && jpegBlob.size < file.size) {
         return { file: new File([jpegBlob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }), didCompress: true }
       }
@@ -1100,13 +1110,22 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     // sequentially in addFiles, cutting perceived wait from O(n) to O(n/concurrency).
     let uploadFile = item.file
     if (item.heic) {
-      try {
-        uploadFile = await convertHeicToJpeg(item.file)
-        const cap = item.kind === 'video' ? caps.video : caps.image
-        if (uploadFile.size > cap) throw new Error(`Converted JPG is ${formatFileSize(uploadFile.size)}, above the ${formatFileSize(cap)} limit`)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        throw new Error(`${item.file.name}: HEIC conversion failed (${msg})`)
+      // iOS Safari 15+ decodes HEIC natively via createImageBitmap — skip the WASM
+      // worker entirely. The compression step below handles re-encoding to WebP/JPEG.
+      // On Android/Chrome where HEIC isn't native, fall back to the WASM worker.
+      const nativeBitmap = await createImageBitmap(item.file).catch(() => null)
+      if (nativeBitmap) {
+        nativeBitmap.close()
+        // Leave uploadFile as item.file (HEIC) — compressImageForUpload decodes it natively
+      } else {
+        try {
+          uploadFile = await convertHeicToJpeg(item.file)
+          const cap = item.kind === 'video' ? caps.video : caps.image
+          if (uploadFile.size > cap) throw new Error(`Converted JPG is ${formatFileSize(uploadFile.size)}, above the ${formatFileSize(cap)} limit`)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          throw new Error(`${item.file.name}: HEIC conversion failed (${msg})`)
+        }
       }
     }
 
