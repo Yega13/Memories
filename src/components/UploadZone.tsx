@@ -588,25 +588,31 @@ function encodeToBlob(
 
 async function processImageForUpload(rawFile: File): Promise<File> {
   // Step 1 — HEIC: try native decode first (iOS Safari 15+), WASM worker fallback.
-  // Native path skips the ~3 MB WASM bootstrap and sequential worker queue entirely,
-  // turning 5–10 s per iPhone photo into near-instant.
   let sourceFile = rawFile
   if (isHeicFile(rawFile)) {
     const nativeBitmap = await createImageBitmap(rawFile).catch(() => null)
     if (nativeBitmap) {
       nativeBitmap.close()
-      // sourceFile stays as rawFile (HEIC) — createImageBitmap below decodes it natively
     } else {
       sourceFile = await convertHeicToJpeg(rawFile)
     }
   }
 
-  // Step 2 — Decode, resize, encode. No timeout: let the device take as long as it needs.
-  // A 15-second encode is still far better than uploading a 15 MB original over mobile.
+  // Step 2 — Decode to check dimensions.
   const bitmap = await createImageBitmap(sourceFile)
   try {
     const { width: w, height: h } = bitmap
-    const scale = Math.min(1, UPLOAD_MAX_DIM / Math.max(w, h))
+    const longest = Math.max(w, h)
+
+    // Fast path: image already fits — skip canvas encoding entirely.
+    // Just strip EXIF for JPEGs and upload as-is. Canvas encoding is expensive
+    // (1–3 s per image on desktop), so avoiding it here is a meaningful win.
+    if (longest <= UPLOAD_MAX_DIM) {
+      return stripExifClientSide(sourceFile)
+    }
+
+    // Slow path: resize + encode.
+    const scale = UPLOAD_MAX_DIM / longest
     const tw = Math.max(1, Math.round(w * scale))
     const th = Math.max(1, Math.round(h * scale))
 
@@ -618,11 +624,14 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     if (!ctx) throw new Error('canvas context unavailable')
     ctx.drawImage(bitmap, 0, 0, tw, th)
 
-    // Prefer WebP (~35% smaller than JPEG at equal quality). Falls back to JPEG on browsers
-    // that support displaying WebP but not encoding it (very old iOS Safari).
-    const webpBlob = await encodeToBlob(canvas, 'image/webp', UPLOAD_QUALITY)
-    if (webpBlob && webpBlob.type === 'image/webp') {
-      return new File([webpBlob], rawFile.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
+    // Mobile: WebP first — 35% smaller than JPEG, worth the slower encode on slow networks.
+    // Desktop: JPEG first — 5–10× faster to encode than WebP; network is fast so size is irrelevant.
+    const mobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    if (mobile) {
+      const webpBlob = await encodeToBlob(canvas, 'image/webp', UPLOAD_QUALITY)
+      if (webpBlob && webpBlob.type === 'image/webp') {
+        return new File([webpBlob], rawFile.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
+      }
     }
     const jpegBlob = await encodeToBlob(canvas, 'image/jpeg', UPLOAD_QUALITY)
     if (jpegBlob) {
