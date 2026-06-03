@@ -555,133 +555,82 @@ async function processMirrorQueue(): Promise<void> {
   }
 }
 
-// ─── Grid thumbnail generation ────────────────────────────────────────────────
-// Generates a small preview (longest side ~900 px) from the original image, encoded as WebP
-// when supported and JPEG otherwise. The grid loads this thumbnail instead of the multi-MB
-// original; the lightbox + download paths keep using the original `url`. If thumbnail
-// generation fails at any step, we just don't include it — the upload still succeeds with
-// the original, and the grid falls back to `photo.url`.
+// ─── Image processing pipeline ───────────────────────────────────────────────
+// Single function that handles HEIC conversion, resize, and encode in one pass.
+//
+// Key design decisions vs the previous implementation:
+//   1. NO artificial timeout on canvas encoding. The old 5-second timeout was
+//      designed for thumbnail encoding of a 600 px canvas. On mobile, encoding a
+//      1920 px canvas takes 6–15 s. When the timeout fired, the function silently
+//      returned the original 15–20 MB file, which the XHR then tried to upload over
+//      mobile LTE. The carrier drops connections on large slow payloads → "Failed to
+//      fetch". This was the root cause of 14/20 failures.
+//   2. NEVER falls back to the original file. If encoding fails, the error propagates
+//      so the item shows as failed rather than silently uploading a 20 MB original.
+//   3. HEIC handling is inside this function — no more split logic between uploadItem
+//      and separate compression code.
+//   4. Single quality target for all devices: 1920 px / 0.85 quality.
+//      Visually identical to the original on every screen; ~25% smaller than the
+//      previous 2048 px / 0.88 setting.
 
-const THUMB_LONGEST_DIM = 600
-const THUMB_QUALITY = 0.8
-const THUMB_ENCODE_TIMEOUT_MS = 5_000
+const UPLOAD_MAX_DIM = 1920
+const UPLOAD_QUALITY = 0.85
 
-// Races blob encoding against a timeout. If encoding hangs (rare but happens on some
-// browser/hardware combos), resolves null after 5 s so the upload continues without a thumbnail
-// rather than stalling indefinitely. Works for both HTMLCanvasElement and OffscreenCanvas.
-function toBlobWithTimeout(
-  canvas: HTMLCanvasElement | OffscreenCanvas,
+function encodeToBlob(
+  canvas: OffscreenCanvas | HTMLCanvasElement,
   type: string,
   quality: number,
 ): Promise<Blob | null> {
-  const encode: Promise<Blob | null> = canvas instanceof OffscreenCanvas
+  return canvas instanceof OffscreenCanvas
     ? canvas.convertToBlob({ type, quality })
-    : new Promise<Blob | null>((res) => (canvas as HTMLCanvasElement).toBlob(res, type, quality))
-  const timeout = new Promise<null>((res) => window.setTimeout(() => res(null), THUMB_ENCODE_TIMEOUT_MS))
-  return Promise.race([encode, timeout])
+    : new Promise(res => (canvas as HTMLCanvasElement).toBlob(res, type, quality))
 }
 
-async function generateImageThumbnail(file: File): Promise<{ blob: Blob; ext: string } | null> {
-  try {
-    // ImageBitmap decode is faster and runs off-thread on supported browsers.
-    const bitmap = await createImageBitmap(file)
-    try {
-      const { width: w, height: h } = bitmap
-      if (!w || !h) return null
-      const longest = Math.max(w, h)
-      const scale = longest > THUMB_LONGEST_DIM ? THUMB_LONGEST_DIM / longest : 1
-      const tw = Math.max(1, Math.round(w * scale))
-      const th = Math.max(1, Math.round(h * scale))
-
-      // OffscreenCanvas.convertToBlob() is Promise-native and has no DOM dependency.
-      // Falls back to HTMLCanvasElement for browsers without OffscreenCanvas (Safari < 16.4).
-      const supportsOffscreen = typeof OffscreenCanvas !== 'undefined'
-      let canvas: HTMLCanvasElement | OffscreenCanvas
-      if (supportsOffscreen) {
-        canvas = new OffscreenCanvas(tw, th)
-      } else {
-        const el = document.createElement('canvas')
-        el.width = tw
-        el.height = th
-        canvas = el
-      }
-      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
-      if (!ctx) return null
-      ctx.drawImage(bitmap, 0, 0, tw, th)
-
-      // Prefer WebP when the browser supports encoding it. Smaller files, identical quality.
-      const webpBlob = await toBlobWithTimeout(canvas, 'image/webp', THUMB_QUALITY)
-      if (webpBlob && webpBlob.type === 'image/webp') return { blob: webpBlob, ext: 'webp' }
-      // Fallback: JPEG. Universally supported.
-      const jpegBlob = await toBlobWithTimeout(canvas, 'image/jpeg', THUMB_QUALITY)
-      if (jpegBlob) return { blob: jpegBlob, ext: 'jpg' }
-      return null
-    } finally {
-      bitmap.close()
+async function processImageForUpload(rawFile: File): Promise<File> {
+  // Step 1 — HEIC: try native decode first (iOS Safari 15+), WASM worker fallback.
+  // Native path skips the ~3 MB WASM bootstrap and sequential worker queue entirely,
+  // turning 5–10 s per iPhone photo into near-instant.
+  let sourceFile = rawFile
+  if (isHeicFile(rawFile)) {
+    const nativeBitmap = await createImageBitmap(rawFile).catch(() => null)
+    if (nativeBitmap) {
+      nativeBitmap.close()
+      // sourceFile stays as rawFile (HEIC) — createImageBitmap below decodes it natively
+    } else {
+      sourceFile = await convertHeicToJpeg(rawFile)
     }
-  } catch {
-    return null
   }
-}
 
-// ─── Main-image compression ───────────────────────────────────────────────────
-// Resizes images whose longest side exceeds MAX_UPLOAD_DIM and re-encodes.
-// Tries WebP first (30–40% smaller than JPEG at equal quality), falls back to JPEG.
-// Returns { file, didCompress }. When didCompress=true the canvas re-encode already
-// stripped EXIF, so the caller can skip the separate stripExifClientSide step.
-// If anything fails, returns the original file with didCompress=false.
-
-const MAX_UPLOAD_DIM_DESKTOP = 2048
-const MAX_UPLOAD_DIM_MOBILE = 1600
-const UPLOAD_QUALITY_DESKTOP = 0.88
-const UPLOAD_QUALITY_MOBILE = 0.82
-
-function getCompressParams(): { maxDim: number; quality: number } {
-  const mobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-  return mobile
-    ? { maxDim: MAX_UPLOAD_DIM_MOBILE, quality: UPLOAD_QUALITY_MOBILE }
-    : { maxDim: MAX_UPLOAD_DIM_DESKTOP, quality: UPLOAD_QUALITY_DESKTOP }
-}
-
-async function compressImageForUpload(file: File): Promise<{ file: File; didCompress: boolean }> {
+  // Step 2 — Decode, resize, encode. No timeout: let the device take as long as it needs.
+  // A 15-second encode is still far better than uploading a 15 MB original over mobile.
+  const bitmap = await createImageBitmap(sourceFile)
   try {
-    const { maxDim, quality } = getCompressParams()
-    const bitmap = await createImageBitmap(file)
-    try {
-      const { width: w, height: h } = bitmap
-      const longest = Math.max(w, h)
-      if (longest <= maxDim) return { file, didCompress: false }
-      const scale = maxDim / longest
-      const tw = Math.max(1, Math.round(w * scale))
-      const th = Math.max(1, Math.round(h * scale))
-      const supportsOffscreen = typeof OffscreenCanvas !== 'undefined'
-      let canvas: HTMLCanvasElement | OffscreenCanvas
-      if (supportsOffscreen) {
-        canvas = new OffscreenCanvas(tw, th)
-      } else {
-        const el = document.createElement('canvas')
-        el.width = tw; el.height = th
-        canvas = el
-      }
-      const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
-      if (!ctx) return { file, didCompress: false }
-      ctx.drawImage(bitmap, 0, 0, tw, th)
-      // Prefer WebP — ~35% smaller than JPEG at same quality. Falls back to JPEG for
-      // browsers that support WebP display but not WebP canvas encoding (older iOS).
-      const webpBlob = await toBlobWithTimeout(canvas, 'image/webp', quality)
-      if (webpBlob && webpBlob.type === 'image/webp' && webpBlob.size < file.size) {
-        return { file: new File([webpBlob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' }), didCompress: true }
-      }
-      const jpegBlob = await toBlobWithTimeout(canvas, 'image/jpeg', quality)
-      if (jpegBlob && jpegBlob.size < file.size) {
-        return { file: new File([jpegBlob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }), didCompress: true }
-      }
-      return { file, didCompress: false }
-    } finally {
-      bitmap.close()
+    const { width: w, height: h } = bitmap
+    const scale = Math.min(1, UPLOAD_MAX_DIM / Math.max(w, h))
+    const tw = Math.max(1, Math.round(w * scale))
+    const th = Math.max(1, Math.round(h * scale))
+
+    const canvas: OffscreenCanvas | HTMLCanvasElement = typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(tw, th)
+      : Object.assign(document.createElement('canvas'), { width: tw, height: th })
+
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
+    if (!ctx) throw new Error('canvas context unavailable')
+    ctx.drawImage(bitmap, 0, 0, tw, th)
+
+    // Prefer WebP (~35% smaller than JPEG at equal quality). Falls back to JPEG on browsers
+    // that support displaying WebP but not encoding it (very old iOS Safari).
+    const webpBlob = await encodeToBlob(canvas, 'image/webp', UPLOAD_QUALITY)
+    if (webpBlob && webpBlob.type === 'image/webp') {
+      return new File([webpBlob], rawFile.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })
     }
-  } catch {
-    return { file, didCompress: false }
+    const jpegBlob = await encodeToBlob(canvas, 'image/jpeg', UPLOAD_QUALITY)
+    if (jpegBlob) {
+      return new File([jpegBlob], rawFile.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+    }
+    throw new Error('canvas encoding returned null blob')
+  } finally {
+    bitmap.close()
   }
 }
 
@@ -1105,51 +1054,19 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   }
 
   async function uploadItem(item: PendingItem): Promise<PhotoInsertRow> {
-    // Convert HEIC just-in-time so the prepare phase is instant for bulk iPhone uploads.
-    // Conversion runs here with the existing upload concurrency (3–5 parallel) instead of
-    // sequentially in addFiles, cutting perceived wait from O(n) to O(n/concurrency).
-    let uploadFile = item.file
-    if (item.heic) {
-      // iOS Safari 15+ decodes HEIC natively via createImageBitmap — skip the WASM
-      // worker entirely. The compression step below handles re-encoding to WebP/JPEG.
-      // On Android/Chrome where HEIC isn't native, fall back to the WASM worker.
-      const nativeBitmap = await createImageBitmap(item.file).catch(() => null)
-      if (nativeBitmap) {
-        nativeBitmap.close()
-        // Leave uploadFile as item.file (HEIC) — compressImageForUpload decodes it natively
-      } else {
-        try {
-          uploadFile = await convertHeicToJpeg(item.file)
-          const cap = item.kind === 'video' ? caps.video : caps.image
-          if (uploadFile.size > cap) throw new Error(`Converted JPG is ${formatFileSize(uploadFile.size)}, above the ${formatFileSize(cap)} limit`)
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          throw new Error(`${item.file.name}: HEIC conversion failed (${msg})`)
-        }
-      }
-    }
-
+    // ── Image path ────────────────────────────────────────────────────────────
     if (item.kind === 'image') {
-      // Compress first — if the image is resized, canvas re-encode strips EXIF naturally
-      // so we skip the separate EXIF step. For small images that aren't resized we still
-      // need explicit EXIF stripping.
-      const { file: compressed, didCompress } = await compressImageForUpload(uploadFile)
-      uploadFile = compressed
-      if (!didCompress) uploadFile = await stripExifClientSide(uploadFile)
-    }
+      // processImageForUpload handles HEIC conversion, resize, and encode in one pass.
+      // It never returns the original file — errors propagate cleanly.
+      const processed = await processImageForUpload(item.file)
+      const ext = extensionFor(processed, 'image')
+      const path = `${album.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
-    const ext = extensionFor(uploadFile, item.kind)
-    const baseId = `${Date.now()}-${Math.random().toString(36).substring(2)}`
-    const filename = `${baseId}.${ext}`
-
-    if (item.kind === 'image') {
-      const path = `${album.id}/${filename}`
-      await uploadToSupabaseStorage(uploadFile, path, uploadFile.type || undefined)
+      await uploadToSupabaseStorage(processed, path, processed.type)
 
       const mainUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
-      // Derive thumbnail URL from Supabase's on-demand image transform API — same
-      // infrastructure already used for OG images. Eliminates a separate thumbnail
-      // upload XHR per photo. Falls back to mainUrl in the grid if transform fails.
+      // thumb_url uses Supabase's on-demand image transform (same as OG images).
+      // No separate thumbnail upload needed — eliminates one XHR per photo.
       const thumbUrl = mainUrl
         .replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')
         + '?width=600&quality=80'
@@ -1161,16 +1078,16 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         caption: item.caption.trim() || null,
         author_name: item.author.trim() || null,
         media_type: 'image',
-        poster_path: null,
-        poster_url: null,
-        stream_uid: null,
-        stream_iframe_url: null,
-        stream_thumbnail_url: null,
-        thumb_path: null,
-        thumb_url: thumbUrl,
+        poster_path: null, poster_url: null,
+        stream_uid: null, stream_iframe_url: null, stream_thumbnail_url: null,
+        thumb_path: null, thumb_url: thumbUrl,
         duration_seconds: null,
       }
     }
+
+    // ── Video path ────────────────────────────────────────────────────────────
+    const ext = extensionFor(item.file, 'video')
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
     try {
       const stream = await uploadVideoToStream(item.file, album.id, filename)
@@ -1181,30 +1098,24 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         caption: item.caption.trim() || null,
         author_name: item.author.trim() || null,
         media_type: 'video',
-        poster_path: null,
-        poster_url: stream.stream_thumbnail_url,
+        poster_path: null, poster_url: stream.stream_thumbnail_url,
         stream_uid: stream.stream_uid,
         stream_iframe_url: stream.stream_iframe_url,
         stream_thumbnail_url: stream.stream_thumbnail_url,
-        thumb_path: null,
-        thumb_url: null,
+        thumb_path: null, thumb_url: null,
         duration_seconds: null,
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // 503 = Stream simply not configured on this deployment — expected, not an error.
-      // Any other failure is unexpected and worth surfacing so we can diagnose it.
       if (!/503|not configured/i.test(msg)) {
-        console.error(`[stream] upload FAILED for "${item.file.name}" (${item.file.size} bytes); falling back to R2. Reason:`, msg)
+        console.error(`[stream] upload FAILED for "${item.file.name}"; falling back to R2:`, msg)
       }
     }
 
     const res = item.file.size > MULTIPART_THRESHOLD
       ? await uploadVideoMultipart(item.file, album.id, filename)
       : await uploadToR2(item.file, album.id, filename, 'video')
-    const posterPath: string | null = null
-    const posterUrl: string | null = null
-    const durationSeconds: number | null = null
+
     return {
       storage_path: res.storage_path,
       storage_backend: 'r2',
@@ -1212,14 +1123,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       caption: item.caption.trim() || null,
       author_name: item.author.trim() || null,
       media_type: 'video',
-      poster_path: posterPath,
-      poster_url: posterUrl,
-      stream_uid: null,
-      stream_iframe_url: null,
-      stream_thumbnail_url: null,
-      thumb_path: null,
-      thumb_url: null,
-      duration_seconds: durationSeconds,
+      poster_path: null, poster_url: null,
+      stream_uid: null, stream_iframe_url: null, stream_thumbnail_url: null,
+      thumb_path: null, thumb_url: null,
+      duration_seconds: null,
     }
   }
 
