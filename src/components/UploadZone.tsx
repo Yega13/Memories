@@ -612,10 +612,13 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     }
   }
 
-  // Step 2 — Decode + encode inside the semaphore (1 at a time across all workers).
-  // Uploads run after this returns, outside the semaphore, so two uploads can proceed
-  // concurrently while the next photo is being decoded — CPU and network overlap.
-  return runWithDecodeSemaphore(async () => {
+  // Step 2 — Decode + encode.
+  // On mobile: run inside the semaphore (1 at a time) to prevent simultaneous large
+  // bitmap allocations causing OOM. On desktop: run freely (4-way parallel is fine,
+  // no memory pressure risk, and serialising kills throughput: 17 s → 42 s).
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+
+  const decodeAndEncode = async (): Promise<File> => {
     let bitmap: ImageBitmap | null = null
     let imgElement: HTMLImageElement | null = null
     let blobUrl: string | null = null
@@ -624,13 +627,15 @@ async function processImageForUpload(rawFile: File): Promise<File> {
       bitmap = await createImageBitmap(sourceFile)
     } catch {
       // createImageBitmap rejects Samsung vendor JPEG profiles, CMYK, Motion Photos, etc.
-      // <img> is more permissive. ctx.drawImage() accepts HTMLImageElement directly —
-      // no createImageBitmap(img) needed (that step itself fails on some Android Chrome).
+      // <img> is more permissive. ctx.drawImage() accepts HTMLImageElement directly.
+      // 15-second timeout prevents indefinite hangs when the browser is under memory
+      // pressure (onerror can be delayed by minutes waiting for an OOM to resolve).
       blobUrl = URL.createObjectURL(sourceFile)
       imgElement = await new Promise<HTMLImageElement>((resolve, reject) => {
         const el = new Image()
-        el.onload = () => resolve(el)
-        el.onerror = () => reject(new Error('cannot decode image'))
+        const timer = window.setTimeout(() => reject(new Error('cannot decode image')), 15_000)
+        el.onload = () => { window.clearTimeout(timer); resolve(el) }
+        el.onerror = () => { window.clearTimeout(timer); reject(new Error('cannot decode image')) }
         el.src = blobUrl!
       })
     }
@@ -669,34 +674,39 @@ async function processImageForUpload(rawFile: File): Promise<File> {
       bitmap?.close()
       if (blobUrl) URL.revokeObjectURL(blobUrl)
     }
-  })
+  }
+
+  return isMobile ? runWithDecodeSemaphore(decodeAndEncode) : decodeAndEncode()
 }
 
-// ─── Image decodability check with fallback ───────────────────────────────────
-// createImageBitmap is strict about MIME and structure; <img> is more permissive.
-// Re-downloaded Hushare photos (EXIF-stripped, possibly re-encoded) can fail the
-// bitmap path but display fine via <img>. Try both before rejecting the file.
+// ─── Tiny preview thumbnail ───────────────────────────────────────────────────
+// Renders at most 120 px in each dimension — ~3 KB JPEG vs ~48 MB decoded full-res.
+// For a batch of 72 photos: 216 KB vs ~3.5 GB of GPU texture memory.
+// That GPU exhaustion was the root cause of "cannot decode image" failures at photo ~63:
+// by then no memory was left to decode the next image in processImageForUpload.
 
-async function canDecodeImage(file: File): Promise<boolean> {
+const PREVIEW_MAX_DIM = 120
+
+async function tinyPreviewFromSource(src: ImageBitmap | HTMLImageElement): Promise<string> {
   try {
-    const bmp = await createImageBitmap(file)
-    bmp.close()
-    return true
+    const sw = src instanceof ImageBitmap ? src.width : (src as HTMLImageElement).naturalWidth
+    const sh = src instanceof ImageBitmap ? src.height : (src as HTMLImageElement).naturalHeight
+    if (!sw || !sh) return ''
+    const scale = Math.min(1, PREVIEW_MAX_DIM / Math.max(sw, sh))
+    const tw = Math.max(1, Math.round(sw * scale))
+    const th = Math.max(1, Math.round(sh * scale))
+    const canvas: OffscreenCanvas | HTMLCanvasElement = typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(tw, th)
+      : Object.assign(document.createElement('canvas'), { width: tw, height: th })
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
+    if (!ctx) return ''
+    ctx.drawImage(src as CanvasImageSource, 0, 0, tw, th)
+    const blob = canvas instanceof OffscreenCanvas
+      ? await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.6 })
+      : await new Promise<Blob | null>(res => (canvas as HTMLCanvasElement).toBlob(res, 'image/jpeg', 0.6))
+    return blob ? URL.createObjectURL(blob) : ''
   } catch {
-    const url = URL.createObjectURL(file)
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => resolve()
-        img.onerror = () => reject()
-        img.src = url
-      })
-      return true
-    } catch {
-      return false
-    } finally {
-      URL.revokeObjectURL(url)
-    }
+    return ''
   }
 }
 
@@ -1051,20 +1061,45 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
 
       const heic = kind === 'image' && isHeicFile(file)
 
-      // Validate non-HEIC images by decoding a bitmap — catches corrupt/truncated files
-      // before they enter the queue and stall mid-upload. HEIC is excluded because
-      // createImageBitmap doesn't support it natively; the HEIC worker handles validation.
+      // For non-HEIC images: validate decodability and generate a tiny thumbnail preview
+      // in a single decode pass. The thumbnail (≤120 px, ~3 KB) replaces the full-res
+      // blob URL that previously caused GPU memory exhaustion on large batches.
+      let previewUrl: string
       if (kind === 'image' && !heic) {
-        const ok = await canDecodeImage(file)
-        if (!ok) {
-          rejected.push(`${file.name}: unreadable image file`)
-          continue
+        let bitmap: ImageBitmap | null = null
+        let imgEl: HTMLImageElement | null = null
+        let tempUrl: string | null = null
+
+        try {
+          bitmap = await createImageBitmap(file)
+        } catch {
+          tempUrl = URL.createObjectURL(file)
+          try {
+            imgEl = await new Promise<HTMLImageElement>((resolve, reject) => {
+              const el = new Image()
+              el.onload = () => resolve(el)
+              el.onerror = () => reject()
+              el.src = tempUrl!
+            })
+          } catch {
+            URL.revokeObjectURL(tempUrl!)
+            rejected.push(`${file.name}: unreadable image file`)
+            continue
+          }
+          URL.revokeObjectURL(tempUrl!)
         }
+
+        const src = bitmap ?? imgEl!
+        const tiny = await tinyPreviewFromSource(src)
+        bitmap?.close()
+        previewUrl = tiny || URL.createObjectURL(file)
+      } else {
+        previewUrl = URL.createObjectURL(file)
       }
 
       next.push({
         file,
-        preview: URL.createObjectURL(file),
+        preview: previewUrl,
         kind,
         caption: '',
         author: '',
