@@ -129,40 +129,19 @@ export default function RevealDatePicker({ value, onChange }: Props) {
         ))}
       </div>
 
-      {/* Time row */}
-      <div className="flex items-center gap-2 px-4 py-3" style={{ borderTop: '1px solid #EAE0D0' }}>
-        <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#C4A882' }}>Time</span>
-        <div className="flex items-center gap-1.5 ml-auto">
-          <select
-            value={h12}
-            onChange={e => changeHour(+e.target.value, isPM)}
-            disabled={!parsed}
-            className="text-xs font-semibold rounded-lg px-2 py-1.5 focus:outline-none cursor-pointer"
-            style={{ background: 'rgba(92,61,30,0.07)', color: '#3D2B1A', border: '1px solid #E0D5C5' }}
-          >
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
-              <option key={h} value={h}>{String(h).padStart(2, '0')}</option>
-            ))}
-          </select>
-          <span className="text-xs font-bold" style={{ color: '#C4A882' }}>:</span>
-          <select
-            value={minute}
-            onChange={e => changeMinute(+e.target.value)}
-            disabled={!parsed}
-            className="text-xs font-semibold rounded-lg px-2 py-1.5 focus:outline-none cursor-pointer"
-            style={{ background: 'rgba(92,61,30,0.07)', color: '#3D2B1A', border: '1px solid #E0D5C5' }}
-          >
-            {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
-              <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
-            ))}
-          </select>
+      {/* Time section */}
+      <div style={{ borderTop: '1px solid #EAE0D0', opacity: parsed ? 1 : 0.4, pointerEvents: parsed ? 'auto' : 'none' }}>
+        {/* Time header */}
+        <div className="flex items-center px-3 pt-2.5 pb-1.5 gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest flex-1 text-center" style={{ color: '#C4A882' }}>Hour</span>
+          <div style={{ width: 1 }} />
+          <span className="text-[10px] font-semibold uppercase tracking-widest flex-1 text-center" style={{ color: '#C4A882' }}>Min</span>
           <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #E0D5C5' }}>
             {(['AM', 'PM'] as const).map(period => (
               <button
                 key={period}
                 onClick={() => changeHour(h12, period === 'PM')}
-                disabled={!parsed}
-                className="text-[11px] px-2.5 py-1.5 font-bold transition"
+                className="text-[11px] px-2.5 py-1 font-bold transition"
                 style={{
                   background: (period === 'PM') === isPM ? '#254F22' : 'rgba(92,61,30,0.07)',
                   color: (period === 'PM') === isPM ? '#FDFAF5' : '#8B6F4E',
@@ -173,6 +152,52 @@ export default function RevealDatePicker({ value, onChange }: Props) {
             ))}
           </div>
         </div>
+
+        {/* Hour + Minute grids */}
+        <div className="flex gap-2 px-3 pb-3">
+          {/* Hours: 1–12 in 4 cols */}
+          <div className="grid grid-cols-4 gap-1 flex-1">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map(h => (
+              <button
+                key={h}
+                onClick={() => changeHour(h, isPM)}
+                className="h-7 rounded-lg text-[11px] font-semibold flex items-center justify-center transition hover:scale-105"
+                style={{
+                  background: h === h12 ? '#254F22' : 'rgba(92,61,30,0.07)',
+                  color: h === h12 ? '#FDFAF5' : '#5C3D1E',
+                  boxShadow: h === h12 ? '0 2px 6px rgba(37,79,34,0.3)' : 'none',
+                }}
+              >
+                {String(h).padStart(2, '0')}
+              </button>
+            ))}
+          </div>
+
+          {/* Divider */}
+          <div style={{ width: 1, background: '#EAE0D0', alignSelf: 'stretch' }} />
+
+          {/* Minutes: 00–55 in 4 cols */}
+          <div className="grid grid-cols-3 gap-1 flex-1">
+            {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
+              <button
+                key={m}
+                onClick={() => changeMinute(m)}
+                className="h-7 rounded-lg text-[11px] font-semibold flex items-center justify-center transition hover:scale-105"
+                style={{
+                  background: m === minute ? '#254F22' : 'rgba(92,61,30,0.07)',
+                  color: m === minute ? '#FDFAF5' : '#5C3D1E',
+                  boxShadow: m === minute ? '0 2px 6px rgba(37,79,34,0.3)' : 'none',
+                }}
+              >
+                :{String(m).padStart(2, '0')}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {!parsed && (
+          <p className="text-center text-[10px] pb-2" style={{ color: '#C4A882' }}>Pick a day first</p>
+        )}
       </div>
     </div>
   )
