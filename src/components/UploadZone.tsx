@@ -586,29 +586,6 @@ function encodeToBlob(
     : new Promise(res => (canvas as HTMLCanvasElement).toBlob(res, type, quality))
 }
 
-// createImageBitmap(file) rejects vendor-specific JPEG profiles (Samsung CMYK, etc.)
-// and some re-encoded formats. The <img> path is more permissive — once the browser
-// has rendered the image element, createImageBitmap(imgElement) extracts the pixels
-// from its internal raster regardless of the original encoding.
-async function loadBitmap(file: File): Promise<ImageBitmap> {
-  try {
-    return await createImageBitmap(file)
-  } catch {
-    const url = URL.createObjectURL(file)
-    try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const el = new Image()
-        el.onload = () => resolve(el)
-        el.onerror = () => reject(new Error('cannot decode image'))
-        el.src = url
-      })
-      return await createImageBitmap(img)
-    } finally {
-      URL.revokeObjectURL(url)
-    }
-  }
-}
-
 async function processImageForUpload(rawFile: File): Promise<File> {
   // Step 1 — HEIC: try native decode first (iOS Safari 15+), WASM worker fallback.
   let sourceFile = rawFile
@@ -621,22 +598,44 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     }
   }
 
-  // Step 2 — Decode. Uses <img> fallback for vendor-specific formats that
-  // createImageBitmap(file) rejects (Samsung CMYK, certain re-encoded JPEGs, etc.)
-  const bitmap = await loadBitmap(sourceFile)
+  // Step 2 — Decode.
+  // createImageBitmap(file) is fastest and runs off-thread on supporting browsers.
+  // It rejects Samsung vendor JPEG profiles, CMYK color spaces, Motion Photos, and
+  // other formats that <img> handles fine. When it fails, load via <img> instead.
+  //
+  // Critically: ctx.drawImage() accepts HTMLImageElement directly — no need to call
+  // createImageBitmap(img) afterward. That intermediate step was itself failing on
+  // some Android Chrome versions.
+  let bitmap: ImageBitmap | null = null
+  let imgElement: HTMLImageElement | null = null
+  let blobUrl: string | null = null
+
   try {
-    const { width: w, height: h } = bitmap
+    bitmap = await createImageBitmap(sourceFile)
+  } catch {
+    blobUrl = URL.createObjectURL(sourceFile)
+    imgElement = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image()
+      el.onload = () => resolve(el)
+      el.onerror = () => reject(new Error('cannot decode image'))
+      el.src = blobUrl!
+    })
+  }
+
+  try {
+    const drawSource = bitmap ?? imgElement!
+    const w = bitmap ? bitmap.width : imgElement!.naturalWidth
+    const h = bitmap ? bitmap.height : imgElement!.naturalHeight
     const longest = Math.max(w, h)
 
-    // Fast path: image already fits — skip canvas encoding entirely.
-    // Just strip EXIF for JPEGs and upload as-is. Canvas encoding is expensive
-    // (1–3 s per image on desktop), so avoiding it here is a meaningful win.
-    if (longest <= UPLOAD_MAX_DIM) {
+    // Fast path for already-small images: only available when createImageBitmap
+    // succeeded. When using the <img> fallback, always re-encode through canvas to
+    // normalise vendor-specific formats into clean WebP/JPEG.
+    if (longest <= UPLOAD_MAX_DIM && bitmap) {
       return stripExifClientSide(sourceFile)
     }
 
-    // Slow path: resize + encode.
-    const scale = UPLOAD_MAX_DIM / longest
+    const scale = Math.min(1, UPLOAD_MAX_DIM / longest)
     const tw = Math.max(1, Math.round(w * scale))
     const th = Math.max(1, Math.round(h * scale))
 
@@ -646,10 +645,10 @@ async function processImageForUpload(rawFile: File): Promise<File> {
 
     const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null
     if (!ctx) throw new Error('canvas context unavailable')
-    ctx.drawImage(bitmap, 0, 0, tw, th)
+    ctx.drawImage(drawSource, 0, 0, tw, th)
 
     // Mobile: WebP first — 35% smaller than JPEG, worth the slower encode on slow networks.
-    // Desktop: JPEG first — 5–10× faster to encode than WebP; network is fast so size is irrelevant.
+    // Desktop: JPEG first — 5–10× faster to encode; network is fast so size is irrelevant.
     const mobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
     if (mobile) {
       const webpBlob = await encodeToBlob(canvas, 'image/webp', UPLOAD_QUALITY)
@@ -663,7 +662,8 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     }
     throw new Error('canvas encoding returned null blob')
   } finally {
-    bitmap.close()
+    bitmap?.close()
+    if (blobUrl) URL.revokeObjectURL(blobUrl)
   }
 }
 
