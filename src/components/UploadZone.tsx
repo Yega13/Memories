@@ -260,7 +260,11 @@ async function uploadVideoMultipart(
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(R2_MULTIPART_CONCURRENCY, totalChunks) }, () => chunkWorker()))
+  // Mobile: 1 concurrent chunk worker — same burst-drop issue as file-level concurrency.
+  // Two simultaneous XHRs to R2 on mobile triggers carrier reset → "Network error on chunk 2".
+  const isMobileChunk = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  const chunkConcurrency = Math.min(isMobileChunk ? 1 : R2_MULTIPART_CONCURRENCY, totalChunks)
+  await Promise.all(Array.from({ length: chunkConcurrency }, () => chunkWorker()))
 
   const parts = partResults.filter((p): p is { partNumber: number; etag: string } => p !== null)
 
@@ -611,10 +615,11 @@ async function encodeFromSource(
   const h = drawSource instanceof ImageBitmap ? drawSource.height : drawSource.naturalHeight
   const longest = Math.max(w, h)
 
-  // Small images already fit — strip EXIF and return as-is (no re-encode needed).
-  // Only safe when decoded via ImageBitmap; HTMLImageElement sources may need canvas
-  // normalization (e.g. CMYK JPEG, Motion Photo) even when the dimensions are within limits.
-  if (longest <= UPLOAD_MAX_DIM && drawSource instanceof ImageBitmap) {
+  // Skip re-encoding only when the file is already small AND fits within upload dimensions.
+  // A 1800×1350 Samsung JPEG can still be 6–8 MB — uploading the original takes 15–20 s on
+  // mobile LTE and gets carrier-dropped. Cap at 1.5 MB so large originals always get
+  // re-encoded to ~400 KB JPEG regardless of pixel dimensions.
+  if (longest <= UPLOAD_MAX_DIM && drawSource instanceof ImageBitmap && originalFile.size <= 1.5 * 1024 * 1024) {
     return stripExifClientSide(originalFile)
   }
 
@@ -1024,7 +1029,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const pendingRef = useRef<PendingItem[]>([])
 
   function dbg(msg: string) {
-    setDebugLog(prev => [...prev.slice(-30), `${new Date().toISOString().slice(11,19)} ${msg}`])
+    setDebugLog(prev => [...prev.slice(-99), `${new Date().toISOString().slice(11,19)} ${msg}`])
   }
 
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
@@ -1297,7 +1302,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             percent: Math.max(4, Math.round((completed / queue.length) * 90)),
           })
         }
-        dbg(`START ${item.file.name} (${Math.round(item.file.size/1024)}KB${item.compressed ? ' pre✓' : ' no-pre'})`)
+        dbg(`START ${item.file.name} (${Math.round((item.compressed ?? item.file).size/1024)}KB${item.compressed ? ' pre✓' : ' no-pre'})`)
         try {
           const row = await uploadItem(item)
           rows[myIndex] = row
