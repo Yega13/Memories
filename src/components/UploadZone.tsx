@@ -107,6 +107,13 @@ async function uploadVideoMultipart(
   filename: string,
   onProgress?: (percent: number) => void,
 ): Promise<R2UploadResult> {
+  // Reset presign status per upload. r2PresignWorking is module-level so a previous video's
+  // chunk 6 failure (403 from R2 → sets flag false) would permanently route ALL subsequent
+  // videos through the Worker proxy path, which times out on slow mobile (~30 s limit vs the
+  // 71 s it takes to send 5 MB at 70 KB/s). Resetting here gives every video a fresh attempt
+  // at the direct presigned URL path (browser → R2, no Worker in the way).
+  r2PresignWorking = true
+
   // Step 1: init
   const initRes = await fetch('/api/upload/r2/multipart?action=init', {
     method: 'POST',
