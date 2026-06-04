@@ -1088,9 +1088,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     const rejected: string[] = []
 
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    // 4 workers on desktop halves prepare time from ~50 s to ~12 s for large batches.
-    // 2 on mobile avoids OOM — the decode semaphore serialises the heavy GPU work anyway.
-    const ADDFILES_CONCURRENCY = isMobile ? 2 : 4
+    // 4 workers on both mobile and desktop. The semaphore was only needed when decode and
+    // upload ran concurrently (OOM risk). Now decode is in addFiles and upload uses the
+    // pre-compressed result — they never overlap, so 4 parallel decodes is safe on mobile too.
+    const ADDFILES_CONCURRENCY = 4
     let cursor = 0
 
     async function prepareWorker() {
@@ -1153,7 +1154,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             return { preview: tiny || URL.createObjectURL(file), compressed: comp }
           }
 
-          const result: PrepResult = isMobile ? await runWithDecodeSemaphore(doWork) : await doWork()
+          const result: PrepResult = await doWork()
           if ('error' in result) {
             rejected.push(result.error)
             continue
