@@ -80,6 +80,8 @@ async function uploadToR2(
       return await uploadToR2Once(file, albumId, filename, kind, onProgress)
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e))
+      // Rate limit / definitive server rejection — retrying won't help, surface immediately.
+      if (/upload limit reached|rate limit/i.test(lastError.message)) throw lastError
       if (attempt < 5) await wait(Math.min(1500 * attempt, 8000))
     }
   }

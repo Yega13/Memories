@@ -194,7 +194,7 @@ export default function AlbumPageClient() {
       .eq('album_id', albumId)
       .order('sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: true })
-      .limit(500)
+      .limit(2000)
 
     setPhotos(data || [])
   }
