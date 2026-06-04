@@ -1037,20 +1037,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const [uploadError, setUploadError] = useState('')
   const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null)
   const [dragOver, setDragOver] = useState(false)
-  const [debugLog, setDebugLog] = useState<string[]>([])
-  const debugFailuresRef = useRef<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingRef = useRef<PendingItem[]>([])
 
-  function dbg(msg: string) {
-    const entry = `${new Date().toISOString().slice(11,19)} ${msg}`
-    if (msg.startsWith('FAIL')) debugFailuresRef.current = [...debugFailuresRef.current, entry]
-    // Failures pinned at top so they survive the rolling 60-line activity window
-    setDebugLog(prev => {
-      const activity = [...prev.filter(l => !l.startsWith('!!')), entry].slice(-60)
-      return [...debugFailuresRef.current.map(f => `!! ${f}`), ...activity]
-    })
-  }
 
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
 
@@ -1323,11 +1312,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             percent: Math.max(4, Math.round((completed / queue.length) * 90)),
           })
         }
-        dbg(`START ${item.file.name} (${Math.round((item.compressed ?? item.file).size/1024)}KB${item.compressed ? ' pre✓' : ' no-pre'})`)
         try {
           const row = await uploadItem(item)
           rows[myIndex] = row
-          dbg(`OK ${item.file.name}`)
           // Revoke the preview URL only after a successful upload. Revoking at pickup
           // was too early — failed items need their preview blob alive so the retry UI
           // can show the image. Revoking here still frees memory promptly for the
@@ -1342,7 +1329,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           // "tap Upload to retry".
           const msg = e instanceof Error ? e.message : String(e)
           failureMessages.push(`${item.file.name}: ${msg}`)
-          dbg(`FAIL ${item.file.name}: ${msg}`)
           console.warn('[upload] item failed:', item.file.name, msg)
         }
         completed += 1
@@ -1650,17 +1636,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           >
             {uploading ? 'Uploading...' : `Upload ${pending.length} item${pending.length !== 1 ? 's' : ''}`}
           </button>
-        </div>
-      )}
-      {debugLog.length > 0 && (
-        <div className="mt-3 rounded-xl p-3 text-[10px] font-mono break-all" style={{ background: '#111', color: '#0f0', maxHeight: 260, overflowY: 'auto' }}>
-          <div className="flex justify-between mb-1" style={{ color: '#888' }}>
-            <span>DEBUG LOG</span>
-            <button onClick={() => { setDebugLog([]); debugFailuresRef.current = [] }} style={{ color: '#f66' }}>clear</button>
-          </div>
-          {debugLog.map((line, i) => (
-            <div key={i} style={{ color: line.includes('FAIL') ? '#f66' : line.includes('OK') ? '#6f6' : '#0f0' }}>{line}</div>
-          ))}
         </div>
       )}
     </div>
