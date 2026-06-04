@@ -697,13 +697,12 @@ async function processImageForUpload(rawFile: File): Promise<File> {
   return isMobile ? runWithDecodeSemaphore(decodeAndEncode) : decodeAndEncode()
 }
 
-// ─── Tiny preview thumbnail ───────────────────────────────────────────────────
-// Renders at most 120 px in each dimension — ~3 KB JPEG vs ~48 MB decoded full-res.
-// For a batch of 72 photos: 216 KB vs ~3.5 GB of GPU texture memory.
-// That GPU exhaustion was the root cause of "cannot decode image" failures at photo ~63:
-// by then no memory was left to decode the next image in processImageForUpload.
+// ─── Preview thumbnail ────────────────────────────────────────────────────────
+// 400 px covers the 64×64 CSS thumbnail at 3× DPR (192 px physical) with room to spare.
+// ~40 KB JPEG per preview — 100 previews = ~4 MB, still very manageable.
+// Previously 120 px which looked pixelated on high-DPI Samsung/iPhone screens.
 
-const PREVIEW_MAX_DIM = 120
+const PREVIEW_MAX_DIM = 400
 
 async function tinyPreviewFromSource(src: ImageBitmap | HTMLImageElement): Promise<string> {
   try {
@@ -1073,10 +1072,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
 
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
     // Desktop: 4 parallel workers — plenty of RAM, fast GPU.
-    // Mobile: 3 workers. Each 12 MP photo decoded to ImageBitmap = ~48 MB GPU memory.
-    // 4 simultaneous = ~192 MB → OOM → mass "unreadable image file" failures (confirmed).
-    // 3 simultaneous = ~144 MB → safe on any modern phone with 4+ GB RAM.
-    const ADDFILES_CONCURRENCY = isMobile ? 3 : 4
+    // Mobile: 2 workers. Each 12 MP photo decoded to ImageBitmap = ~48 MB GPU memory.
+    // 3 simultaneous = ~144 MB → still OOM on Z Flip3 (confirmed). 2 = ~96 MB, safe.
+    const ADDFILES_CONCURRENCY = isMobile ? 2 : 4
     let cursor = 0
 
     async function prepareWorker() {
