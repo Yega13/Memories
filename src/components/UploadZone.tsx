@@ -1079,10 +1079,13 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     const rejected: string[] = []
 
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    // 4 workers on both mobile and desktop. The semaphore was only needed when decode and
-    // upload ran concurrently (OOM risk). Now decode is in addFiles and upload uses the
-    // pre-compressed result — they never overlap, so 4 parallel decodes is safe on mobile too.
-    const ADDFILES_CONCURRENCY = 4
+    // Desktop: 4 parallel workers — plenty of RAM, fast GPU.
+    // Mobile: 2 workers max. Each 12 MP photo decoded to ImageBitmap = ~48 MB of GPU memory.
+    // 4 simultaneous = ~192 MB which exceeds Chrome's mobile renderer limit → createImageBitmap
+    // fails for ALL 4 at once → <img> fallback also fails under memory pressure → "unreadable
+    // image file" for 30-40% of the batch. 2 workers = ~96 MB peak, safe on any modern phone,
+    // and still 2× faster than the old semaphore-serialised approach (~18 s vs ~35 s).
+    const ADDFILES_CONCURRENCY = isMobile ? 2 : 4
     let cursor = 0
 
     async function prepareWorker() {
