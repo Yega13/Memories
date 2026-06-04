@@ -622,17 +622,10 @@ async function encodeFromSource(
   const h = drawSource instanceof ImageBitmap ? drawSource.height : drawSource.naturalHeight
   const longest = Math.max(w, h)
 
-  // Skip re-encoding only for small JPEGs that already fit within upload dimensions.
-  // WebP and PNG must always be re-encoded: uploading them as-is to Supabase with a non-JPEG
-  // Content-Type causes connection resets ("Failed to fetch") on mobile. Large JPEGs
-  // (> 1.5 MB) are also re-encoded — a 1800×1350 Samsung JPEG can be 6–8 MB which takes
-  // 15–20 s on mobile LTE and gets carrier-dropped before the upload finishes.
-  if (
-    longest <= UPLOAD_MAX_DIM &&
-    drawSource instanceof ImageBitmap &&
-    originalFile.size <= 1.5 * 1024 * 1024 &&
-    /^image\/jpe?g$/i.test(originalFile.type)
-  ) {
+  // JPEGs already within upload dimensions: skip re-encoding, just strip EXIF.
+  // WebP and PNG must always be re-encoded — uploading them with a non-JPEG Content-Type
+  // to Supabase causes connection resets ("Failed to fetch") on mobile.
+  if (longest <= UPLOAD_MAX_DIM && drawSource instanceof ImageBitmap && /^image\/jpe?g$/i.test(originalFile.type)) {
     return stripExifClientSide(originalFile)
   }
 
@@ -1080,12 +1073,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
 
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
     // Desktop: 4 parallel workers — plenty of RAM, fast GPU.
-    // Mobile: 2 workers max. Each 12 MP photo decoded to ImageBitmap = ~48 MB of GPU memory.
-    // 4 simultaneous = ~192 MB which exceeds Chrome's mobile renderer limit → createImageBitmap
-    // fails for ALL 4 at once → <img> fallback also fails under memory pressure → "unreadable
-    // image file" for 30-40% of the batch. 2 workers = ~96 MB peak, safe on any modern phone,
-    // and still 2× faster than the old semaphore-serialised approach (~18 s vs ~35 s).
-    const ADDFILES_CONCURRENCY = isMobile ? 2 : 4
+    // Mobile: 3 workers. Each 12 MP photo decoded to ImageBitmap = ~48 MB GPU memory.
+    // 4 simultaneous = ~192 MB → OOM → mass "unreadable image file" failures (confirmed).
+    // 3 simultaneous = ~144 MB → safe on any modern phone with 4+ GB RAM.
+    const ADDFILES_CONCURRENCY = isMobile ? 3 : 4
     let cursor = 0
 
     async function prepareWorker() {

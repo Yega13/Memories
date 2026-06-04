@@ -52,11 +52,11 @@ export const R2_SINGLE_UPLOAD_TIMEOUT_MS = 120_000
 export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 600_000
 
 // Maximum concurrent upload worker slots by device input class.
-// Mobile gets 1 — even 2 simultaneous XHRs to supabase.co trigger carrier burst-drop
-// heuristics, causing fast "failed to fetch" failures that cascade into 10+ min sessions
-// via the retry backoff. Sequential uploads avoid this entirely.
+// Mobile gets 2 — files are pre-compressed to ~400 KB before upload, so each XHR
+// completes in ~1 s. Brief 1-second overlaps are far less likely to trigger carrier
+// burst-drop heuristics than the old 15-20 s large-file uploads were.
 // Desktop gets 4 — broadband+HTTP/2 handles 4 concurrent uploads without stalling.
-export const UPLOAD_CONCURRENCY_MOBILE = 1
+export const UPLOAD_CONCURRENCY_MOBILE = 2
 export const UPLOAD_CONCURRENCY_DESKTOP = 4
 
 // Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency
