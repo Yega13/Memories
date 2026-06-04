@@ -978,10 +978,15 @@ async function uploadToSupabaseStorage(
   contentType: string | undefined,
 ): Promise<void> {
   const token = await getUploadToken()
+  // Mobile: 4 attempts, 4 s max backoff (500→1000→2000→4000 = 7.5 s total waste per failure).
+  // Desktop: 8 attempts, 16 s max backoff — broadband connections recover slower from ISP blips.
+  // With mobile concurrency=1 most "failed to fetch" errors don't happen at all; this just
+  // caps the damage when a carrier genuinely drops mid-upload.
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  const maxAttempts = isMobile ? 4 : 8
+  const maxBackoffMs = isMobile ? 4_000 : 16_000
   let lastError: Error = new Error('Upload failed')
-  // 8 attempts with exponential backoff: 500 → 1000 → 2000 → 4000 → 8000 → 16000ms (~31s total).
-  // Cellular handoffs and tower switches typically last 5–15s — linear 500ms×attempt gave up too fast.
-  for (let attempt = 1; attempt <= 8; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await uploadToSupabaseOnce(file, path, token, contentType)
       return
@@ -995,11 +1000,11 @@ async function uploadToSupabaseStorage(
         || /storage upload failed: [5]\d{2}/.test(lastError.message.toLowerCase())
         || /storage upload failed: 429/.test(lastError.message)
       if (!retriable) throw lastError
-      if (attempt < 8) {
+      if (attempt < maxAttempts) {
         const retryAfterMs = (lastError as Error & { retryAfterMs?: number }).retryAfterMs
         const backoff = retryAfterMs && retryAfterMs > 0
           ? Math.min(retryAfterMs, 30_000)
-          : Math.min(500 * Math.pow(2, attempt - 1), 16_000)  // 500, 1000, 2000, 4000, 8000, 16000, 16000
+          : Math.min(500 * Math.pow(2, attempt - 1), maxBackoffMs)
         await wait(backoff)
       }
     }
@@ -1014,8 +1019,13 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const [uploadError, setUploadError] = useState('')
   const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [debugLog, setDebugLog] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingRef = useRef<PendingItem[]>([])
+
+  function dbg(msg: string) {
+    setDebugLog(prev => [...prev.slice(-30), `${new Date().toISOString().slice(11,19)} ${msg}`])
+  }
 
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
 
@@ -1277,9 +1287,8 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         const myIndex = cursor
         cursor += 1
         const item = queue[myIndex]
-        // HEIC conversion runs inside uploadItem and can take 10-30s. Set the status
-        // label to "Converting" before the call so the UI doesn't appear frozen.
-        if (item.heic) {
+        // HEIC items without a pre-compressed file still need conversion during upload.
+        if (item.heic && !item.compressed) {
           setUploadStatus({
             fileName: item.file.name,
             index: completed + 1,
@@ -1288,9 +1297,11 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             percent: Math.max(4, Math.round((completed / queue.length) * 90)),
           })
         }
+        dbg(`START ${item.file.name} (${Math.round(item.file.size/1024)}KB${item.compressed ? ' pre✓' : ' no-pre'})`)
         try {
           const row = await uploadItem(item)
           rows[myIndex] = row
+          dbg(`OK ${item.file.name}`)
           // Revoke the preview URL only after a successful upload. Revoking at pickup
           // was too early — failed items need their preview blob alive so the retry UI
           // can show the image. Revoking here still frees memory promptly for the
@@ -1305,6 +1316,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           // "tap Upload to retry".
           const msg = e instanceof Error ? e.message : String(e)
           failureMessages.push(`${item.file.name}: ${msg}`)
+          dbg(`FAIL ${item.file.name}: ${msg}`)
           console.warn('[upload] item failed:', item.file.name, msg)
         }
         completed += 1
@@ -1612,6 +1624,17 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           >
             {uploading ? 'Uploading...' : `Upload ${pending.length} item${pending.length !== 1 ? 's' : ''}`}
           </button>
+        </div>
+      )}
+      {debugLog.length > 0 && (
+        <div className="mt-3 rounded-xl p-3 text-[10px] font-mono break-all" style={{ background: '#111', color: '#0f0', maxHeight: 260, overflowY: 'auto' }}>
+          <div className="flex justify-between mb-1" style={{ color: '#888' }}>
+            <span>DEBUG LOG</span>
+            <button onClick={() => setDebugLog([])} style={{ color: '#f66' }}>clear</button>
+          </div>
+          {debugLog.map((line, i) => (
+            <div key={i} style={{ color: line.includes('FAIL') ? '#f66' : line.includes('OK') ? '#6f6' : '#0f0' }}>{line}</div>
+          ))}
         </div>
       )}
     </div>
