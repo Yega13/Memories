@@ -226,7 +226,7 @@ async function uploadVideoMultipart(
 
       let part: { partNumber: number; etag: string } | null = null
       let lastErr: Error | null = null
-      for (let attempt = 1; attempt <= 8; attempt++) {
+      for (let attempt = 1; attempt <= maxChunkAttempts; attempt++) {
         if (abortTriggered) break
         try {
           part = await uploadChunkOnce(partNumber, chunk, chunkStart, chunkEnd)
@@ -238,7 +238,7 @@ async function uploadVideoMultipart(
           // 4xx = definitive server rejection. Retrying won't help — surface it fast.
           const httpStatus = (lastErr as Error & { status?: number }).status
           if (typeof httpStatus === 'number' && httpStatus >= 400 && httpStatus < 500) break
-          if (attempt < 8) await wait(Math.min(2500 * attempt, 15000))
+          if (attempt < maxChunkAttempts) await wait(Math.min(2500 * attempt, maxChunkBackoffMs))
         }
       }
 
@@ -261,8 +261,13 @@ async function uploadVideoMultipart(
   }
 
   // Mobile: 1 concurrent chunk worker — same burst-drop issue as file-level concurrency.
-  // Two simultaneous XHRs to R2 on mobile triggers carrier reset → "Network error on chunk 2".
+  // Two simultaneous XHRs to R2 on mobile triggers carrier reset → "Network error on chunk N".
+  // Mobile also gets fewer retries (3 vs 8) and smaller max backoff (5s vs 15s): a carrier that
+  // drops a 70-second 5 MB transfer will keep dropping it — retrying 8 times wastes ~67 s per
+  // failed video and is the reason bulk video batches drag to 7+ minutes.
   const isMobileChunk = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  const maxChunkAttempts = isMobileChunk ? 3 : 8
+  const maxChunkBackoffMs = isMobileChunk ? 5_000 : 15_000
   const chunkConcurrency = Math.min(isMobileChunk ? 1 : R2_MULTIPART_CONCURRENCY, totalChunks)
   await Promise.all(Array.from({ length: chunkConcurrency }, () => chunkWorker()))
 
@@ -615,11 +620,17 @@ async function encodeFromSource(
   const h = drawSource instanceof ImageBitmap ? drawSource.height : drawSource.naturalHeight
   const longest = Math.max(w, h)
 
-  // Skip re-encoding only when the file is already small AND fits within upload dimensions.
-  // A 1800×1350 Samsung JPEG can still be 6–8 MB — uploading the original takes 15–20 s on
-  // mobile LTE and gets carrier-dropped. Cap at 1.5 MB so large originals always get
-  // re-encoded to ~400 KB JPEG regardless of pixel dimensions.
-  if (longest <= UPLOAD_MAX_DIM && drawSource instanceof ImageBitmap && originalFile.size <= 1.5 * 1024 * 1024) {
+  // Skip re-encoding only for small JPEGs that already fit within upload dimensions.
+  // WebP and PNG must always be re-encoded: uploading them as-is to Supabase with a non-JPEG
+  // Content-Type causes connection resets ("Failed to fetch") on mobile. Large JPEGs
+  // (> 1.5 MB) are also re-encoded — a 1800×1350 Samsung JPEG can be 6–8 MB which takes
+  // 15–20 s on mobile LTE and gets carrier-dropped before the upload finishes.
+  if (
+    longest <= UPLOAD_MAX_DIM &&
+    drawSource instanceof ImageBitmap &&
+    originalFile.size <= 1.5 * 1024 * 1024 &&
+    /^image\/jpe?g$/i.test(originalFile.type)
+  ) {
     return stripExifClientSide(originalFile)
   }
 
@@ -1025,11 +1036,18 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [debugLog, setDebugLog] = useState<string[]>([])
+  const debugFailuresRef = useRef<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingRef = useRef<PendingItem[]>([])
 
   function dbg(msg: string) {
-    setDebugLog(prev => [...prev.slice(-99), `${new Date().toISOString().slice(11,19)} ${msg}`])
+    const entry = `${new Date().toISOString().slice(11,19)} ${msg}`
+    if (msg.startsWith('FAIL')) debugFailuresRef.current = [...debugFailuresRef.current, entry]
+    // Failures pinned at top so they survive the rolling 60-line activity window
+    setDebugLog(prev => {
+      const activity = [...prev.filter(l => !l.startsWith('!!')), entry].slice(-60)
+      return [...debugFailuresRef.current.map(f => `!! ${f}`), ...activity]
+    })
   }
 
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
@@ -1635,7 +1653,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         <div className="mt-3 rounded-xl p-3 text-[10px] font-mono break-all" style={{ background: '#111', color: '#0f0', maxHeight: 260, overflowY: 'auto' }}>
           <div className="flex justify-between mb-1" style={{ color: '#888' }}>
             <span>DEBUG LOG</span>
-            <button onClick={() => setDebugLog([])} style={{ color: '#f66' }}>clear</button>
+            <button onClick={() => { setDebugLog([]); debugFailuresRef.current = [] }} style={{ color: '#f66' }}>clear</button>
           </div>
           {debugLog.map((line, i) => (
             <div key={i} style={{ color: line.includes('FAIL') ? '#f66' : line.includes('OK') ? '#6f6' : '#0f0' }}>{line}</div>
