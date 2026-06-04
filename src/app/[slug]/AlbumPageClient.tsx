@@ -509,6 +509,11 @@ export default function AlbumPageClient() {
           onCoverSet={(photoId) => handleAlbumUpdated({ cover_photo_id: photoId })}
         />
         </ErrorBoundary>
+        {photos.length >= 2000 && (
+          <p className="text-center text-xs py-4" style={{ color: '#8B6F4E' }}>
+            Showing the first 2,000 items — the album may contain more.
+          </p>
+        )}
 
         {!effectiveIsOwner && (
           <div className="mt-8 text-center">

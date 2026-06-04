@@ -45,8 +45,8 @@ export async function POST(req: Request) {
   const forbidden = forbidCrossSiteRequest(req)
   if (forbidden) return forbidden
 
-  // Per-IP rate limit: 100 uploads/hour prevents a single source from flooding storage.
-  const ipLimit = await checkRateLimit(clientIpKey(req, 'r2_upload'), 3600, 100)
+  // Per-IP rate limit: 500 uploads/hour prevents a single source from flooding storage.
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'r2_upload'), 3600, 500)
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: 'Upload limit reached. Please wait before uploading more files.' },
@@ -74,7 +74,7 @@ export async function POST(req: Request) {
   }
 
   // Per-album rate limit: caps total uploads regardless of how many IPs are used.
-  const albumLimit = await checkRateLimit(`r2_upload_album:${albumId}`, 3600, 500)
+  const albumLimit = await checkRateLimit(`r2_upload_album:${albumId}`, 3600, 5000)
   if (!albumLimit.ok) {
     return NextResponse.json(
       { error: 'This album has reached its upload limit. Please try again later.' },
