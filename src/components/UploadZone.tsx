@@ -1748,7 +1748,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         onClick={() => { if (!uploading && !preparing) inputRef.current?.click() }}
         onDragOver={(e) => { e.preventDefault(); if (!uploading && !preparing) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); void processAndUploadAll(e.dataTransfer.files) }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files) }}
         className="hush-hover-lift hush-upload-zone rounded-2xl p-4 sm:p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
@@ -1791,7 +1791,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           onChange={(e) => {
             const input = e.currentTarget
             const files = input.files
-            void processAndUploadAll(files).finally(() => {
+            void addFiles(files).finally(() => {
               input.value = ''
             })
           }}
