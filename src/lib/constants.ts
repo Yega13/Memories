@@ -56,7 +56,7 @@ export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 600_000
 // at the exact same instant (prevents carrier burst-drop "Failed to fetch"). Smaller
 // output files (1600 px / 0.80 q) mean each upload completes faster, reducing overlap.
 // Desktop gets 4 — broadband+HTTP/2 handles 4 concurrent uploads without stalling.
-export const UPLOAD_CONCURRENCY_MOBILE = 2
+export const UPLOAD_CONCURRENCY_MOBILE = 3
 export const UPLOAD_CONCURRENCY_DESKTOP = 4
 
 // Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency

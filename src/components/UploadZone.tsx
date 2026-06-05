@@ -280,7 +280,7 @@ async function uploadVideoMultipart(
   // drops a 70-second 5 MB transfer will keep dropping it — retrying 8 times wastes ~67 s per
   // failed video and is the reason bulk video batches drag to 7+ minutes.
   const isMobileChunk = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-  const maxChunkAttempts = isMobileChunk ? 3 : 8
+  const maxChunkAttempts = isMobileChunk ? 5 : 8
   const maxChunkBackoffMs = isMobileChunk ? 5_000 : 15_000
   const chunkConcurrency = Math.min(isMobileChunk ? 1 : R2_MULTIPART_CONCURRENCY, totalChunks)
   await Promise.all(Array.from({ length: chunkConcurrency }, () => chunkWorker()))
@@ -1239,11 +1239,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             }
           }
 
-          // Serialize decodes on mobile to prevent OOM from concurrent large bitmap allocations
-          // (50 MP camera photos = ~200 MB each; 2 concurrent without semaphore = OOM → false "unreadable" rejections)
-          const result: PrepResult = isMobile
-            ? await runWithDecodeSemaphore(doWork)
-            : await doWork()
+          const result: PrepResult = await doWork()
           if ('error' in result) {
             rejected.push(result.error)
             continue
@@ -1580,13 +1576,179 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     throw lastError ?? new Error('Could not save uploaded files')
   }
 
+  // ─── Pipeline: process + upload concurrently ──────────────────────────────
+  // Files are encoded and uploaded at the same time — as soon as a photo is ready
+  // it goes straight to Supabase/R2 without waiting for the rest to finish processing.
+  async function processAndUploadAll(inputFiles: FileList | null) {
+    if (uploading || preparing || !inputFiles || inputFiles.length === 0) return
+    const filesArr = Array.from(inputFiles)
+    const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    const PROC = isMobile ? 2 : 4
+    const UPLOAD = Math.min(isMobile ? UPLOAD_CONCURRENCY_MOBILE : UPLOAD_CONCURRENCY_DESKTOP, filesArr.length)
+
+    setUploading(true)
+    setUploadError('')
+    setUploadStatus({ fileName: `${filesArr.length} item${filesArr.length === 1 ? '' : 's'}`, index: 0, total: filesArr.length, phase: 'Uploading', percent: 2 })
+
+    type QueueEntry = { item: PendingItem; fileIndex: number }
+    const readyQueue: QueueEntry[] = []
+    const rows: (PhotoInsertRow | null)[] = new Array(filesArr.length).fill(null)
+    const failureMessages: string[] = []
+    const rejected: string[] = []
+    let procCursor = 0
+    let uploadCursor = 0
+    let procDone = false
+    let uploadCompleted = 0
+
+    async function processOne(file: File): Promise<PendingItem | null> {
+      const kind = detectKind(file)
+      if (!kind) { rejected.push(`${file.name}: unsupported file type`); return null }
+      const cap = kind === 'video' ? caps.video : caps.image
+      if (file.size > cap) { rejected.push(`${file.name}: ${formatFileSize(file.size)} exceeds ${formatFileSize(cap)} limit`); return null }
+      const heic = kind === 'image' && isHeicFile(file)
+      let preview = URL.createObjectURL(file)
+      let compressed: File | undefined
+
+      if (kind === 'image' && !heic) {
+        let bitmap: ImageBitmap | null = null
+        let imgEl: HTMLImageElement | null = null
+        let imgUrl: string | null = null
+        let sourceFile = file
+        try { bitmap = await createImageBitmap(file) } catch { /* next */ }
+        if (!bitmap && /^image\/jpe?g$/i.test(file.type)) {
+          try {
+            const jpegOnly = await extractJpegBytes(file)
+            if (jpegOnly !== file) {
+              bitmap = await createImageBitmap(jpegOnly)
+              sourceFile = new File([jpegOnly], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified })
+            }
+          } catch { /* next */ }
+        }
+        if (!bitmap) {
+          imgUrl = URL.createObjectURL(file)
+          try {
+            imgEl = await new Promise<HTMLImageElement>((res, rej) => {
+              const el = new Image(); el.onload = () => res(el); el.onerror = () => rej(); el.src = imgUrl!
+            })
+          } catch { URL.revokeObjectURL(imgUrl); imgUrl = null }
+        }
+        if (!bitmap && !imgEl) {
+          try {
+            const heicFile = await convertHeicToJpeg(file)
+            bitmap = await createImageBitmap(heicFile)
+            sourceFile = heicFile
+          } catch { rejected.push(`${file.name}: unreadable image file`); return null }
+        }
+        try {
+          const src = bitmap ?? imgEl!
+          const tiny = await tinyPreviewFromSource(src)
+          if (tiny) { URL.revokeObjectURL(preview); preview = tiny }
+          try { compressed = await encodeFromSource(src, sourceFile) } catch { /* uploadItem re-processes */ }
+        } finally {
+          bitmap?.close()
+          if (imgUrl) URL.revokeObjectURL(imgUrl)
+        }
+      } else if (heic) {
+        try { compressed = await processImageForUpload(file) } catch { /* uploadItem re-processes */ }
+      }
+      return { file, compressed, preview, kind, caption: '', author: '', heic }
+    }
+
+    async function processingWorker() {
+      while (procCursor < filesArr.length) {
+        const myI = procCursor++
+        const item = await processOne(filesArr[myI])
+        if (item) readyQueue.push({ item, fileIndex: myI })
+      }
+    }
+
+    async function uploadWorker() {
+      while (true) {
+        if (uploadCursor < readyQueue.length) {
+          const myI = uploadCursor++
+          const { item, fileIndex } = readyQueue[myI]
+          try {
+            rows[fileIndex] = await uploadItem(item)
+            if (item.preview.startsWith('blob:')) URL.revokeObjectURL(item.preview)
+          } catch (e) {
+            failureMessages.push(`${item.file.name}: ${e instanceof Error ? e.message : String(e)}`)
+          }
+          uploadCompleted++
+          setUploadStatus({ fileName: item.file.name, index: uploadCompleted, total: filesArr.length, phase: 'Uploading', percent: Math.max(4, Math.round((uploadCompleted / filesArr.length) * 90)) })
+        } else if (procDone && uploadCursor >= readyQueue.length) {
+          break
+        } else {
+          await wait(20)
+        }
+      }
+    }
+
+    const runPipeline = async () => {
+      await Promise.all([
+        Promise.all(Array.from({ length: Math.min(PROC, filesArr.length) }, processingWorker)).then(() => { procDone = true }),
+        Promise.all(Array.from({ length: UPLOAD }, uploadWorker)),
+      ])
+    }
+
+    if (typeof navigator !== 'undefined' && 'locks' in navigator) {
+      await navigator.locks.request('hushare-upload', runPipeline)
+    } else {
+      await runPipeline()
+    }
+
+    setUploadStatus({ fileName: `${filesArr.length} item${filesArr.length === 1 ? '' : 's'}`, index: filesArr.length, total: filesArr.length, phase: 'Saving to album', percent: 95 })
+
+    const successRows = rows.filter((r): r is PhotoInsertRow => r !== null)
+    let serverRejectedCount = 0
+    if (successRows.length > 0) {
+      try {
+        for (let i = 0; i < successRows.length; i += 100) {
+          const result = await saveUploadedRows(successRows.slice(i, i + 100))
+          serverRejectedCount += result.rejected
+        }
+        onPhotosUploaded?.()
+      } catch (e) {
+        const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded files'}`
+        setUploadError(message); showAppToast(message, 'error'); setUploading(false); setUploadStatus(null); return
+      }
+      filesArr.forEach((file, i) => {
+        const row = rows[i]
+        if (!row || row.media_type !== 'video') return
+        if (row.storage_backend === 'stream') {
+          if (row.stream_uid) mirrorQueue.push({ file, albumId: album.id, storagePath: row.storage_path, baseId: row.stream_uid })
+        } else if (file.size <= POSTER_MAX_BYTES) {
+          posterQueue.push({ file, albumId: album.id, storagePath: row.storage_path })
+        }
+      })
+      void processPosterQueue()
+      void processMirrorQueue()
+    }
+
+    const failedCount = failureMessages.length
+    if (rejected.length > 0 || failedCount > 0) {
+      const parts: string[] = []
+      if (successRows.length > 0) parts.push(`${successRows.length} uploaded`)
+      if (failedCount > 0) parts.push(`${failedCount} failed — ${failureMessages[0] ?? ''}`)
+      if (rejected.length > 0) parts.push(`${rejected.length} skipped: ${rejected[0]}`)
+      const msg = parts.join(', ')
+      setUploadError(msg); showAppToast(msg, 'error')
+    } else {
+      showAppToast(serverRejectedCount > 0
+        ? `${successRows.length} uploaded, ${serverRejectedCount} skipped by server.`
+        : `${filesArr.length - rejected.length} file${filesArr.length - rejected.length !== 1 ? 's' : ''} uploaded.`,
+        serverRejectedCount > 0 ? 'error' : undefined)
+    }
+    setUploading(false)
+    setUploadStatus(null)
+  }
+
   return (
     <div className="hush-upload-wrap my-6">
       <div
         onClick={() => { if (!uploading && !preparing) inputRef.current?.click() }}
         onDragOver={(e) => { e.preventDefault(); if (!uploading && !preparing) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files) }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); void processAndUploadAll(e.dataTransfer.files) }}
         className="hush-hover-lift hush-upload-zone rounded-2xl p-4 sm:p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
@@ -1629,12 +1791,30 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           onChange={(e) => {
             const input = e.currentTarget
             const files = input.files
-            void addFiles(files).finally(() => {
+            void processAndUploadAll(files).finally(() => {
               input.value = ''
             })
           }}
         />
       </div>
+
+      {uploadError && (
+        <div className="mt-4 text-sm p-3 rounded-lg flex items-start justify-between gap-3" style={{ background: '#FEE2E2', color: '#C0392B' }}>
+          <p>{uploadError}</p>
+          <button type="button" onClick={() => { setUploadError(''); setUploadStatus(null) }} className="font-semibold hover:underline flex-none" style={{ color: '#7A2A1F' }}>Dismiss</button>
+        </div>
+      )}
+      {uploadStatus && (
+        <div className="mt-4 rounded-xl p-3" style={{ background: '#F5F0E8', border: '1px solid #DDD5C5' }}>
+          <div className="flex items-center justify-between gap-3 text-xs mb-2" style={{ color: '#7C5C3E' }}>
+            <span className="truncate">{uploadStatus.phase} - {uploadStatus.fileName}</span>
+            <span className="flex-none">{uploadStatus.index}/{uploadStatus.total} - {uploadStatus.percent}%</span>
+          </div>
+          <div className="h-2 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
+            <div className="h-full transition-all" style={{ width: `${uploadStatus.percent}%`, background: '#254F22' }} />
+          </div>
+        </div>
+      )}
 
       {pending.length > 0 && (
         <div className="mt-4 space-y-3">
@@ -1696,40 +1876,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             </div>
           ))}
 
-          {uploadError && (
-            <div className="text-sm p-3 rounded-lg mb-2 flex items-start justify-between gap-3" style={{ background: '#FEE2E2', color: '#C0392B' }}>
-              <p>{uploadError}</p>
-              <button
-                type="button"
-                onClick={() => { setUploadError(''); setUploadStatus(null) }}
-                className="font-semibold hover:underline"
-                style={{ color: '#7A2A1F' }}
-              >
-                Dismiss
-              </button>
-            </div>
-          )}
-          {uploadStatus && (
-            <div className="rounded-xl p-3" style={{ background: '#F5F0E8', border: '1px solid #DDD5C5' }}>
-              <div className="flex items-center justify-between gap-3 text-xs mb-2" style={{ color: '#7C5C3E' }}>
-                <span className="truncate">
-                  {uploadStatus.phase} - {uploadStatus.fileName}
-                </span>
-                <span className="flex-none">
-                  {uploadStatus.index}/{uploadStatus.total} - {uploadStatus.percent}%
-                </span>
-              </div>
-              <div className="h-2 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
-                <div
-                  className="h-full transition-all"
-                  style={{
-                    width: `${uploadStatus.percent}%`,
-                    background: uploadStatus.phase.toLowerCase().includes('failed') ? '#C0392B' : '#254F22',
-                  }}
-                />
-              </div>
-            </div>
-          )}
           <button
             onClick={uploadAll}
             disabled={uploading}
