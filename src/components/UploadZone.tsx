@@ -101,6 +101,11 @@ const CHUNK_SIZE = R2_CHUNK_SIZE_BYTES
 // R2 binding (no S3 credentials needed) and always works. Resets per page load.
 let r2PresignWorking = true
 
+// Set to false after Stream returns 503 / "not configured" so subsequent videos in the
+// same session skip the init round-trip entirely. A slow 503 response (5-10 s) × 20 videos
+// / 4 workers = 25-50 s wasted just on failed Stream calls in a video-heavy batch.
+let streamAvailable = true
+
 async function uploadVideoMultipart(
   file: File,
   albumId: string,
@@ -325,6 +330,8 @@ async function uploadVideoToStream(
   filename: string,
   onProgress?: (percent: number) => void,
 ): Promise<StreamUploadResult> {
+  if (!streamAvailable) throw new Error('Stream not configured')
+
   const initRes = await fetch('/api/upload/stream/tus', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -334,6 +341,7 @@ async function uploadVideoToStream(
       contentType: file.type || 'video/mp4',
       totalSize: file.size,
     }),
+    signal: AbortSignal.timeout(3_000),
   })
   const initBody = await initRes.json().catch(() => ({})) as {
     error?: string
@@ -343,6 +351,7 @@ async function uploadVideoToStream(
     stream_thumbnail_url?: string
   }
   if (!initRes.ok || !initBody.uploadUrl || !initBody.stream_uid || !initBody.stream_iframe_url || !initBody.stream_thumbnail_url) {
+    if (initRes.status === 503 || /not configured/i.test(initBody.error ?? '')) streamAvailable = false
     throw new Error(initBody.error || `Stream upload init failed: ${initRes.status}`)
   }
 
@@ -605,8 +614,13 @@ function runWithDecodeSemaphore<T>(fn: () => Promise<T>): Promise<T> {
 //      Visually identical to the original on every screen; ~25% smaller than the
 //      previous 2048 px / 0.88 setting.
 
-const UPLOAD_MAX_DIM = 1920
-const UPLOAD_QUALITY = 0.85
+// Desktop keeps 1920 px / 0.85 for full quality. Mobile drops to 1600 px / 0.80 which
+// produces ~250 KB per photo vs ~400 KB — 37% smaller files means 37% faster uploads
+// over a slow LTE connection without any visible quality difference on a phone screen.
+const UPLOAD_MAX_DIM_DESKTOP = 1920
+const UPLOAD_MAX_DIM_MOBILE  = 1600
+const UPLOAD_QUALITY_DESKTOP = 0.85
+const UPLOAD_QUALITY_MOBILE  = 0.80
 
 function encodeToBlob(
   canvas: OffscreenCanvas | HTMLCanvasElement,
@@ -625,6 +639,10 @@ async function encodeFromSource(
   drawSource: ImageBitmap | HTMLImageElement,
   originalFile: File,
 ): Promise<File> {
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  const maxDim  = isMobile ? UPLOAD_MAX_DIM_MOBILE  : UPLOAD_MAX_DIM_DESKTOP
+  const quality = isMobile ? UPLOAD_QUALITY_MOBILE  : UPLOAD_QUALITY_DESKTOP
+
   const w = drawSource instanceof ImageBitmap ? drawSource.width : drawSource.naturalWidth
   const h = drawSource instanceof ImageBitmap ? drawSource.height : drawSource.naturalHeight
   const longest = Math.max(w, h)
@@ -632,11 +650,11 @@ async function encodeFromSource(
   // JPEGs already within upload dimensions: skip re-encoding, just strip EXIF.
   // WebP and PNG must always be re-encoded — uploading them with a non-JPEG Content-Type
   // to Supabase causes connection resets ("Failed to fetch") on mobile.
-  if (longest <= UPLOAD_MAX_DIM && drawSource instanceof ImageBitmap && /^image\/jpe?g$/i.test(originalFile.type)) {
+  if (longest <= maxDim && drawSource instanceof ImageBitmap && /^image\/jpe?g$/i.test(originalFile.type)) {
     return stripExifClientSide(originalFile)
   }
 
-  const scale = Math.min(1, UPLOAD_MAX_DIM / longest)
+  const scale = Math.min(1, maxDim / longest)
   const tw = Math.max(1, Math.round(w * scale))
   const th = Math.max(1, Math.round(h * scale))
 
@@ -648,7 +666,7 @@ async function encodeFromSource(
   if (!ctx) throw new Error('canvas context unavailable')
   ctx.drawImage(drawSource as CanvasImageSource, 0, 0, tw, th)
 
-  const jpegBlob = await encodeToBlob(canvas, 'image/jpeg', UPLOAD_QUALITY)
+  const jpegBlob = await encodeToBlob(canvas, 'image/jpeg', quality)
   if (!jpegBlob) throw new Error('canvas encoding returned null blob')
   return new File([jpegBlob], originalFile.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
 }
@@ -943,6 +961,13 @@ async function stripExifClientSide(file: File): Promise<File> {
 // potentially filling connection slots before any upload has started.
 let _uploadTokenPromise: Promise<string> | null = null
 
+// Stagger consecutive mobile uploads by 800 ms so two workers never hit supabase.co at
+// exactly the same instant. This prevents the carrier burst-drop that causes deterministic
+// "Failed to fetch" with UPLOAD_CONCURRENCY_MOBILE = 2, while still allowing both workers
+// to transfer in parallel (one started 800 ms earlier than the other).
+let _mobileUploadLastStartMs = 0
+const MOBILE_UPLOAD_STAGGER_MS = 800
+
 function getUploadToken(): Promise<string> {
   if (!_uploadTokenPromise) {
     _uploadTokenPromise = supabase.auth.getSession()
@@ -995,11 +1020,16 @@ async function uploadToSupabaseStorage(
   contentType: string | undefined,
 ): Promise<void> {
   const token = await getUploadToken()
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+
+  // Stagger: ensure no two mobile uploads start within MOBILE_UPLOAD_STAGGER_MS of each other.
+  if (isMobile) {
+    const elapsed = Date.now() - _mobileUploadLastStartMs
+    if (elapsed < MOBILE_UPLOAD_STAGGER_MS) await wait(MOBILE_UPLOAD_STAGGER_MS - elapsed)
+    _mobileUploadLastStartMs = Date.now()
+  }
   // Mobile: 4 attempts, 4 s max backoff (500→1000→2000→4000 = 7.5 s total waste per failure).
   // Desktop: 8 attempts, 16 s max backoff — broadband connections recover slower from ISP blips.
-  // With mobile concurrency=1 most "failed to fetch" errors don't happen at all; this just
-  // caps the damage when a carrier genuinely drops mid-upload.
-  const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
   const maxAttempts = isMobile ? 4 : 8
   const maxBackoffMs = isMobile ? 4_000 : 16_000
   let lastError: Error = new Error('Upload failed')

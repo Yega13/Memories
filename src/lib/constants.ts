@@ -52,9 +52,9 @@ export const R2_SINGLE_UPLOAD_TIMEOUT_MS = 120_000
 export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 600_000
 
 // Maximum concurrent upload worker slots by device input class.
-// Mobile gets 2 — files are pre-compressed to ~400 KB before upload, so each XHR
-// completes in ~1 s. Brief 1-second overlaps are far less likely to trigger carrier
-// burst-drop heuristics than the old 15-20 s large-file uploads were.
+// Mobile gets 2 — uploads are staggered by 800 ms so both workers never hit supabase.co
+// at the exact same instant (prevents carrier burst-drop "Failed to fetch"). Smaller
+// output files (1600 px / 0.80 q) mean each upload completes faster, reducing overlap.
 // Desktop gets 4 — broadband+HTTP/2 handles 4 concurrent uploads without stalling.
 export const UPLOAD_CONCURRENCY_MOBILE = 2
 export const UPLOAD_CONCURRENCY_DESKTOP = 4
