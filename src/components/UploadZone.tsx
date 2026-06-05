@@ -1110,6 +1110,8 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingRef = useRef<PendingItem[]>([])
+  type BgUploadState = { status: 'uploading' } | { status: 'done'; row: PhotoInsertRow } | { status: 'failed' }
+  const bgUploads = useRef<Map<File, BgUploadState>>(new Map())
 
 
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
@@ -1142,6 +1144,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   async function addFiles(files: FileList | null) {
     if (uploading || preparing) return
     if (!files) return
+    bgUploads.current.clear()
     setPreparing(true)
 
     const filesArr = Array.from(files)
@@ -1258,6 +1261,16 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         }
 
         itemSlots[myIndex] = { file, compressed, preview: previewUrl, kind, caption: '', author: '', heic }
+        // Kick off background upload immediately while user reviews captions
+        const bgItem = itemSlots[myIndex]
+        if (bgItem) {
+          bgUploads.current.set(file, { status: 'uploading' })
+          void uploadItem(bgItem).then(row => {
+            bgUploads.current.set(file, { status: 'done', row })
+          }).catch(() => {
+            bgUploads.current.set(file, { status: 'failed' })
+          })
+        }
       }
     }
 
@@ -1279,7 +1292,15 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   function removeFile(index: number) {
     setPending((prev) => {
       const target = prev[index]
-      if (target) URL.revokeObjectURL(target.preview)
+      if (target) {
+        URL.revokeObjectURL(target.preview)
+        // If already background-uploaded to storage (not yet in DB), delete it now
+        const bg = bgUploads.current.get(target.file)
+        if (bg?.status === 'done' && bg.row.storage_backend === 'supabase') {
+          void supabase.storage.from('Photos').remove([bg.row.storage_path]).catch(() => {})
+        }
+        bgUploads.current.delete(target.file)
+      }
       return prev.filter((_, i) => i !== index)
     })
   }
@@ -1369,88 +1390,72 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     const queue = [...pending]
     setUploading(true)
     setUploadError('')
-    setUploadStatus(null)
 
-    // rows is index-parallel to queue so order is preserved on save
     const rows: (PhotoInsertRow | null)[] = new Array(queue.length).fill(null)
-    let completed = 0
-    let cursor = 0
-    // Device-aware concurrency. Sequential (=1) made 200-photo bulk uploads take 30+ minutes.
-    // Mobile carriers don't love too many parallel uploads, so coarse pointers get 3; desktop 5.
-    const coarsePointer = typeof window !== 'undefined'
-      && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    const concurrency = Math.min(coarsePointer ? UPLOAD_CONCURRENCY_MOBILE : UPLOAD_CONCURRENCY_DESKTOP, queue.length)
+    const failureMessages: string[] = []
 
-    setUploadStatus({
-      fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`,
-      index: 0,
-      total: queue.length,
-      phase: 'Uploading',
-      percent: 4,
+    // Check if background uploads have already finished everything
+    const allBgDone = queue.every(item => {
+      const bg = bgUploads.current.get(item.file)
+      return bg?.status === 'done' || bg?.status === 'failed'
     })
 
-    // Track which preview URLs have already been revoked so we never double-revoke when the
-    // end-of-batch cleanup runs. URL.revokeObjectURL is a no-op on an already-revoked URL but
-    // the explicit set keeps the intent clear.
-    const revokedPreviews = new Set<number>()
+    if (allBgDone) {
+      // Everything uploaded in background — animate 0→100% and go straight to DB save
+      setUploadStatus({ fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`, index: queue.length, total: queue.length, phase: 'Uploading', percent: 0 })
+      for (let p = 10; p <= 100; p += 10) {
+        setUploadStatus(s => s ? { ...s, percent: p } : s)
+        await wait(55)
+      }
+      queue.forEach((item, i) => {
+        const bg = bgUploads.current.get(item.file)
+        if (bg?.status === 'done') {
+          rows[i] = { ...bg.row, caption: item.caption.trim() || null, author_name: item.author.trim() || null }
+        } else {
+          failureMessages.push(`${item.file.name}: upload failed in background`)
+        }
+        URL.revokeObjectURL(item.preview)
+      })
+    } else {
+      // Some still uploading — show real progress, using bg results where available
+      const coarsePointer = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+      const concurrency = Math.min(coarsePointer ? UPLOAD_CONCURRENCY_MOBILE : UPLOAD_CONCURRENCY_DESKTOP, queue.length)
+      let completed = 0
+      let cursor = 0
 
-    const failureMessages: string[] = []
-    async function worker() {
-      while (cursor < queue.length) {
-        const myIndex = cursor
-        cursor += 1
-        const item = queue[myIndex]
-        // HEIC items without a pre-compressed file still need conversion during upload.
-        if (item.heic && !item.compressed) {
-          setUploadStatus({
-            fileName: item.file.name,
-            index: completed + 1,
-            total: queue.length,
-            phase: 'Converting',
-            percent: Math.max(4, Math.round((completed / queue.length) * 90)),
-          })
-        }
-        try {
-          const row = await uploadItem(item)
-          rows[myIndex] = row
-          // Revoke the preview URL only after a successful upload. Revoking at pickup
-          // was too early — failed items need their preview blob alive so the retry UI
-          // can show the image. Revoking here still frees memory promptly for the
-          // common success path.
-          if (!revokedPreviews.has(myIndex)) {
+      setUploadStatus({ fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`, index: 0, total: queue.length, phase: 'Uploading', percent: 4 })
+
+      async function worker() {
+        while (cursor < queue.length) {
+          const myIndex = cursor++
+          const item = queue[myIndex]
+          try {
+            let bg = bgUploads.current.get(item.file)
+            // Wait if still uploading in background
+            while (bg?.status === 'uploading') { await wait(50); bg = bgUploads.current.get(item.file) }
+            if (bg?.status === 'done') {
+              rows[myIndex] = { ...bg.row, caption: item.caption.trim() || null, author_name: item.author.trim() || null }
+            } else {
+              rows[myIndex] = await uploadItem(item)
+            }
             URL.revokeObjectURL(item.preview)
-            revokedPreviews.add(myIndex)
+          } catch (e) {
+            failureMessages.push(`${item.file.name}: ${e instanceof Error ? e.message : String(e)}`)
           }
-        } catch (e) {
-          // Leave rows[myIndex] as null — item stays in pending for retry. Capture the message
-          // so the toast surfaces the real reason (e.g. "Chunk 3 failed: ...") instead of just
-          // "tap Upload to retry".
-          const msg = e instanceof Error ? e.message : String(e)
-          failureMessages.push(`${item.file.name}: ${msg}`)
-          console.warn('[upload] item failed:', item.file.name, msg)
+          completed++
+          setUploadStatus({ fileName: item.file.name, index: completed, total: queue.length, phase: completed === queue.length ? 'Saving to album' : 'Uploading', percent: Math.max(4, Math.round((completed / queue.length) * 90)) })
         }
-        completed += 1
-        setUploadStatus({
-          fileName: item.file.name,
-          index: completed,
-          total: queue.length,
-          phase: completed === queue.length ? 'Saving to album' : 'Uploading',
-          percent: Math.max(4, Math.round((completed / queue.length) * 90)),
-        })
+      }
+
+      const runWorkers = () => Promise.all(Array.from({ length: concurrency }, worker))
+      if (typeof navigator !== 'undefined' && 'locks' in navigator) {
+        await navigator.locks.request('hushare-upload', runWorkers)
+      } else {
+        await runWorkers()
       }
     }
 
-    async function runWorkers() {
-      await Promise.all(Array.from({ length: concurrency }, () => worker()))
-    }
-
-    // Web Lock keeps the browser from throttling this tab while uploading.
-    // Falls back gracefully when the API is unavailable.
-    if (typeof navigator !== 'undefined' && 'locks' in navigator) {
-      await navigator.locks.request('hushare-upload', runWorkers)
-    } else {
-      await runWorkers()
-    }
+    setUploadStatus({ fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`, index: queue.length, total: queue.length, phase: 'Saving to album', percent: 98 })
 
     const successRows = rows.filter((r): r is PhotoInsertRow => r !== null)
     const failedItems = queue.filter((_, i) => rows[i] === null)
@@ -1468,12 +1473,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         setUploadError(message)
         showAppToast(message, 'error')
         setUploading(false)
+        setUploadStatus(null)
         return
       }
-      // Enqueue background poster jobs for successfully uploaded videos. We DO this strictly
-      // after the rows exist in the DB so the PATCH route has something to update. Jobs run
-      // one at a time (module-level queue), and any failure is silent — the video itself is
-      // already saved and visible to users with the friendly Play placeholder.
       queue.forEach((item, i) => {
         const row = rows[i]
         if (!row || row.media_type !== 'video') return
@@ -1482,38 +1484,17 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         posterQueue.push({ file: item.file, albumId: album.id, storagePath: row.storage_path })
       })
       void processPosterQueue()
-
-      // Enqueue background R2 mirror jobs for Stream-backed videos. Mirror = a copy of the
-      // original mp4 in R2 so the download/archive button works (Stream itself doesn't expose
-      // the original). All failures are silent — Stream playback still works either way.
       queue.forEach((item, i) => {
         const row = rows[i]
         if (!row || row.media_type !== 'video' || row.storage_backend !== 'stream') return
         if (!row.stream_uid) return
-        mirrorQueue.push({
-          file: item.file,
-          albumId: album.id,
-          storagePath: row.storage_path,
-          baseId: row.stream_uid,
-        })
+        mirrorQueue.push({ file: item.file, albumId: album.id, storagePath: row.storage_path, baseId: row.stream_uid })
       })
       void processMirrorQueue()
     }
 
-    // Successful items' preview URLs were already revoked inside the worker. We only need to
-    // sweep up any unrevoked entries here as a safety net (e.g. an item that succeeded but
-    // somehow slipped past the worker's revoke). Failed items keep their preview alive on
-    // purpose so they can be retried.
-    queue.forEach((item, i) => {
-      if (rows[i] === null) return
-      if (revokedPreviews.has(i)) return
-      URL.revokeObjectURL(item.preview)
-      revokedPreviews.add(i)
-    })
-
     if (failedItems.length > 0) {
       setPending(failedItems)
-      // Show the first actual error inline so users have a clue why it failed, not just "retry".
       const detail = failureMessages[0] ? ` — ${failureMessages[0]}` : ''
       const msg = successRows.length > 0
         ? `${successRows.length} uploaded, ${failedItems.length} failed${detail}`
@@ -1523,13 +1504,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     } else {
       setPending([])
       if (serverRejectedCount > 0) {
-        // Uploads to storage succeeded but the server discarded some rows during validation
-        // (e.g. shape mismatch). Don't requeue — those rows are storage orphans and the user
-        // would just keep getting the same rejection.
-        showAppToast(
-          `${queue.length - serverRejectedCount} uploaded, ${serverRejectedCount} skipped by server.`,
-          'error',
-        )
+        showAppToast(`${queue.length - serverRejectedCount} uploaded, ${serverRejectedCount} skipped by server.`, 'error')
       } else {
         showAppToast(`${queue.length} file${queue.length === 1 ? '' : 's'} uploaded.`)
       }
@@ -1751,7 +1726,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         onClick={() => { if (!uploading && !preparing) inputRef.current?.click() }}
         onDragOver={(e) => { e.preventDefault(); if (!uploading && !preparing) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); void processAndUploadAll(e.dataTransfer.files) }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files) }}
         className="hush-hover-lift hush-upload-zone rounded-2xl p-4 sm:p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
@@ -1794,7 +1769,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           onChange={(e) => {
             const input = e.currentTarget
             const files = input.files
-            void processAndUploadAll(files).finally(() => {
+            void addFiles(files).finally(() => {
               input.value = ''
             })
           }}
