@@ -1156,7 +1156,20 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
                 })
               } catch {
                 URL.revokeObjectURL(tempUrl!)
-                return { error: `${file.name}: unreadable image file` }
+                // Last resort: some Android OEMs mislabel HEIC files as image/jpeg
+                let heicBitmap: ImageBitmap | null = null
+                try {
+                  const heicConverted = await convertHeicToJpeg(file)
+                  heicBitmap = await createImageBitmap(heicConverted)
+                  const tiny = await tinyPreviewFromSource(heicBitmap)
+                  let comp: File | undefined
+                  try { comp = await encodeFromSource(heicBitmap, heicConverted) } catch { /* ignore */ }
+                  return { preview: tiny || URL.createObjectURL(file), compressed: comp }
+                } catch {
+                  return { error: `${file.name}: unreadable image file` }
+                } finally {
+                  heicBitmap?.close()
+                }
               }
               URL.revokeObjectURL(tempUrl!)
               tempUrl = null
@@ -1174,7 +1187,11 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             return { preview: tiny || URL.createObjectURL(file), compressed: comp }
           }
 
-          const result: PrepResult = await doWork()
+          // Serialize decodes on mobile to prevent OOM from concurrent large bitmap allocations
+          // (50 MP camera photos = ~200 MB each; 2 concurrent without semaphore = OOM → false "unreadable" rejections)
+          const result: PrepResult = isMobile
+            ? await runWithDecodeSemaphore(doWork)
+            : await doWork()
           if ('error' in result) {
             rejected.push(result.error)
             continue
@@ -1277,7 +1294,11 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       }
     }
 
-    const res = item.file.size > MULTIPART_THRESHOLD
+    // Mobile always uses multipart: chunks go browser → R2 directly via presigned PUT URL.
+    // The single-file FormData path (uploadToR2) routes through the Worker proxy, which carrier
+    // networks reset far more aggressively than the presigned direct-to-R2 connection.
+    const isMobileVideo = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    const res = (isMobileVideo || item.file.size > MULTIPART_THRESHOLD)
       ? await uploadVideoMultipart(item.file, album.id, filename)
       : await uploadToR2(item.file, album.id, filename, 'video')
 
