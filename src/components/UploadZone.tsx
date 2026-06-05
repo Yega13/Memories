@@ -1584,7 +1584,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     const filesArr = Array.from(inputFiles)
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
     const PROC = isMobile ? 2 : 4
-    const UPLOAD = Math.min(isMobile ? UPLOAD_CONCURRENCY_MOBILE : UPLOAD_CONCURRENCY_DESKTOP, filesArr.length)
+    // Mobile: 1 upload worker prevents concurrent memory pressure that caused 86 rejections.
+    // The single worker still fully overlaps with processing (upload rate ≥ processing rate).
+    // Desktop: full concurrency — no memory pressure risk.
+    const UPLOAD = Math.min(isMobile ? 1 : UPLOAD_CONCURRENCY_DESKTOP, filesArr.length)
 
     setUploading(true)
     setUploadError('')
@@ -1748,7 +1751,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         onClick={() => { if (!uploading && !preparing) inputRef.current?.click() }}
         onDragOver={(e) => { e.preventDefault(); if (!uploading && !preparing) setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setDragOver(false); void addFiles(e.dataTransfer.files) }}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); void processAndUploadAll(e.dataTransfer.files) }}
         className="hush-hover-lift hush-upload-zone rounded-2xl p-4 sm:p-8 text-center cursor-pointer transition"
         style={{
           border: dragOver ? '2px dashed #254F22' : '2px dashed #C5B9A8',
@@ -1791,7 +1794,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           onChange={(e) => {
             const input = e.currentTarget
             const files = input.files
-            void addFiles(files).finally(() => {
+            void processAndUploadAll(files).finally(() => {
               input.value = ''
             })
           }}
