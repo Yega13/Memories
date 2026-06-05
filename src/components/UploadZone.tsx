@@ -697,18 +697,26 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     try {
       bitmap = await createImageBitmap(sourceFile)
     } catch {
-      // createImageBitmap rejects Samsung vendor JPEG profiles, CMYK, Motion Photos, etc.
-      // <img> is more permissive. ctx.drawImage() accepts HTMLImageElement directly.
-      // 15-second timeout prevents indefinite hangs when the browser is under memory
-      // pressure (onerror can be delayed by minutes waiting for an OOM to resolve).
-      blobUrl = URL.createObjectURL(sourceFile)
-      imgElement = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const el = new Image()
-        const timer = window.setTimeout(() => reject(new Error('cannot decode image')), 15_000)
-        el.onload = () => { window.clearTimeout(timer); resolve(el) }
-        el.onerror = () => { window.clearTimeout(timer); reject(new Error('cannot decode image')) }
-        el.src = blobUrl!
-      })
+      // Samsung Motion Photos: JPEG + embedded MP4 — extract just the JPEG portion
+      if (/^image\/jpe?g$/i.test(sourceFile.type)) {
+        const jpegOnly = await extractJpegBytes(sourceFile)
+        if (jpegOnly !== sourceFile) {
+          try {
+            bitmap = await createImageBitmap(jpegOnly)
+            sourceFile = new File([jpegOnly], sourceFile.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: sourceFile.lastModified })
+          } catch { /* fall through to <img> */ }
+        }
+      }
+      if (!bitmap) {
+        blobUrl = URL.createObjectURL(sourceFile)
+        imgElement = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const el = new Image()
+          const timer = window.setTimeout(() => reject(new Error('cannot decode image')), 15_000)
+          el.onload = () => { window.clearTimeout(timer); resolve(el) }
+          el.onerror = () => { window.clearTimeout(timer); reject(new Error('cannot decode image')) }
+          el.src = blobUrl!
+        })
+      }
     }
 
     try {
@@ -947,6 +955,40 @@ async function stripExifClientSide(file: File): Promise<File> {
   }
 }
 
+// Extracts just the JPEG portion from files that have non-JPEG data appended (Samsung Motion
+// Photos = JPEG + embedded MP4). Walks the JPEG segment structure to find the real end-of-image
+// marker (0xFF 0xD9) and returns a Blob truncated there. Returns the original file unchanged
+// when no extra data is found or the file doesn't start with a JPEG signature.
+async function extractJpegBytes(file: File): Promise<Blob> {
+  const buf = await file.arrayBuffer()
+  const bytes = new Uint8Array(buf)
+  const view = new DataView(buf)
+  if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return file
+  let i = 2
+  while (i < bytes.length - 1) {
+    if (bytes[i] !== 0xFF) break
+    while (i < bytes.length && bytes[i] === 0xFF) i++
+    const marker = bytes[i++]
+    if (marker === 0xD9) return buf.byteLength === i ? file : new Blob([buf.slice(0, i)], { type: 'image/jpeg' })
+    if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD7) || marker === 0x01) continue
+    if (i + 1 >= bytes.length) break
+    const segLen = view.getUint16(i, false)
+    if (marker === 0xDA) {
+      i += segLen
+      while (i < bytes.length - 1) {
+        if (bytes[i] !== 0xFF) { i++; continue }
+        const b = bytes[i + 1]
+        if (b === 0xD9) { i += 2; return buf.byteLength === i ? file : new Blob([buf.slice(0, i)], { type: 'image/jpeg' }) }
+        if (b === 0x00 || (b >= 0xD0 && b <= 0xD7)) { i += 2; continue }
+        break
+      }
+    } else {
+      i += segLen
+    }
+  }
+  return file
+}
+
 // ─── XHR-based Supabase Storage upload ───────────────────────────────────────
 // The Supabase JS SDK uses plain fetch() with no timeout. Under concurrent uploads
 // (3–5 workers) a single hanging request occupies a browser connection slot
@@ -1141,50 +1183,60 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           const doWork = async (): Promise<PrepResult> => {
             let bitmap: ImageBitmap | null = null
             let imgEl: HTMLImageElement | null = null
-            let tempUrl: string | null = null
+            let imgUrl: string | null = null
+            let sourceFile = file
 
-            try {
-              bitmap = await createImageBitmap(file)
-            } catch {
-              tempUrl = URL.createObjectURL(file)
+            // S1: createImageBitmap on original
+            try { bitmap = await createImageBitmap(file) } catch { /* next */ }
+
+            // S2: Samsung Motion Photos — JPEG with embedded MP4 after the EOI marker
+            if (!bitmap && /^image\/jpe?g$/i.test(file.type)) {
+              try {
+                const jpegOnly = await extractJpegBytes(file)
+                if (jpegOnly !== file) {
+                  bitmap = await createImageBitmap(jpegOnly)
+                  sourceFile = new File([jpegOnly], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified })
+                }
+              } catch { /* next */ }
+            }
+
+            // S3: <img> element — more permissive, handles unusual color profiles
+            if (!bitmap) {
+              imgUrl = URL.createObjectURL(file)
               try {
                 imgEl = await new Promise<HTMLImageElement>((resolve, reject) => {
                   const el = new Image()
                   el.onload = () => resolve(el)
                   el.onerror = () => reject()
-                  el.src = tempUrl!
+                  el.src = imgUrl!
                 })
               } catch {
-                URL.revokeObjectURL(tempUrl!)
-                // Last resort: some Android OEMs mislabel HEIC files as image/jpeg
-                let heicBitmap: ImageBitmap | null = null
-                try {
-                  const heicConverted = await convertHeicToJpeg(file)
-                  heicBitmap = await createImageBitmap(heicConverted)
-                  const tiny = await tinyPreviewFromSource(heicBitmap)
-                  let comp: File | undefined
-                  try { comp = await encodeFromSource(heicBitmap, heicConverted) } catch { /* ignore */ }
-                  return { preview: tiny || URL.createObjectURL(file), compressed: comp }
-                } catch {
-                  return { error: `${file.name}: unreadable image file` }
-                } finally {
-                  heicBitmap?.close()
-                }
+                URL.revokeObjectURL(imgUrl)
+                imgUrl = null
               }
-              URL.revokeObjectURL(tempUrl!)
-              tempUrl = null
             }
 
-            const src = bitmap ?? imgEl!
-            const tiny = await tinyPreviewFromSource(src)
-            let comp: File | undefined
-            try {
-              comp = await encodeFromSource(src, file)
-            } catch {
-              // pre-compression failed; uploadItem falls back to processImageForUpload
+            // S4: HEIC conversion — some Android OEMs label HEIC files as image/jpeg
+            if (!bitmap && !imgEl) {
+              try {
+                const heicFile = await convertHeicToJpeg(file)
+                bitmap = await createImageBitmap(heicFile)
+                sourceFile = heicFile
+              } catch {
+                return { error: `${file.name}: unreadable image file` }
+              }
             }
-            bitmap?.close()
-            return { preview: tiny || URL.createObjectURL(file), compressed: comp }
+
+            try {
+              const src = bitmap ?? imgEl!
+              const tiny = await tinyPreviewFromSource(src)
+              let comp: File | undefined
+              try { comp = await encodeFromSource(src, sourceFile) } catch { /* uploadItem re-processes */ }
+              return { preview: tiny || URL.createObjectURL(file), compressed: comp }
+            } finally {
+              bitmap?.close()
+              if (imgUrl) URL.revokeObjectURL(imgUrl)
+            }
           }
 
           // Serialize decodes on mobile to prevent OOM from concurrent large bitmap allocations
