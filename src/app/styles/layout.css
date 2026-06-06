@@ -425,18 +425,9 @@
     min-height: calc(100svh - 73px) !important;
   }
 
-  /* Explicit show/hide rules — belt-and-suspenders alongside Tailwind lg: utilities */
-  .hush-home-visuals {
-    display: flex !important;
-  }
-
-  .hush-home-desktop-bg {
-    display: block !important;
-  }
-
-  .hush-home-mobile-bg {
-    display: none !important;
-  }
+  .hush-home-visuals { display: flex !important; }
+  .hush-home-desktop-bg { display: block !important; width: 55% !important; }
+  .hush-home-mobile-bg { display: none !important; }
 
   .hush-home-grid {
     grid-template-columns: minmax(0, 0.98fr) minmax(420px, 1.02fr) !important;
@@ -446,22 +437,25 @@
     gap: clamp(2rem, 4vw, 4.5rem) !important;
   }
 
-  .hush-home-main {
-    align-self: center;
-  }
+  .hush-home-main { align-self: center; }
 
+  /* Explicit color overrides — belt-and-suspenders in case Tailwind lg: misses */
   .hush-home-eyebrow {
+    color: #8B6F4E !important;
     margin-bottom: clamp(0.7rem, 1.4vh, 1.1rem) !important;
   }
-
   .hush-home-title {
+    color: #254F22 !important;
+    text-shadow: none !important;
     max-width: 760px;
     margin-bottom: clamp(0.8rem, 1.6vh, 1.25rem) !important;
     font-size: clamp(3.2rem, 4.9vw, 5.2rem) !important;
     line-height: 0.98 !important;
   }
-
+  .hush-home-title em { color: #7C4A2D !important; }
   .hush-home-copy {
+    color: #6B5A4E !important;
+    text-shadow: none !important;
     max-width: 520px !important;
     margin-bottom: clamp(1rem, 2vh, 1.55rem) !important;
     font-size: clamp(1rem, 1.05vw, 1.18rem) !important;
@@ -472,31 +466,38 @@
     max-width: 430px !important;
     padding: clamp(0.95rem, 1.35vw, 1.2rem) !important;
   }
-
   .hush-home-input {
     padding-top: 0.68rem !important;
     padding-bottom: 0.68rem !important;
     margin-bottom: 0.65rem !important;
   }
-
   .hush-home-button {
     padding-top: 0.72rem !important;
     padding-bottom: 0.72rem !important;
   }
+  .hush-home-note { margin-top: 0.65rem !important; }
 
-  .hush-home-note {
-    margin-top: 0.65rem !important;
-  }
-
+  /* Photos: slightly smaller, more gap between cards via reduced scale */
   .hush-home-visuals {
-    height: min(50vh, 560px) !important;
-    transform: scale(0.88);
-    transform-origin: center;
+    height: min(44vh, 500px) !important;
+    transform: scale(0.78);
+    transform-origin: center right;
   }
 
-  .hush-home-desktop-bg {
-    width: 55% !important;
+  /* Nav: smaller */
+  .hush-nav {
+    padding-block: 0.55rem !important;
   }
+  .hush-logo { height: clamp(22px, 1.7vw, 30px) !important; }
+  .hush-nav-links a, .hush-nav-links button { font-size: 0.88rem !important; }
+
+  /* Footer: smaller */
+  .hush-footer { padding-block: 0.5rem !important; }
+  .hush-footer-links a, .hush-footer-links span { font-size: 0.8rem !important; }
+
+  /* FAQ items: tighter */
+  .hush-reveal { font-size: 0.9rem !important; }
+  .hush-reveal h2, .hush-reveal h3 { font-size: 1rem !important; }
 }
 
 /* ── Notebook / narrow laptop (768–1023px, pointer:fine = mouse/trackpad) ───── */
@@ -519,12 +520,17 @@
 
   .hush-home-main { align-self: center; }
 
+  .hush-home-eyebrow { color: #8B6F4E !important; }
   .hush-home-title {
+    color: #254F22 !important;
+    text-shadow: none !important;
     font-size: clamp(1.5rem, 3vw, 2.2rem) !important;
     line-height: 1.05 !important;
     margin-bottom: 0.6rem !important;
   }
   .hush-home-copy {
+    color: #6B5A4E !important;
+    text-shadow: none !important;
     font-size: clamp(0.82rem, 1vw, 1rem) !important;
     max-width: 100% !important;
     margin-bottom: 0.75rem !important;

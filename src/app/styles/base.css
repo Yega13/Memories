@@ -10,6 +10,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Force breakpoints to px so they fire at correct CSS pixels regardless of
+   browser font-size setting. 64rem = 1024px only at exactly 16px root font. */
+@theme {
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1440px;
+}
+
 html,
 body {
   max-width: 100%;
