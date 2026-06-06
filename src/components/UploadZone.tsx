@@ -1366,10 +1366,27 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     // Mobile always uses multipart: chunks go browser → R2 directly via presigned PUT URL.
     // The single-file FormData path (uploadToR2) routes through the Worker proxy, which carrier
     // networks reset far more aggressively than the presigned direct-to-R2 connection.
+    // Outer retry loop: if multipart exhausts its per-chunk retries (carrier dropped then
+    // reconnected), a fresh uploadVideoMultipart call starts a brand-new multipart session and
+    // retransmits from chunk 1. 3 full attempts on mobile catches the cases chunk-level retries
+    // can't — a connection that's down for >30 s and then recovers.
     const isMobileVideo = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    const res = (isMobileVideo || item.file.size > MULTIPART_THRESHOLD)
-      ? await uploadVideoMultipart(item.file, album.id, filename)
-      : await uploadToR2(item.file, album.id, filename, 'video')
+    const maxVideoAttempts = isMobileVideo ? 3 : 1
+    let videoRes: R2UploadResult | null = null
+    let lastVideoErr: Error = new Error('Video upload failed')
+    for (let vAttempt = 1; vAttempt <= maxVideoAttempts; vAttempt++) {
+      try {
+        videoRes = (isMobileVideo || item.file.size > MULTIPART_THRESHOLD)
+          ? await uploadVideoMultipart(item.file, album.id, filename)
+          : await uploadToR2(item.file, album.id, filename, 'video')
+        break
+      } catch (e) {
+        lastVideoErr = e instanceof Error ? e : new Error(String(e))
+        if (vAttempt < maxVideoAttempts) await wait(Math.min(4000 * vAttempt, 15000))
+      }
+    }
+    if (!videoRes) throw lastVideoErr
+    const res = videoRes
 
     return {
       storage_path: res.storage_path,
