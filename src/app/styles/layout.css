@@ -499,6 +499,58 @@
   }
 }
 
+/* ── Notebook / narrow laptop (768–1023px, pointer:fine = mouse/trackpad) ───── */
+/* Fires on real laptops only — pointer:fine excludes iPads and Surface Pro touch. */
+
+@media (min-width: 768px) and (max-width: 1023px) and (pointer: fine) {
+  .hush-home-hero { min-height: calc(100svh - 73px) !important; }
+  .hush-home-visuals { display: flex !important; }
+  .hush-home-desktop-bg { display: block !important; width: 52% !important; }
+  .hush-home-mobile-bg { display: none !important; }
+
+  .hush-home-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    min-height: calc(100svh - 73px) !important;
+    padding-top: 1.5rem !important;
+    padding-bottom: 1.5rem !important;
+    gap: 1.5rem !important;
+    align-items: center !important;
+  }
+
+  .hush-home-main { align-self: center; }
+
+  .hush-home-title {
+    font-size: clamp(1.5rem, 3vw, 2.2rem) !important;
+    line-height: 1.05 !important;
+    margin-bottom: 0.6rem !important;
+  }
+  .hush-home-copy {
+    font-size: clamp(0.82rem, 1vw, 1rem) !important;
+    max-width: 100% !important;
+    margin-bottom: 0.75rem !important;
+  }
+  .hush-album-create-card {
+    max-width: min(100%, 320px) !important;
+    padding: 0.75rem !important;
+  }
+  .hush-home-input {
+    padding-top: 0.45rem !important;
+    padding-bottom: 0.45rem !important;
+    margin-bottom: 0.4rem !important;
+    font-size: 0.85rem !important;
+  }
+  .hush-home-button {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    font-size: 0.85rem !important;
+  }
+  .hush-home-visuals {
+    height: min(48vh, 440px) !important;
+    transform: scale(0.7) !important;
+    transform-origin: center center !important;
+  }
+}
+
 /* ── Compact landscape tablet (900–1100px, max-height 720px, touch-only) ────── */
 /* pointer: coarse restricts this to actual tablets — prevents it firing on desktop
    monitors that happen to be narrow/short (e.g. 1024×768 with browser chrome). */
