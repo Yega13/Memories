@@ -112,12 +112,14 @@ async function uploadVideoMultipart(
   filename: string,
   onProgress?: (percent: number) => void,
 ): Promise<R2UploadResult> {
-  // Reset presign status per upload. r2PresignWorking is module-level so a previous video's
-  // chunk 6 failure (403 from R2 → sets flag false) would permanently route ALL subsequent
-  // videos through the Worker proxy path, which times out on slow mobile (~30 s limit vs the
-  // 71 s it takes to send 5 MB at 70 KB/s). Resetting here gives every video a fresh attempt
-  // at the direct presigned URL path (browser → R2, no Worker in the way).
-  r2PresignWorking = true
+  // On mobile: skip presigned URLs entirely and always use the Worker proxy path.
+  // Presigned PUTs go directly to R2's S3 endpoint, which requires a CORS preflight.
+  // Mobile browsers (Chrome/Safari) enforce CORS differently from desktop — a silent
+  // CORS rejection triggers a switchToProxy retry that burns a chunk attempt. Worker
+  // proxy uses a server-side R2 binding (no CORS, no cross-origin), and is reliable
+  // on Wi-Fi regardless of device class. On desktop keep presign (faster, no Worker hop).
+  const isMobileChunkUpload = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  r2PresignWorking = !isMobileChunkUpload
 
   // Step 1: init
   const initRes = await fetch('/api/upload/r2/multipart?action=init', {
@@ -1226,6 +1228,14 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
                 bitmap = await createImageBitmap(heicFile)
                 sourceFile = heicFile
               } catch {
+                // Mobile codec gap: this JPEG decoded fine on desktop but createImageBitmap
+                // and <img> both failed (Samsung motion photo metadata, non-standard JPEG
+                // structure, or mobile browser memory limit). Upload EXIF-stripped original
+                // rather than rejecting — size is already within cap.
+                if (/^image\/jpe?g$/i.test(file.type)) {
+                  const stripped = await stripExifClientSide(file).catch(() => file)
+                  return { preview: URL.createObjectURL(file), compressed: stripped }
+                }
                 return { error: `${file.name}: unreadable image file` }
               }
             }
@@ -1632,7 +1642,14 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             const heicFile = await convertHeicToJpeg(file)
             bitmap = await createImageBitmap(heicFile)
             sourceFile = heicFile
-          } catch { rejected.push(`${file.name}: unreadable image file`); return null }
+          } catch {
+            if (/^image\/jpe?g$/i.test(file.type)) {
+              const stripped = await stripExifClientSide(file).catch(() => file)
+              return { file, compressed: stripped, preview, kind, caption: '', author: '', heic: false }
+            }
+            rejected.push(`${file.name}: unreadable image file`)
+            return null
+          }
         }
         try {
           const src = bitmap ?? imgEl!
