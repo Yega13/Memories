@@ -477,27 +477,16 @@
   }
   .hush-home-note { margin-top: 0.65rem !important; }
 
-  /* Photos: slightly smaller, more gap between cards via reduced scale */
+  /* Photos: natural scale, cards spread via JSX positions */
   .hush-home-visuals {
-    height: min(44vh, 500px) !important;
-    transform: scale(0.78);
-    transform-origin: center right;
+    transform: scale(0.88);
+    transform-origin: center;
   }
 
-  /* Nav: smaller */
-  .hush-nav {
-    padding-block: 0.55rem !important;
-  }
+  /* Nav: slightly smaller */
+  .hush-nav { padding-block: 0.55rem !important; }
   .hush-logo { height: clamp(22px, 1.7vw, 30px) !important; }
   .hush-nav-links a, .hush-nav-links button { font-size: 0.88rem !important; }
-
-  /* Footer: smaller */
-  .hush-footer { padding-block: 0.5rem !important; }
-  .hush-footer-links a, .hush-footer-links span { font-size: 0.8rem !important; }
-
-  /* FAQ items: tighter */
-  .hush-reveal { font-size: 0.9rem !important; }
-  .hush-reveal h2, .hush-reveal h3 { font-size: 1rem !important; }
 }
 
 /* ── Notebook / narrow laptop (768–1023px, pointer:fine = mouse/trackpad) ───── */
