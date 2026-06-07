@@ -112,14 +112,12 @@ async function uploadVideoMultipart(
   filename: string,
   onProgress?: (percent: number) => void,
 ): Promise<R2UploadResult> {
-  // On mobile: skip presigned URLs entirely and always use the Worker proxy path.
-  // Presigned PUTs go directly to R2's S3 endpoint, which requires a CORS preflight.
-  // Mobile browsers (Chrome/Safari) enforce CORS differently from desktop — a silent
-  // CORS rejection triggers a switchToProxy retry that burns a chunk attempt. Worker
-  // proxy uses a server-side R2 binding (no CORS, no cross-origin), and is reliable
-  // on Wi-Fi regardless of device class. On desktop keep presign (faster, no Worker hop).
-  const isMobileChunkUpload = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-  r2PresignWorking = !isMobileChunkUpload
+  // Reset presign status per upload. r2PresignWorking is module-level so a previous video's
+  // chunk 6 failure (403 from R2 → sets flag false) would permanently route ALL subsequent
+  // videos through the Worker proxy path, which times out on slow mobile (~30 s limit vs the
+  // 71 s it takes to send 5 MB at 70 KB/s). Resetting here gives every video a fresh attempt
+  // at the direct presigned URL path (browser → R2, no Worker in the way).
+  r2PresignWorking = true
 
   // Step 1: init
   const initRes = await fetch('/api/upload/r2/multipart?action=init', {
@@ -1107,6 +1105,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const [pending, setPending] = useState<PendingItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [preparing, setPreparing] = useState(false)
+  const [preparingProgress, setPreparingProgress] = useState<{ done: number; total: number } | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -1150,6 +1149,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     setPreparing(true)
 
     const filesArr = Array.from(files)
+    setPreparingProgress({ done: 0, total: filesArr.length })
     // Pre-allocated so parallel workers can write results in file order.
     const itemSlots: (PendingItem | null)[] = new Array(filesArr.length).fill(null)
     const rejected: string[] = []
@@ -1168,11 +1168,13 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         const kind = detectKind(file)
         if (!kind) {
           rejected.push(`${file.name}: unsupported file type`)
+          setPreparingProgress(p => p ? { ...p, done: p.done + 1 } : null)
           continue
         }
         const cap = kind === 'video' ? caps.video : caps.image
         if (file.size > cap) {
           rejected.push(`${file.name}: ${formatFileSize(file.size)} exceeds ${formatFileSize(cap)} limit`)
+          setPreparingProgress(p => p ? { ...p, done: p.done + 1 } : null)
           continue
         }
 
@@ -1228,15 +1230,14 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
                 bitmap = await createImageBitmap(heicFile)
                 sourceFile = heicFile
               } catch {
-                // Mobile codec gap: this JPEG decoded fine on desktop but createImageBitmap
-                // and <img> both failed (Samsung motion photo metadata, non-standard JPEG
-                // structure, or mobile browser memory limit). Upload EXIF-stripped original
-                // rather than rejecting — size is already within cap.
-                if (/^image\/jpe?g$/i.test(file.type)) {
-                  const stripped = await stripExifClientSide(file).catch(() => file)
-                  return { preview: URL.createObjectURL(file), compressed: stripped }
-                }
-                return { error: `${file.name}: unreadable image file` }
+                // Mobile codec gap: createImageBitmap + <img> + HEIC conversion all failed.
+                // Upload the original rather than rejecting — EXIF-stripped for JPEG,
+                // as-is for WebP/AVIF/PNG (already web-native, server/CDN handles them).
+                // File size is already within cap (checked above).
+                const stripped = /^image\/jpe?g$/i.test(file.type)
+                  ? await stripExifClientSide(file).catch(() => file)
+                  : file
+                return { preview: URL.createObjectURL(file), compressed: stripped }
               }
             }
 
@@ -1255,6 +1256,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           const result: PrepResult = await doWork()
           if ('error' in result) {
             rejected.push(result.error)
+            setPreparingProgress(p => p ? { ...p, done: p.done + 1 } : null)
             continue
           }
           previewUrl = result.preview
@@ -1271,6 +1273,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         }
 
         itemSlots[myIndex] = { file, compressed, preview: previewUrl, kind, caption: '', author: '', heic }
+        setPreparingProgress(p => p ? { ...p, done: p.done + 1 } : null)
         // Kick off background upload immediately while user reviews captions
         const bgItem = itemSlots[myIndex]
         if (bgItem) {
@@ -1286,6 +1289,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
 
     await Promise.all(Array.from({ length: Math.min(ADDFILES_CONCURRENCY, filesArr.length) }, prepareWorker))
 
+    setPreparingProgress(null)
     const next = itemSlots.filter((item): item is PendingItem => item !== null)
 
     if (rejected.length) {
@@ -1315,7 +1319,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     })
   }
 
-  async function uploadItem(item: PendingItem): Promise<PhotoInsertRow> {
+  async function uploadItem(item: PendingItem, onVideoProgress?: (pct: number) => void): Promise<PhotoInsertRow> {
     // ── Image path ────────────────────────────────────────────────────────────
     if (item.kind === 'image') {
       // Use the file pre-compressed during addFiles; fall back if pre-compression failed.
@@ -1387,8 +1391,8 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     for (let vAttempt = 1; vAttempt <= maxVideoAttempts; vAttempt++) {
       try {
         videoRes = (isMobileVideo || item.file.size > MULTIPART_THRESHOLD)
-          ? await uploadVideoMultipart(item.file, album.id, filename)
-          : await uploadToR2(item.file, album.id, filename, 'video')
+          ? await uploadVideoMultipart(item.file, album.id, filename, onVideoProgress)
+          : await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
         break
       } catch (e) {
         lastVideoErr = e instanceof Error ? e : new Error(String(e))
@@ -1463,7 +1467,11 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             if (bg?.status === 'done') {
               rows[myIndex] = { ...bg.row, caption: item.caption.trim() || null, author_name: item.author.trim() || null }
             } else {
-              rows[myIndex] = await uploadItem(item)
+              const base = Math.max(4, Math.round((completed / queue.length) * 90))
+              const next = Math.max(4, Math.round(((completed + 1) / queue.length) * 90))
+              rows[myIndex] = await uploadItem(item, (videoPct) => {
+                setUploadStatus(s => s ? { ...s, percent: Math.round(base + (next - base) * videoPct / 100) } : s)
+              })
             }
             URL.revokeObjectURL(item.preview)
           } catch (e) {
@@ -1643,12 +1651,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             bitmap = await createImageBitmap(heicFile)
             sourceFile = heicFile
           } catch {
-            if (/^image\/jpe?g$/i.test(file.type)) {
-              const stripped = await stripExifClientSide(file).catch(() => file)
-              return { file, compressed: stripped, preview, kind, caption: '', author: '', heic: false }
-            }
-            rejected.push(`${file.name}: unreadable image file`)
-            return null
+            const stripped = /^image\/jpe?g$/i.test(file.type)
+              ? await stripExifClientSide(file).catch(() => file)
+              : file
+            return { file, compressed: stripped, preview, kind, caption: '', author: '', heic: false }
           }
         }
         try {
@@ -1789,9 +1795,21 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           . Illegal or abusive content may be removed.
         </p>
         {preparing && (
-          <p className="mt-3 text-xs font-semibold" style={{ color: '#254F22' }}>
-            Preparing files...
-          </p>
+          <div className="mt-3">
+            <p className="text-xs font-semibold" style={{ color: '#254F22' }}>
+              {preparingProgress
+                ? `Preparing ${preparingProgress.done} / ${preparingProgress.total}…`
+                : 'Preparing files…'}
+            </p>
+            {preparingProgress && preparingProgress.total > 0 && (
+              <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{ width: `${Math.round(preparingProgress.done / preparingProgress.total * 100)}%`, background: '#8B6F4E' }}
+                />
+              </div>
+            )}
+          </div>
         )}
         <input
           ref={inputRef}
