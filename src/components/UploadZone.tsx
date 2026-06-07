@@ -1464,10 +1464,13 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   async function uploadAll() {
     if (pending.length === 0) return
     const queue = [...pending]
-    // Stop new background uploads from starting — they'd compete for bandwidth with
-    // the foreground workers. In-flight uploads finish naturally; their status is read
-    // by the workers below.
+    // Drain the bg upload queue and mark every file still in 'uploading' state as
+    // 'failed'. Without this, files that were queued but never started keep status
+    // 'uploading' forever and workers spin-wait on them indefinitely (deadlock).
     bgSem.current.q = []
+    bgUploads.current.forEach((val, file) => {
+      if (val.status === 'uploading') bgUploads.current.set(file, { status: 'failed' })
+    })
     setUploading(true)
     setUploadError('')
 
@@ -1509,14 +1512,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           const myIndex = cursor++
           const item = queue[myIndex]
           try {
-            let bg = bgUploads.current.get(item.file)
-            // Wait if still uploading in background
-            while (bg?.status === 'uploading') { await wait(50); bg = bgUploads.current.get(item.file) }
+            const bg = bgUploads.current.get(item.file)
             if (bg?.status === 'done') {
               rows[myIndex] = { ...bg.row, caption: item.caption.trim() || null, author_name: item.author.trim() || null }
-              // Pace pre-uploaded files at ~real upload speed so the bar rises from 0
-              // naturally — user shouldn't perceive a jump or notice background uploading.
-              await wait(1000)
             } else {
               const base = Math.max(4, Math.round((completed / queue.length) * 90))
               const next = Math.max(4, Math.round(((completed + 1) / queue.length) * 90))
@@ -1893,7 +1891,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
             <div
               className="h-full"
-              style={{ width: `${uploadStatus.percent}%`, background: '#8B6F4E', transition: 'width 1s ease' }}
+              style={{ width: `${uploadStatus.percent}%`, background: '#8B6F4E', transition: 'width 2s ease-out' }}
             />
           </div>
         </div>
@@ -1967,7 +1965,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
                 ? `linear-gradient(to right, #1b3d19 ${uploadStatus?.percent ?? 0}%, #254F22 ${uploadStatus?.percent ?? 0}%)`
                 : '#254F22',
               color: '#FDFAF5',
-              transition: 'background 1s ease',
+              transition: 'background 2s ease-out',
             }}
           >
             {uploading
