@@ -1070,10 +1070,10 @@ async function uploadToSupabaseStorage(
     if (elapsed < MOBILE_UPLOAD_STAGGER_MS) await wait(MOBILE_UPLOAD_STAGGER_MS - elapsed)
     _mobileUploadLastStartMs = Date.now()
   }
-  // Mobile: 4 attempts, 4 s max backoff (500→1000→2000→4000 = 7.5 s total waste per failure).
+  // Mobile: 6 attempts, 8 s max backoff — extra retries cover Wi-Fi blips lasting > 7.5 s.
   // Desktop: 8 attempts, 16 s max backoff — broadband connections recover slower from ISP blips.
-  const maxAttempts = isMobile ? 4 : 8
-  const maxBackoffMs = isMobile ? 4_000 : 16_000
+  const maxAttempts = isMobile ? 6 : 8
+  const maxBackoffMs = isMobile ? 8_000 : 16_000
   let lastError: Error = new Error('Upload failed')
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -1448,10 +1448,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     const failureMessages: string[] = []
 
     // Check if background uploads have already finished everything
-    const allBgDone = queue.every(item => {
-      const bg = bgUploads.current.get(item.file)
-      return bg?.status === 'done' || bg?.status === 'failed'
-    })
+    // Only count as "all done" if every item succeeded in background.
+    // Failed bg items must go through the worker path to get re-uploaded.
+    const allBgDone = queue.every(item => bgUploads.current.get(item.file)?.status === 'done')
 
     if (allBgDone) {
       // Everything uploaded in background — animate 0→100% and go straight to DB save
@@ -1488,9 +1487,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             while (bg?.status === 'uploading') { await wait(50); bg = bgUploads.current.get(item.file) }
             if (bg?.status === 'done') {
               rows[myIndex] = { ...bg.row, caption: item.caption.trim() || null, author_name: item.author.trim() || null }
-              // Spread already-done completions over time so the bar rises smoothly
-              // from 0% instead of jumping instantly to however much was pre-uploaded.
-              await wait(40)
+              // Pace pre-uploaded files at ~real upload speed so the bar rises from 0
+              // naturally — user shouldn't perceive a jump or notice background uploading.
+              await wait(1000)
             } else {
               const base = Math.max(4, Math.round((completed / queue.length) * 90))
               const next = Math.max(4, Math.round(((completed + 1) / queue.length) * 90))
@@ -1940,7 +1939,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
                 ? `linear-gradient(to right, #1b3d19 ${uploadStatus?.percent ?? 0}%, #254F22 ${uploadStatus?.percent ?? 0}%)`
                 : '#254F22',
               color: '#FDFAF5',
-              transition: 'background 0.4s ease',
+              transition: 'background 1s ease',
             }}
           >
             {uploading
