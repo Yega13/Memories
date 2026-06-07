@@ -1113,9 +1113,20 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   const pendingRef = useRef<PendingItem[]>([])
   type BgUploadState = { status: 'uploading' } | { status: 'done'; row: PhotoInsertRow } | { status: 'failed' }
   const bgUploads = useRef<Map<File, BgUploadState>>(new Map())
+  // Semaphore for background uploads: limits concurrency so 100 prepared files don't
+  // all fire XHRs simultaneously (which causes network congestion and "failed to fetch").
+  const bgSem = useRef<{ n: number; q: Array<() => void> }>({ n: 0, q: [] })
 
 
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
+
+  function startBgUpload(fn: () => Promise<unknown>): void {
+    const sem = bgSem.current
+    const isMob = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+    const limit = isMob ? 2 : UPLOAD_CONCURRENCY_DESKTOP
+    const go = () => { sem.n++; void fn().finally(() => { sem.n--; sem.q.shift()?.() }) }
+    if (sem.n < limit) go(); else sem.q.push(go)
+  }
 
   useEffect(() => {
     pendingRef.current = pending
@@ -1146,6 +1157,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     if (uploading || preparing) return
     if (!files) return
     bgUploads.current.clear()
+    bgSem.current = { n: 0, q: [] }
     setPreparing(true)
 
     const filesArr = Array.from(files)
@@ -1274,15 +1286,17 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
 
         itemSlots[myIndex] = { file, compressed, preview: previewUrl, kind, caption: '', author: '', heic }
         setPreparingProgress(p => p ? { ...p, done: p.done + 1 } : null)
-        // Kick off background upload immediately while user reviews captions
+        // Kick off background upload through the semaphore (max 2 concurrent on mobile,
+        // UPLOAD_CONCURRENCY_DESKTOP on desktop) so files upload while the user reviews
+        // captions without flooding the network with 100 simultaneous XHRs.
         const bgItem = itemSlots[myIndex]
         if (bgItem) {
           bgUploads.current.set(file, { status: 'uploading' })
-          void uploadItem(bgItem).then(row => {
+          startBgUpload(() => uploadItem(bgItem).then(row => {
             bgUploads.current.set(file, { status: 'done', row })
           }).catch(() => {
             bgUploads.current.set(file, { status: 'failed' })
-          })
+          }))
         }
       }
     }
@@ -1909,10 +1923,18 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           <button
             onClick={uploadAll}
             disabled={uploading}
-            className="hush-press w-full font-semibold rounded-xl py-3 transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: '#254F22', color: '#FDFAF5' }}
+            className="hush-press w-full font-semibold rounded-xl py-3 disabled:cursor-not-allowed overflow-hidden relative"
+            style={{
+              background: uploading
+                ? `linear-gradient(to right, #1b3d19 ${uploadStatus?.percent ?? 0}%, #254F22 ${uploadStatus?.percent ?? 0}%)`
+                : '#254F22',
+              color: '#FDFAF5',
+              transition: 'background 0.4s ease',
+            }}
           >
-            {uploading ? 'Uploading...' : `Upload ${pending.length} item${pending.length !== 1 ? 's' : ''}`}
+            {uploading
+              ? `Uploading ${uploadStatus?.percent ?? 0}%…`
+              : `Upload ${pending.length} item${pending.length !== 1 ? 's' : ''}`}
           </button>
         </div>
       )}
