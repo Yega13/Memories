@@ -180,6 +180,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
 
   async function deletePhoto(photo: Photo) {
     if (!isOwner) return
+    // Optimistic: remove from UI immediately so the user sees instant feedback.
+    onPhotoDeleted(photo.id)
+    if (lightbox !== null) closeLightbox()
     setDeleting(photo.id)
 
     const res = await fetch('/api/album/photo/delete', {
@@ -189,11 +192,9 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
     })
 
     if (res.ok) {
-      onPhotoDeleted(photo.id)
-      if (lightbox !== null) closeLightbox()
       showAppToast('Media deleted.')
     } else {
-      showAppToast(`Delete failed (${res.status})`, 'error')
+      showAppToast(`Delete failed (${res.status}) — refresh to see current state`, 'error')
     }
 
     setDeleting(null)

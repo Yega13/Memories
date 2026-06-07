@@ -55,6 +55,11 @@ export function useSelectMode({
     if (selectedIds.size === 0) return
     setBulkDeleting(true)
     const ids = [...selectedIds]
+
+    // Optimistic: remove from UI immediately.
+    for (const id of ids) onPhotoDeleted(id)
+    exitSelectMode()
+
     // Server max is 200 per request — chunk just in case.
     const CHUNK = 200
     let deleted = 0
@@ -70,17 +75,16 @@ export function useSelectMode({
         const body = (await res.json().catch(() => ({}))) as { deleted?: number; error?: string }
         if (res.ok && typeof body.deleted === 'number') {
           deleted += body.deleted
-          for (const id of batch) onPhotoDeleted(id)
         } else {
           failed += batch.length
+          console.error('[bulk-delete] server error:', body.error ?? res.status)
         }
       } catch {
         failed += batch.length
       }
     }
     setBulkDeleting(false)
-    exitSelectMode()
-    if (failed > 0) showAppToast(`${deleted} deleted, ${failed} failed.`, 'error')
+    if (failed > 0) showAppToast(`${deleted} deleted, ${failed} failed — refresh to see current state`, 'error')
     else showAppToast(`${deleted} photo${deleted !== 1 ? 's' : ''} deleted.`)
   }
 

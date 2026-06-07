@@ -130,13 +130,13 @@ export async function POST(req: Request) {
     const { error: storageError } = await admin.storage.from('Photos').remove(supabasePaths)
     if (storageError) console.error('[photo/bulk-delete] storage remove failed:', storageError.message)
   }
-  for (const uid of streamUids) {
-    try {
-      await deleteStreamVideo(uid)
-    } catch (e) {
+  // Parallel Stream deletions — sequential was O(n×2s) per video and caused Worker
+  // timeout on batches of ~10+ Stream videos, returning 0 deleted silently.
+  await Promise.all(streamUids.map(uid =>
+    deleteStreamVideo(uid).catch(e =>
       console.error('[photo/bulk-delete] Stream remove failed:', e instanceof Error ? e.message : String(e))
-    }
-  }
+    )
+  ))
 
   const ids = photos.map((p) => p.id)
   const { error: dbError } = await admin.from('photos').delete().in('id', ids)

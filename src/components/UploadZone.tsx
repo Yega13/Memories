@@ -147,87 +147,97 @@ async function uploadVideoMultipart(
     chunkStart: number,
     chunkEnd: number,
   ): Promise<{ partNumber: number; etag: string }> {
+    // Eagerly read chunk bytes into memory. Avoids iOS file-handle expiry: if iOS has
+    // released the temporary file reference after several minutes (common during long
+    // uploads), a lazy Blob.slice silently sends 0 bytes and the XHR fires onerror.
+    // Reading to ArrayBuffer here surfaces that as a clear error instead.
+    let chunkBytes: ArrayBuffer
+    try {
+      chunkBytes = await chunk.arrayBuffer()
+    } catch {
+      throw new Error(`Failed to read chunk ${partNumber} from file — re-add the video and try again`)
+    }
+
     // Try presigned URL first — browser PUTs directly to R2, Worker not in data path.
-    // Skip if already known-broken (403/CORS from a previous chunk this session).
     let presignedUrl: string | null = null
     if (r2PresignWorking) {
-    try {
-      const presignRes = await fetch('/api/upload/r2/multipart?action=presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, uploadId, partNumber }),
-        signal: AbortSignal.timeout(15_000),
-      })
-      if (presignRes.ok) {
-        const data = await presignRes.json() as { url?: string }
-        presignedUrl = data.url ?? null
-      }
-      // 501 = not configured; any other non-ok status → fall through to Worker proxy
-    } catch { /* network error getting presigned URL → fall through */ }
-    } // end if (r2PresignWorking)
+      try {
+        const presignRes = await fetch('/api/upload/r2/multipart?action=presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, uploadId, partNumber }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        if (presignRes.ok) {
+          const data = await presignRes.json() as { url?: string }
+          presignedUrl = data.url ?? null
+        }
+      } catch { /* network error getting presigned URL → fall through */ }
+    }
 
-    return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-
-      if (presignedUrl) {
-        // Direct path: browser → R2 (Worker not buffering the bytes)
-        xhr.open('PUT', presignedUrl)
-      } else {
-        // Fallback path: browser → Worker → R2
-        const params = new URLSearchParams({ action: 'chunk', uploadId: uploadId!, key: key!, partNumber: String(partNumber) })
-        xhr.open('POST', `/api/upload/r2/multipart?${params.toString()}`)
-      }
-
-      xhr.setRequestHeader('Content-Type', 'application/octet-stream')
-      xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return
-        const chunkUploaded = (event.loaded / event.total) * (chunkEnd - chunkStart)
-        onProgress?.(Math.round((uploadedBytes + chunkUploaded) / file.size * 95))
-      }
-      xhr.onload = () => {
-        if (presignedUrl) {
-          // R2 S3 API returns ETag in response header, no JSON body
+    if (presignedUrl) {
+      // Direct path: XHR PUT to R2 with per-byte progress tracking.
+      return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('PUT', presignedUrl!)
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+        xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return
+          const chunkUploaded = (event.loaded / event.total) * (chunkEnd - chunkStart)
+          onProgress?.(Math.round((uploadedBytes + chunkUploaded) / file.size * 95))
+        }
+        xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             const etag = (xhr.getResponseHeader('ETag') ?? '').replace(/"/g, '')
             if (etag) { resolve({ partNumber, etag }); return }
             reject(new Error(`No ETag for chunk ${partNumber}`))
           } else if (xhr.status === 403) {
-            // Presigned URL rejected — bad S3 credentials or missing R2 CORS policy.
-            // Mark broken so all subsequent chunks skip presign and use Worker proxy.
             r2PresignWorking = false
-            console.warn('[r2/presign] 403 on chunk PUT — S3 credentials invalid or R2 CORS not configured. Switching to Worker proxy for all chunks.')
-            reject(Object.assign(new Error(`Presigned URL rejected (403), switching to Worker proxy`), { switchToProxy: true }))
+            reject(Object.assign(new Error('Presigned URL rejected (403), switching to Worker proxy'), { switchToProxy: true }))
           } else {
             const err = new Error(`Chunk ${partNumber} failed: ${xhr.status}`)
             ;(err as Error & { status?: number }).status = xhr.status
             reject(err)
           }
-        } else {
-          let body: { error?: string; partNumber?: number; etag?: string } = {}
-          try { body = JSON.parse(xhr.responseText || '{}') } catch {}
-          if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
-            resolve({ partNumber: body.partNumber, etag: body.etag })
-          } else {
-            const err = new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`)
-            ;(err as Error & { status?: number }).status = xhr.status
-            reject(err)
-          }
         }
-      }
-      xhr.onerror = () => {
-        if (presignedUrl) {
-          // CORS error blocks reading status — treat same as 403 (broken presign credentials/policy)
+        xhr.onerror = () => {
           r2PresignWorking = false
-          console.warn('[r2/presign] CORS error on chunk PUT — switching to Worker proxy for all chunks.')
-          reject(Object.assign(new Error(`Presigned URL CORS error, switching to Worker proxy`), { switchToProxy: true }))
-          return
+          reject(Object.assign(new Error('Presigned URL CORS error, switching to Worker proxy'), { switchToProxy: true }))
         }
-        reject(new Error(`Network error on chunk ${partNumber}`))
-      }
-      xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
-      xhr.send(chunk)
-    })
+        xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
+        xhr.send(chunkBytes)
+      })
+    }
+
+    // Worker proxy path: fetch() is more reliable than XHR for large binary bodies on
+    // mobile — iOS Safari can silently cancel XHR with application/octet-stream bodies
+    // above a few MB, manifesting as onerror with no status code.
+    const params = new URLSearchParams({ action: 'chunk', uploadId: uploadId!, key: key!, partNumber: String(partNumber) })
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), R2_CHUNK_UPLOAD_TIMEOUT_MS)
+    let res: Response
+    try {
+      res = await fetch(`/api/upload/r2/multipart?${params}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: chunkBytes,
+        signal: ac.signal,
+      })
+    } catch (e) {
+      clearTimeout(timer)
+      const msg = e instanceof Error ? e.message : String(e)
+      throw new Error(`Network error on chunk ${partNumber}: ${msg}`)
+    }
+    clearTimeout(timer)
+    let body: { error?: string; partNumber?: number; etag?: string } = {}
+    try { body = await res.json() } catch {}
+    if (res.status >= 200 && res.status < 300 && body.partNumber && body.etag) {
+      return { partNumber: body.partNumber, etag: body.etag }
+    }
+    const err = new Error(body.error || `Chunk ${partNumber} failed: ${res.status}`)
+    ;(err as Error & { status?: number }).status = res.status
+    throw err
   }
 
   async function chunkWorker(): Promise<void> {
@@ -1823,23 +1833,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           </Link>
           . Illegal or abusive content may be removed.
         </p>
-        {preparing && (
-          <div className="mt-3">
-            <p className="text-xs font-semibold" style={{ color: '#254F22' }}>
-              {preparingProgress
-                ? `Preparing ${preparingProgress.done} / ${preparingProgress.total}…`
-                : 'Preparing files…'}
-            </p>
-            {preparingProgress && preparingProgress.total > 0 && (
-              <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
-                <div
-                  className="h-full transition-all duration-300"
-                  style={{ width: `${Math.round(preparingProgress.done / preparingProgress.total * 100)}%`, background: '#8B6F4E' }}
-                />
-              </div>
-            )}
-          </div>
-        )}
         <input
           ref={inputRef}
           type="file"
@@ -1863,18 +1856,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           <button type="button" onClick={() => { setUploadError(''); setUploadStatus(null) }} className="font-semibold hover:underline flex-none" style={{ color: '#7A2A1F' }}>Dismiss</button>
         </div>
       )}
-      {uploadStatus && (
-        <div className="mt-4 rounded-xl p-3" style={{ background: '#F5F0E8', border: '1px solid #DDD5C5' }}>
-          <div className="flex items-center justify-between gap-3 text-xs mb-2" style={{ color: '#7C5C3E' }}>
-            <span className="truncate">{uploadStatus.phase} - {uploadStatus.fileName}</span>
-            <span className="flex-none">{uploadStatus.index}/{uploadStatus.total} - {uploadStatus.percent}%</span>
-          </div>
-          <div className="h-2 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
-            <div className="h-full transition-all" style={{ width: `${uploadStatus.percent}%`, background: '#254F22' }} />
-          </div>
-        </div>
-      )}
-
       {pending.length > 0 && (
         <div className="mt-4 space-y-3">
           {pending.map((item, i) => (
@@ -1951,6 +1932,30 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
               ? `Uploading ${uploadStatus?.percent ?? 0}%…`
               : `Upload ${pending.length} item${pending.length !== 1 ? 's' : ''}`}
           </button>
+        </div>
+      )}
+
+      {(preparing || uploading) && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold" style={{ color: '#254F22' }}>
+            {preparing
+              ? (preparingProgress
+                  ? `Preparing ${preparingProgress.done} / ${preparingProgress.total}…`
+                  : 'Preparing files…')
+              : `Uploading ${uploadStatus?.percent ?? 0}%…`}
+          </p>
+          <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
+            <div
+              className="h-full"
+              style={{
+                width: preparing
+                  ? `${preparingProgress && preparingProgress.total > 0 ? Math.round(preparingProgress.done / preparingProgress.total * 100) : 0}%`
+                  : `${uploadStatus?.percent ?? 0}%`,
+                background: '#8B6F4E',
+                transition: uploading ? 'width 1s ease' : 'width 0.3s ease',
+              }}
+            />
+          </div>
         </div>
       )}
     </div>
