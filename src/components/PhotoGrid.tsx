@@ -191,9 +191,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
       body: JSON.stringify({ slug, photo_id: photo.id }),
     })
 
-    if (res.ok) {
-      showAppToast('Media deleted.')
-    } else {
+    if (!res.ok) {
       showAppToast(`Delete failed (${res.status}) — refresh to see current state`, 'error')
     }
 

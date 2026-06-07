@@ -85,7 +85,6 @@ export function useSelectMode({
     }
     setBulkDeleting(false)
     if (failed > 0) showAppToast(`${deleted} deleted, ${failed} failed — refresh to see current state`, 'error')
-    else showAppToast(`${deleted} photo${deleted !== 1 ? 's' : ''} deleted.`)
   }
 
   // Exit select mode when arrange mode activates (they're mutually exclusive).

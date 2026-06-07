@@ -1029,41 +1029,58 @@ function getUploadToken(): Promise<string> {
   return _uploadTokenPromise
 }
 
-function uploadToSupabaseOnce(
+async function uploadToSupabaseOnce(
   file: File | Blob,
   path: string,
   token: string,
   contentType: string | undefined,
 ): Promise<void> {
-  // Normalize URL — guard against trailing slash in the env var
+  // Read to ArrayBuffer before sending — on iOS, canvas.toBlob() Blobs can be
+  // invalidated under memory pressure after a long preparation phase, causing
+  // onerror ("Failed to fetch") the moment XHR tries to read the body. An
+  // ArrayBuffer lives in the JS heap and is never subject to that same release.
+  // We also switch from XHR to fetch() which uses NSURLSession more reliably
+  // on iOS for large request bodies that XHR sometimes silently cancels.
+  let body: ArrayBuffer | File | Blob
+  try { body = await file.arrayBuffer() } catch { body = file }
+
   const base = supabaseUrl.replace(/\/$/, '')
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${base}/storage/v1/object/Photos/${path}`)
-    xhr.timeout = R2_SINGLE_UPLOAD_TIMEOUT_MS
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+  const headers: Record<string, string> = {
     // apikey is required by Supabase's API gateway to route and identify the project.
     // The JS SDK always sends it alongside Authorization; omitting it can cause the edge
     // to drop the connection (manifesting as "Failed to fetch") rather than returning 4xx.
-    xhr.setRequestHeader('apikey', supabaseAnonKey)
-    xhr.setRequestHeader('x-upsert', 'false')
-    xhr.setRequestHeader('cache-control', 'max-age=604800')
-    if (contentType) xhr.setRequestHeader('Content-Type', contentType)
-    xhr.onload = () => {
-      if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 409) { resolve(); return }
-      let body: { error?: string; message?: string } = {}
-      try { body = JSON.parse(xhr.responseText || '{}') } catch {}
-      const err = new Error(body.error || body.message || `Storage upload failed: ${xhr.status}`)
-      if (xhr.status === 429) {
-        const retryAfterSec = Number(xhr.getResponseHeader('Retry-After') ?? 0)
-        ;(err as Error & { retryAfterMs?: number }).retryAfterMs = retryAfterSec > 0 ? retryAfterSec * 1000 : 0
-      }
-      reject(err)
-    }
-    xhr.onerror = () => reject(new Error('Failed to fetch'))
-    xhr.ontimeout = () => reject(new Error('Storage upload timed out'))
-    xhr.send(file)
-  })
+    'apikey': supabaseAnonKey,
+    'Authorization': `Bearer ${token}`,
+    'x-upsert': 'false',
+    'cache-control': 'max-age=604800',
+  }
+  if (contentType) headers['Content-Type'] = contentType
+
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), R2_SINGLE_UPLOAD_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(`${base}/storage/v1/object/Photos/${path}`, {
+      method: 'POST',
+      headers,
+      body,
+      signal: ac.signal,
+    })
+  } catch (e) {
+    clearTimeout(timer)
+    if (e instanceof Error && e.name === 'AbortError') throw new Error('Storage upload timed out')
+    throw new Error('Failed to fetch')
+  }
+  clearTimeout(timer)
+  if ((res.status >= 200 && res.status < 300) || res.status === 409) return
+  let bodyJson: { error?: string; message?: string } = {}
+  try { bodyJson = await res.json() } catch {}
+  const err = new Error(bodyJson.error || bodyJson.message || `Storage upload failed: ${res.status}`)
+  if (res.status === 429) {
+    const retryAfterSec = Number(res.headers.get('Retry-After') ?? 0)
+    ;(err as Error & { retryAfterMs?: number }).retryAfterMs = retryAfterSec > 0 ? retryAfterSec * 1000 : 0
+  }
+  throw err
 }
 
 async function uploadToSupabaseStorage(
@@ -1182,10 +1199,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     const rejected: string[] = []
 
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    // Desktop: 4 parallel workers — plenty of RAM, fast GPU.
-    // Mobile: 2 workers. Each 12 MP photo decoded to ImageBitmap = ~48 MB GPU memory.
-    // 3 simultaneous = ~144 MB → still OOM on Z Flip3 (confirmed). 2 = ~96 MB, safe.
-    const ADDFILES_CONCURRENCY = isMobile ? 3 : 4
+    // Desktop: 8 parallel workers — multi-core CPUs + GPU handle 8 concurrent canvas encodes
+    // well, roughly halving preparation time for large batches.
+    // Mobile: 3 workers. Each 12 MP photo decoded to ImageBitmap = ~48 MB GPU memory.
+    const ADDFILES_CONCURRENCY = isMobile ? 3 : 8
     let cursor = 0
 
     async function prepareWorker() {
