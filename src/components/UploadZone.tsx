@@ -1160,7 +1160,12 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     bgSem.current = { n: 0, q: [] }
     setPreparing(true)
 
-    const filesArr = Array.from(files)
+    const MAX_FILES = 150
+    let filesArr = Array.from(files)
+    if (filesArr.length > MAX_FILES) {
+      setUploadError(`You can add up to ${MAX_FILES} items at a time. The first ${MAX_FILES} were kept.`)
+      filesArr = filesArr.slice(0, MAX_FILES)
+    }
     setPreparingProgress({ done: 0, total: filesArr.length })
     // Pre-allocated so parallel workers can write results in file order.
     const itemSlots: (PendingItem | null)[] = new Array(filesArr.length).fill(null)
