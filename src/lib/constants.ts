@@ -45,7 +45,9 @@ export const AUTO_SCROLL_MAX_PX_FRAME = 30
 // ─── Upload ───────────────────────────────────────────────────────────────────
 
 // XHR timeout for a single (non-multipart) R2 upload request.
-export const R2_SINGLE_UPLOAD_TIMEOUT_MS = 120_000
+// 10 minutes — a 95 MB video at 1 Mbps takes ~760 s; this keeps the door open for
+// the full upload while still bailing on truly hung connections.
+export const R2_SINGLE_UPLOAD_TIMEOUT_MS = 600_000
 
 // XHR timeout per multipart/stream chunk. 10 minutes to accommodate slow mobile data
 // (5 MB chunk at 100 Kbps ≈ 400 s; 600 s gives ample margin before retry kicks in).

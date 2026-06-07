@@ -1406,36 +1406,44 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       }
     }
 
-    // Mobile always uses multipart: chunks go browser → R2 directly via presigned PUT URL.
-    // The single-file FormData path (uploadToR2) routes through the Worker proxy, which carrier
-    // networks reset far more aggressively than the presigned direct-to-R2 connection.
-    // Outer retry loop: if multipart exhausts its per-chunk retries (carrier dropped then
-    // reconnected), a fresh uploadVideoMultipart call starts a brand-new multipart session and
-    // retransmits from chunk 1. 3 full attempts on mobile catches the cases chunk-level retries
-    // can't — a connection that's down for >30 s and then recovers.
     const isMobileVideo = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    const maxVideoAttempts = isMobileVideo ? 3 : 1
+    // Just under Cloudflare's 100 MB Worker body limit.
+    const SINGLE_FILE_MOBILE_LIMIT = 95 * 1024 * 1024
     let videoRes: R2UploadResult | null = null
     let lastVideoErr: Error = new Error('Video upload failed')
-    for (let vAttempt = 1; vAttempt <= maxVideoAttempts; vAttempt++) {
-      try {
-        videoRes = (isMobileVideo || item.file.size > MULTIPART_THRESHOLD)
-          ? await uploadVideoMultipart(item.file, album.id, filename, onVideoProgress)
-          : await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
-        break
-      } catch (e) {
-        lastVideoErr = e instanceof Error ? e : new Error(String(e))
-        if (vAttempt < maxVideoAttempts) await wait(Math.min(4000 * vAttempt, 15000))
+
+    if (isMobileVideo && item.file.size <= SINGLE_FILE_MOBILE_LIMIT) {
+      // On mobile, FormData single-file POST is more reliable than raw binary chunk XHR.
+      // iOS/Android can silently cancel application/octet-stream XHR bodies above a few MB,
+      // causing "Network error on chunk 1". Try single-file first; multipart is the fallback.
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          videoRes = await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
+          break
+        } catch (e) {
+          lastVideoErr = e instanceof Error ? e : new Error(String(e))
+          if (attempt < 3) await wait(Math.min(3000 * attempt, 8000))
+        }
       }
     }
-    // Last resort for mobile: if all multipart attempts failed, try the single-file
-    // path for small videos (≤ 30 MB). It uses a different Worker endpoint than
-    // multipart — if the multipart route has an issue this attempt can still succeed.
-    if (!videoRes && isMobileVideo && item.file.size <= 30 * 1024 * 1024) {
-      try {
-        videoRes = await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
-      } catch { /* throw original error below */ }
+
+    if (!videoRes) {
+      // Desktop always uses multipart for files > MULTIPART_THRESHOLD.
+      // Mobile: fallback for >95 MB or if single-file failed.
+      const maxVideoAttempts = isMobileVideo ? 2 : 1
+      for (let vAttempt = 1; vAttempt <= maxVideoAttempts; vAttempt++) {
+        try {
+          videoRes = (isMobileVideo || item.file.size > MULTIPART_THRESHOLD)
+            ? await uploadVideoMultipart(item.file, album.id, filename, onVideoProgress)
+            : await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
+          break
+        } catch (e) {
+          lastVideoErr = e instanceof Error ? e : new Error(String(e))
+          if (vAttempt < maxVideoAttempts) await wait(4000)
+        }
+      }
     }
+
     if (!videoRes) throw lastVideoErr
     const res = videoRes
 
@@ -1456,6 +1464,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   async function uploadAll() {
     if (pending.length === 0) return
     const queue = [...pending]
+    // Stop new background uploads from starting — they'd compete for bandwidth with
+    // the foreground workers. In-flight uploads finish naturally; their status is read
+    // by the workers below.
+    bgSem.current.q = []
     setUploading(true)
     setUploadError('')
 
@@ -1833,6 +1845,23 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           </Link>
           . Illegal or abusive content may be removed.
         </p>
+        {preparing && (
+          <div className="mt-3">
+            <p className="text-xs font-semibold" style={{ color: '#254F22' }}>
+              {preparingProgress
+                ? `Preparing ${preparingProgress.done} / ${preparingProgress.total}…`
+                : 'Preparing files…'}
+            </p>
+            {preparingProgress && preparingProgress.total > 0 && (
+              <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{ width: `${Math.round(preparingProgress.done / preparingProgress.total * 100)}%`, background: '#8B6F4E' }}
+                />
+              </div>
+            )}
+          </div>
+        )}
         <input
           ref={inputRef}
           type="file"
@@ -1854,6 +1883,19 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         <div className="mt-4 text-sm p-3 rounded-lg flex items-start justify-between gap-3" style={{ background: '#FEE2E2', color: '#C0392B' }}>
           <p>{uploadError}</p>
           <button type="button" onClick={() => { setUploadError(''); setUploadStatus(null) }} className="font-semibold hover:underline flex-none" style={{ color: '#7A2A1F' }}>Dismiss</button>
+        </div>
+      )}
+      {uploading && uploadStatus && (
+        <div className="mt-3">
+          <p className="text-xs font-semibold" style={{ color: '#254F22' }}>
+            Uploading {uploadStatus.percent}%…
+          </p>
+          <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
+            <div
+              className="h-full"
+              style={{ width: `${uploadStatus.percent}%`, background: '#8B6F4E', transition: 'width 1s ease' }}
+            />
+          </div>
         </div>
       )}
       {pending.length > 0 && (
@@ -1935,29 +1977,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         </div>
       )}
 
-      {(preparing || uploading) && (
-        <div className="mt-3">
-          <p className="text-xs font-semibold" style={{ color: '#254F22' }}>
-            {preparing
-              ? (preparingProgress
-                  ? `Preparing ${preparingProgress.done} / ${preparingProgress.total}…`
-                  : 'Preparing files…')
-              : `Uploading ${uploadStatus?.percent ?? 0}%…`}
-          </p>
-          <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
-            <div
-              className="h-full"
-              style={{
-                width: preparing
-                  ? `${preparingProgress && preparingProgress.total > 0 ? Math.round(preparingProgress.done / preparingProgress.total * 100) : 0}%`
-                  : `${uploadStatus?.percent ?? 0}%`,
-                background: '#8B6F4E',
-                transition: uploading ? 'width 1s ease' : 'width 0.3s ease',
-              }}
-            />
-          </div>
-        </div>
-      )}
     </div>
   )
 }
