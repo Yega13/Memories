@@ -1123,7 +1123,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   function startBgUpload(fn: () => Promise<unknown>): void {
     const sem = bgSem.current
     const isMob = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    const limit = isMob ? 2 : UPLOAD_CONCURRENCY_DESKTOP
+    const limit = isMob ? UPLOAD_CONCURRENCY_MOBILE : UPLOAD_CONCURRENCY_DESKTOP
     const go = () => { sem.n++; void fn().finally(() => { sem.n--; sem.q.shift()?.() }) }
     if (sem.n < limit) go(); else sem.q.push(go)
   }
@@ -1170,7 +1170,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     // Desktop: 4 parallel workers — plenty of RAM, fast GPU.
     // Mobile: 2 workers. Each 12 MP photo decoded to ImageBitmap = ~48 MB GPU memory.
     // 3 simultaneous = ~144 MB → still OOM on Z Flip3 (confirmed). 2 = ~96 MB, safe.
-    const ADDFILES_CONCURRENCY = isMobile ? 2 : 4
+    const ADDFILES_CONCURRENCY = isMobile ? 3 : 4
     let cursor = 0
 
     async function prepareWorker() {
@@ -1413,6 +1413,14 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         if (vAttempt < maxVideoAttempts) await wait(Math.min(4000 * vAttempt, 15000))
       }
     }
+    // Last resort for mobile: if all multipart attempts failed, try the single-file
+    // path for small videos (≤ 30 MB). It uses a different Worker endpoint than
+    // multipart — if the multipart route has an issue this attempt can still succeed.
+    if (!videoRes && isMobileVideo && item.file.size <= 30 * 1024 * 1024) {
+      try {
+        videoRes = await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
+      } catch { /* throw original error below */ }
+    }
     if (!videoRes) throw lastVideoErr
     const res = videoRes
 
@@ -1468,7 +1476,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       let completed = 0
       let cursor = 0
 
-      setUploadStatus({ fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`, index: 0, total: queue.length, phase: 'Uploading', percent: 4 })
+      setUploadStatus({ fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`, index: 0, total: queue.length, phase: 'Uploading', percent: 0 })
 
       async function worker() {
         while (cursor < queue.length) {
@@ -1480,6 +1488,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             while (bg?.status === 'uploading') { await wait(50); bg = bgUploads.current.get(item.file) }
             if (bg?.status === 'done') {
               rows[myIndex] = { ...bg.row, caption: item.caption.trim() || null, author_name: item.author.trim() || null }
+              // Spread already-done completions over time so the bar rises smoothly
+              // from 0% instead of jumping instantly to however much was pre-uploaded.
+              await wait(40)
             } else {
               const base = Math.max(4, Math.round((completed / queue.length) * 90))
               const next = Math.max(4, Math.round(((completed + 1) / queue.length) * 90))
