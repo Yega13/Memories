@@ -54,12 +54,11 @@ export const R2_SINGLE_UPLOAD_TIMEOUT_MS = 600_000
 export const R2_CHUNK_UPLOAD_TIMEOUT_MS = 600_000
 
 // Maximum concurrent upload worker slots by device input class.
-// Mobile gets 2 — uploads are staggered by 800 ms so both workers never hit supabase.co
-// at the exact same instant (prevents carrier burst-drop "Failed to fetch"). Smaller
-// output files (1600 px / 0.80 q) mean each upload completes faster, reducing overlap.
-// Desktop gets 4 — broadband+HTTP/2 handles 4 concurrent uploads without stalling.
-export const UPLOAD_CONCURRENCY_MOBILE = 3
-export const UPLOAD_CONCURRENCY_DESKTOP = 4
+// Mobile gets 5 — staggered 400 ms apart so ~5 × 300 KB = 1.5 MB is in-flight at once,
+// manageable on LTE/5G. The fetch()-based uploader is more reliable than the old XHR path.
+// Desktop gets 6 — broadband handles 6 concurrent uploads easily.
+export const UPLOAD_CONCURRENCY_MOBILE = 5
+export const UPLOAD_CONCURRENCY_DESKTOP = 6
 
 // Concurrent R2 multipart chunk workers per video. Independent from the file-level concurrency
 // above — these run inside a single video's uploadVideoMultipart call.

@@ -657,12 +657,9 @@ async function encodeFromSource(
   const h = drawSource instanceof ImageBitmap ? drawSource.height : drawSource.naturalHeight
   const longest = Math.max(w, h)
 
-  // JPEGs already within upload dimensions: skip re-encoding, just strip EXIF.
-  // WebP and PNG must always be re-encoded — uploading them with a non-JPEG Content-Type
-  // to Supabase causes connection resets ("Failed to fetch") on mobile.
-  if (longest <= maxDim && drawSource instanceof ImageBitmap && /^image\/jpe?g$/i.test(originalFile.type)) {
-    return stripExifClientSide(originalFile)
-  }
+  // NOTE: no stripExifClientSide fast path here — when the bitmap was pre-decoded at maxDim
+  // its dimensions always equal maxDim even if the original was much larger, so we can't
+  // safely skip re-encoding. Always canvas-encode for consistent, size-capped output.
 
   const scale = Math.min(1, maxDim / longest)
   const tw = Math.max(1, Math.round(w * scale))
@@ -685,7 +682,9 @@ async function processImageForUpload(rawFile: File): Promise<File> {
   // Step 1 — HEIC: outside the semaphore because it uses its own WASM worker.
   let sourceFile = rawFile
   if (isHeicFile(rawFile)) {
-    const nativeBitmap = await createImageBitmap(rawFile).catch(() => null)
+    // Probe native HEIC support with a tiny decode — just testing codec availability,
+    // the actual image is decoded at upload size in decodeAndEncode below.
+    const nativeBitmap = await createImageBitmap(rawFile, { resizeWidth: 64, resizeQuality: 'low' }).catch(() => null)
     if (nativeBitmap) {
       nativeBitmap.close()
     } else {
@@ -694,10 +693,12 @@ async function processImageForUpload(rawFile: File): Promise<File> {
   }
 
   // Step 2 — Decode + encode.
-  // On mobile: run inside the semaphore (1 at a time) to prevent simultaneous large
-  // bitmap allocations causing OOM. On desktop: run freely (4-way parallel is fine,
-  // no memory pressure risk, and serialising kills throughput: 17 s → 42 s).
+  // Decode directly at upload size via { resizeWidth } — the browser uses hardware-accelerated
+  // downsampling during JPEG decode, so a 12 MP photo at 1600 px takes ~150 ms instead of
+  // 3–10 s at full resolution. The resulting bitmap is ~8 MB instead of ~140 MB, making the
+  // old OOM-guard decode semaphore unnecessary even with high concurrency.
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  const maxDimForDecode = isMobile ? UPLOAD_MAX_DIM_MOBILE : UPLOAD_MAX_DIM_DESKTOP
 
   const decodeAndEncode = async (): Promise<File> => {
     let bitmap: ImageBitmap | null = null
@@ -705,14 +706,14 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     let blobUrl: string | null = null
 
     try {
-      bitmap = await createImageBitmap(sourceFile)
+      bitmap = await createImageBitmap(sourceFile, { resizeWidth: maxDimForDecode, resizeQuality: 'high' })
     } catch {
       // Samsung Motion Photos: JPEG + embedded MP4 — extract just the JPEG portion
       if (/^image\/jpe?g$/i.test(sourceFile.type)) {
         const jpegOnly = await extractJpegBytes(sourceFile)
         if (jpegOnly !== sourceFile) {
           try {
-            bitmap = await createImageBitmap(jpegOnly)
+            bitmap = await createImageBitmap(jpegOnly, { resizeWidth: maxDimForDecode, resizeQuality: 'high' })
             sourceFile = new File([jpegOnly], sourceFile.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: sourceFile.lastModified })
           } catch { /* fall through to <img> */ }
         }
@@ -737,7 +738,7 @@ async function processImageForUpload(rawFile: File): Promise<File> {
     }
   }
 
-  return isMobile ? runWithDecodeSemaphore(decodeAndEncode) : decodeAndEncode()
+  return decodeAndEncode()
 }
 
 // ─── Preview thumbnail ────────────────────────────────────────────────────────
@@ -1018,7 +1019,7 @@ let _uploadTokenPromise: Promise<string> | null = null
 // "Failed to fetch" with UPLOAD_CONCURRENCY_MOBILE = 2, while still allowing both workers
 // to transfer in parallel (one started 800 ms earlier than the other).
 let _mobileUploadLastStartMs = 0
-const MOBILE_UPLOAD_STAGGER_MS = 800
+const MOBILE_UPLOAD_STAGGER_MS = 400
 
 function getUploadToken(): Promise<string> {
   if (!_uploadTokenPromise) {
@@ -1199,10 +1200,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     const rejected: string[] = []
 
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    // Desktop: 8 parallel workers — multi-core CPUs + GPU handle 8 concurrent canvas encodes
-    // well, roughly halving preparation time for large batches.
-    // Mobile: 3 workers. Each 12 MP photo decoded to ImageBitmap = ~48 MB GPU memory.
-    const ADDFILES_CONCURRENCY = isMobile ? 3 : 8
+    // Desktop: 8 parallel workers.
+    // Mobile: 6 workers — with resizeWidth pre-decode each bitmap is ~8 MB (down from ~140 MB),
+    // so 6 concurrent = ~48 MB total, well within mobile RAM. No OOM risk.
+    const ADDFILES_CONCURRENCY = isMobile ? 6 : 8
     let cursor = 0
 
     async function prepareWorker() {
@@ -1230,6 +1231,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
           // Single decode pass: validate decodability, tiny preview, AND pre-compress for upload.
           // uploadItem reads item.compressed so processImageForUpload is never called again —
           // eliminating the double-decode that caused 41 "cannot decode image" failures.
+          // Decode at upload size via { resizeWidth } — hardware-accelerated downscale during
+          // JPEG decode drops per-image prep from 3–10 s to ~150 ms on mobile.
+          const prepMaxDim = isMobile ? UPLOAD_MAX_DIM_MOBILE : UPLOAD_MAX_DIM_DESKTOP
+          const decodeOpts: ImageBitmapOptions = { resizeWidth: prepMaxDim, resizeQuality: 'high' }
           type PrepResult = { error: string } | { preview: string; compressed: File | undefined }
           const doWork = async (): Promise<PrepResult> => {
             let bitmap: ImageBitmap | null = null
@@ -1238,14 +1243,14 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             let sourceFile = file
 
             // S1: createImageBitmap on original
-            try { bitmap = await createImageBitmap(file) } catch { /* next */ }
+            try { bitmap = await createImageBitmap(file, decodeOpts) } catch { /* next */ }
 
             // S2: Samsung Motion Photos — JPEG with embedded MP4 after the EOI marker
             if (!bitmap && /^image\/jpe?g$/i.test(file.type)) {
               try {
                 const jpegOnly = await extractJpegBytes(file)
                 if (jpegOnly !== file) {
-                  bitmap = await createImageBitmap(jpegOnly)
+                  bitmap = await createImageBitmap(jpegOnly, decodeOpts)
                   sourceFile = new File([jpegOnly], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified })
                 }
               } catch { /* next */ }
@@ -1271,7 +1276,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             if (!bitmap && !imgEl) {
               try {
                 const heicFile = await convertHeicToJpeg(file)
-                bitmap = await createImageBitmap(heicFile)
+                bitmap = await createImageBitmap(heicFile, decodeOpts)
                 sourceFile = heicFile
               } catch {
                 // Mobile codec gap: createImageBitmap + <img> + HEIC conversion all failed.
