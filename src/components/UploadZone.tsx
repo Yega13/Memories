@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { supabase, supabaseUrl, supabaseAnonKey, type Album } from '@/lib/supabase'
+import { supabase, type Album } from '@/lib/supabase'
 import {
   detectKind,
   extensionFor,
@@ -29,7 +29,7 @@ function uploadToR2Once(
   file: File | Blob,
   albumId: string,
   filename: string,
-  kind: 'video' | 'poster',
+  kind: 'video' | 'poster' | 'image',
   onProgress?: (percent: number) => void,
 ): Promise<R2UploadResult> {
   const form = new FormData()
@@ -66,12 +66,12 @@ function uploadToR2Once(
 
 // Retries uploadToR2Once up to 5 times with exponential backoff. Transient network
 // drops (carrier proxy resets, brief Cloudflare hiccups) are the primary failure mode
-// for poster uploads and small videos — a single retry loop catches them all.
+// for poster uploads, small videos, and images — a single retry loop catches them all.
 async function uploadToR2(
   file: File | Blob,
   albumId: string,
   filename: string,
-  kind: 'video' | 'poster',
+  kind: 'video' | 'poster' | 'image',
   onProgress?: (percent: number) => void,
 ): Promise<R2UploadResult> {
   let lastError: Error = new Error('Upload failed')
@@ -592,20 +592,6 @@ async function processMirrorQueue(): Promise<void> {
   }
 }
 
-// ─── Decode semaphore ─────────────────────────────────────────────────────────
-// Limits concurrent image decode+encode to 1 at a time regardless of upload concurrency.
-// Prevents OOM from simultaneous large bitmap allocations (e.g. two 50 MP photos decoded
-// simultaneously = 400 MB). Uploads run outside the semaphore so network I/O overlaps
-// with the next photo's CPU work — concurrency 2 still doubles upload throughput.
-let _decodeSemaphore: Promise<void> = Promise.resolve()
-
-function runWithDecodeSemaphore<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = _decodeSemaphore
-  let release!: () => void
-  _decodeSemaphore = new Promise(r => { release = r })
-  return prev.then(() => fn()).finally(release) as Promise<T>
-}
-
 // ─── Image processing pipeline ───────────────────────────────────────────────
 // Single function that handles HEIC conversion, resize, and encode in one pass.
 //
@@ -837,10 +823,6 @@ function isRetriableResponseStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500
 }
 
-function isExistingObjectError(message: string): boolean {
-  return /already exists|duplicate|resource already exists/i.test(message)
-}
-
 function isHeicFile(file: File): boolean {
   return HEIC_MIME_TYPES.has(file.type.toLowerCase()) || HEIC_EXT_RE.test(file.name)
 }
@@ -998,135 +980,6 @@ async function extractJpegBytes(file: File): Promise<Blob> {
     }
   }
   return file
-}
-
-// ─── XHR-based Supabase Storage upload ───────────────────────────────────────
-// The Supabase JS SDK uses plain fetch() with no timeout. Under concurrent uploads
-// (3–5 workers) a single hanging request occupies a browser connection slot
-// indefinitely — when all 6 HTTP/1.1 slots to supabase.co fill up, subsequent
-// requests fail immediately with "Failed to fetch" even on a solid connection.
-// Replacing SDK calls with XHR gives us an explicit timeout (R2_SINGLE_UPLOAD_TIMEOUT_MS)
-// and a proper error/retry surface matching the R2 upload path.
-
-// Deduplicates concurrent getSession() calls. When 3–5 upload workers all start
-// simultaneously in incognito mode (no cached session), letting each call getSession()
-// independently could trigger concurrent auth-state reads on the SSR cookie client,
-// potentially filling connection slots before any upload has started.
-let _uploadTokenPromise: Promise<string> | null = null
-
-// Stagger consecutive mobile uploads by 800 ms so two workers never hit supabase.co at
-// exactly the same instant. This prevents the carrier burst-drop that causes deterministic
-// "Failed to fetch" with UPLOAD_CONCURRENCY_MOBILE = 2, while still allowing both workers
-// to transfer in parallel (one started 800 ms earlier than the other).
-let _mobileUploadLastStartMs = 0
-const MOBILE_UPLOAD_STAGGER_MS = 400
-
-function getUploadToken(): Promise<string> {
-  if (!_uploadTokenPromise) {
-    _uploadTokenPromise = supabase.auth.getSession()
-      .then(({ data: { session } }) => session?.access_token ?? supabaseAnonKey)
-      .finally(() => { _uploadTokenPromise = null })
-  }
-  return _uploadTokenPromise
-}
-
-async function uploadToSupabaseOnce(
-  file: File | Blob,
-  path: string,
-  token: string,
-  contentType: string | undefined,
-): Promise<void> {
-  // Read to ArrayBuffer before sending — on iOS, canvas.toBlob() Blobs can be
-  // invalidated under memory pressure after a long preparation phase, causing
-  // onerror ("Failed to fetch") the moment XHR tries to read the body. An
-  // ArrayBuffer lives in the JS heap and is never subject to that same release.
-  // We also switch from XHR to fetch() which uses NSURLSession more reliably
-  // on iOS for large request bodies that XHR sometimes silently cancels.
-  let body: ArrayBuffer | File | Blob
-  try { body = await file.arrayBuffer() } catch { body = file }
-
-  const base = supabaseUrl.replace(/\/$/, '')
-  const headers: Record<string, string> = {
-    // apikey is required by Supabase's API gateway to route and identify the project.
-    // The JS SDK always sends it alongside Authorization; omitting it can cause the edge
-    // to drop the connection (manifesting as "Failed to fetch") rather than returning 4xx.
-    'apikey': supabaseAnonKey,
-    'Authorization': `Bearer ${token}`,
-    'x-upsert': 'false',
-    'cache-control': 'max-age=604800',
-  }
-  if (contentType) headers['Content-Type'] = contentType
-
-  const ac = new AbortController()
-  const timer = setTimeout(() => ac.abort(), R2_SINGLE_UPLOAD_TIMEOUT_MS)
-  let res: Response
-  try {
-    res = await fetch(`${base}/storage/v1/object/Photos/${path}`, {
-      method: 'POST',
-      headers,
-      body,
-      signal: ac.signal,
-    })
-  } catch (e) {
-    clearTimeout(timer)
-    if (e instanceof Error && e.name === 'AbortError') throw new Error('Storage upload timed out')
-    throw new Error('Failed to fetch')
-  }
-  clearTimeout(timer)
-  if ((res.status >= 200 && res.status < 300) || res.status === 409) return
-  let bodyJson: { error?: string; message?: string } = {}
-  try { bodyJson = await res.json() } catch {}
-  const err = new Error(bodyJson.error || bodyJson.message || `Storage upload failed: ${res.status}`)
-  if (res.status === 429) {
-    const retryAfterSec = Number(res.headers.get('Retry-After') ?? 0)
-    ;(err as Error & { retryAfterMs?: number }).retryAfterMs = retryAfterSec > 0 ? retryAfterSec * 1000 : 0
-  }
-  throw err
-}
-
-async function uploadToSupabaseStorage(
-  file: File | Blob,
-  path: string,
-  contentType: string | undefined,
-): Promise<void> {
-  const token = await getUploadToken()
-  const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-
-  // Stagger: ensure no two mobile uploads start within MOBILE_UPLOAD_STAGGER_MS of each other.
-  if (isMobile) {
-    const elapsed = Date.now() - _mobileUploadLastStartMs
-    if (elapsed < MOBILE_UPLOAD_STAGGER_MS) await wait(MOBILE_UPLOAD_STAGGER_MS - elapsed)
-    _mobileUploadLastStartMs = Date.now()
-  }
-  // Mobile: 6 attempts, 8 s max backoff — extra retries cover Wi-Fi blips lasting > 7.5 s.
-  // Desktop: 8 attempts, 16 s max backoff — broadband connections recover slower from ISP blips.
-  const maxAttempts = isMobile ? 6 : 8
-  const maxBackoffMs = isMobile ? 8_000 : 16_000
-  let lastError: Error = new Error('Upload failed')
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      await uploadToSupabaseOnce(file, path, token, contentType)
-      return
-    } catch (e) {
-      lastError = e instanceof Error ? e : new Error(String(e))
-      // 409 "already exists" is a success — another worker or a duplicate filename resolved it.
-      if (isExistingObjectError(lastError.message)) return
-      // Only retry on transient/network errors, 429, and 5xx. 4xx (auth, bad request)
-      // won't be fixed by retrying — surface them immediately.
-      const retriable = isRetriableStorageError(lastError.message)
-        || /storage upload failed: [5]\d{2}/.test(lastError.message.toLowerCase())
-        || /storage upload failed: 429/.test(lastError.message)
-      if (!retriable) throw lastError
-      if (attempt < maxAttempts) {
-        const retryAfterMs = (lastError as Error & { retryAfterMs?: number }).retryAfterMs
-        const backoff = retryAfterMs && retryAfterMs > 0
-          ? Math.min(retryAfterMs, 30_000)
-          : Math.min(500 * Math.pow(2, attempt - 1), maxBackoffMs)
-        await wait(backoff)
-      }
-    }
-  }
-  throw lastError
 }
 
 export default function UploadZone({ album, onPhotosUploaded }: Props) {
@@ -1376,27 +1229,21 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       // Use the file pre-compressed during addFiles; fall back if pre-compression failed.
       const processed = item.compressed ?? await processImageForUpload(item.file)
       const ext = extensionFor(processed, 'image')
-      const path = `${album.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-
-      await uploadToSupabaseStorage(processed, path, processed.type)
-
-      const mainUrl = supabase.storage.from('Photos').getPublicUrl(path).data.publicUrl
-      // thumb_url uses Supabase's on-demand image transform (same as OG images).
-      // No separate thumbnail upload needed — eliminates one XHR per photo.
-      const thumbUrl = mainUrl
-        .replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')
-        + '?width=600&quality=80'
-
+      const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+      // Upload to R2 — zero egress cost vs Supabase Storage which bills per GB served.
+      const r2Result = await uploadToR2(processed, album.id, filename, 'image')
       return {
-        storage_path: path,
-        storage_backend: 'supabase',
-        url: mainUrl,
+        storage_path: r2Result.storage_path,
+        storage_backend: 'r2',
+        url: r2Result.url,
         caption: item.caption.trim() || null,
         author_name: item.author.trim() || null,
         media_type: 'image',
         poster_path: null, poster_url: null,
         stream_uid: null, stream_iframe_url: null, stream_thumbnail_url: null,
-        thumb_path: null, thumb_url: thumbUrl,
+        // Client already compresses to 1600 px / q=0.8 so the R2 URL doubles as thumbnail.
+        // No Supabase transform needed and no separate thumb upload.
+        thumb_path: null, thumb_url: r2Result.url,
         duration_seconds: null,
       }
     }
@@ -1655,180 +1502,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     }
 
     throw lastError ?? new Error('Could not save uploaded files')
-  }
-
-  // ─── Pipeline: process + upload concurrently ──────────────────────────────
-  // Files are encoded and uploaded at the same time — as soon as a photo is ready
-  // it goes straight to Supabase/R2 without waiting for the rest to finish processing.
-  async function processAndUploadAll(inputFiles: FileList | null) {
-    if (uploading || preparing || !inputFiles || inputFiles.length === 0) return
-    const filesArr = Array.from(inputFiles)
-    const isMobile = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-    const PROC = isMobile ? 2 : 4
-    // Mobile: 1 upload worker prevents concurrent memory pressure that caused 86 rejections.
-    // The single worker still fully overlaps with processing (upload rate ≥ processing rate).
-    // Desktop: full concurrency — no memory pressure risk.
-    const UPLOAD = Math.min(isMobile ? 1 : UPLOAD_CONCURRENCY_DESKTOP, filesArr.length)
-
-    setUploading(true)
-    setUploadError('')
-    setUploadStatus({ fileName: `${filesArr.length} item${filesArr.length === 1 ? '' : 's'}`, index: 0, total: filesArr.length, phase: 'Uploading', percent: 2 })
-
-    type QueueEntry = { item: PendingItem; fileIndex: number }
-    const readyQueue: QueueEntry[] = []
-    const rows: (PhotoInsertRow | null)[] = new Array(filesArr.length).fill(null)
-    const failureMessages: string[] = []
-    const rejected: string[] = []
-    let procCursor = 0
-    let uploadCursor = 0
-    let procDone = false
-    let uploadCompleted = 0
-
-    async function processOne(file: File): Promise<PendingItem | null> {
-      const kind = detectKind(file)
-      if (!kind) { rejected.push(`${file.name}: unsupported file type`); return null }
-      const cap = kind === 'video' ? caps.video : caps.image
-      if (file.size > cap) { rejected.push(`${file.name}: ${formatFileSize(file.size)} exceeds ${formatFileSize(cap)} limit`); return null }
-      const heic = kind === 'image' && isHeicFile(file)
-      let preview = URL.createObjectURL(file)
-      let compressed: File | undefined
-
-      if (kind === 'image' && !heic) {
-        let bitmap: ImageBitmap | null = null
-        let imgEl: HTMLImageElement | null = null
-        let imgUrl: string | null = null
-        let sourceFile = file
-        try { bitmap = await createImageBitmap(file) } catch { /* next */ }
-        if (!bitmap && /^image\/jpe?g$/i.test(file.type)) {
-          try {
-            const jpegOnly = await extractJpegBytes(file)
-            if (jpegOnly !== file) {
-              bitmap = await createImageBitmap(jpegOnly)
-              sourceFile = new File([jpegOnly], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg', lastModified: file.lastModified })
-            }
-          } catch { /* next */ }
-        }
-        if (!bitmap) {
-          imgUrl = URL.createObjectURL(file)
-          try {
-            imgEl = await new Promise<HTMLImageElement>((res, rej) => {
-              const el = new Image(); el.onload = () => res(el); el.onerror = () => rej(); el.src = imgUrl!
-            })
-          } catch { URL.revokeObjectURL(imgUrl); imgUrl = null }
-        }
-        if (!bitmap && !imgEl) {
-          try {
-            const heicFile = await convertHeicToJpeg(file)
-            bitmap = await createImageBitmap(heicFile)
-            sourceFile = heicFile
-          } catch {
-            const stripped = /^image\/jpe?g$/i.test(file.type)
-              ? await stripExifClientSide(file).catch(() => file)
-              : file
-            return { file, compressed: stripped, preview, kind, caption: '', author: '', heic: false }
-          }
-        }
-        try {
-          const src = bitmap ?? imgEl!
-          const tiny = await tinyPreviewFromSource(src)
-          if (tiny) { URL.revokeObjectURL(preview); preview = tiny }
-          try { compressed = await encodeFromSource(src, sourceFile) } catch { /* uploadItem re-processes */ }
-        } finally {
-          bitmap?.close()
-          if (imgUrl) URL.revokeObjectURL(imgUrl)
-        }
-      } else if (heic) {
-        try { compressed = await processImageForUpload(file) } catch { /* uploadItem re-processes */ }
-      }
-      return { file, compressed, preview, kind, caption: '', author: '', heic }
-    }
-
-    async function processingWorker() {
-      while (procCursor < filesArr.length) {
-        const myI = procCursor++
-        const item = await processOne(filesArr[myI])
-        if (item) readyQueue.push({ item, fileIndex: myI })
-      }
-    }
-
-    async function uploadWorker() {
-      while (true) {
-        if (uploadCursor < readyQueue.length) {
-          const myI = uploadCursor++
-          const { item, fileIndex } = readyQueue[myI]
-          try {
-            rows[fileIndex] = await uploadItem(item)
-            if (item.preview.startsWith('blob:')) URL.revokeObjectURL(item.preview)
-          } catch (e) {
-            failureMessages.push(`${item.file.name}: ${e instanceof Error ? e.message : String(e)}`)
-          }
-          uploadCompleted++
-          setUploadStatus({ fileName: item.file.name, index: uploadCompleted, total: filesArr.length, phase: 'Uploading', percent: Math.max(4, Math.round((uploadCompleted / filesArr.length) * 90)) })
-        } else if (procDone && uploadCursor >= readyQueue.length) {
-          break
-        } else {
-          await wait(20)
-        }
-      }
-    }
-
-    const runPipeline = async () => {
-      await Promise.all([
-        Promise.all(Array.from({ length: Math.min(PROC, filesArr.length) }, processingWorker)).then(() => { procDone = true }),
-        Promise.all(Array.from({ length: UPLOAD }, uploadWorker)),
-      ])
-    }
-
-    if (typeof navigator !== 'undefined' && 'locks' in navigator) {
-      await navigator.locks.request('hushare-upload', runPipeline)
-    } else {
-      await runPipeline()
-    }
-
-    setUploadStatus({ fileName: `${filesArr.length} item${filesArr.length === 1 ? '' : 's'}`, index: filesArr.length, total: filesArr.length, phase: 'Saving to album', percent: 95 })
-
-    const successRows = rows.filter((r): r is PhotoInsertRow => r !== null)
-    let serverRejectedCount = 0
-    if (successRows.length > 0) {
-      try {
-        for (let i = 0; i < successRows.length; i += 100) {
-          const result = await saveUploadedRows(successRows.slice(i, i + 100))
-          serverRejectedCount += result.rejected
-        }
-        onPhotosUploaded?.()
-      } catch (e) {
-        const message = `Save failed: ${e instanceof Error ? e.message : 'Could not save uploaded files'}`
-        setUploadError(message); showAppToast(message, 'error'); setUploading(false); setUploadStatus(null); return
-      }
-      filesArr.forEach((file, i) => {
-        const row = rows[i]
-        if (!row || row.media_type !== 'video') return
-        if (row.storage_backend === 'stream') {
-          if (row.stream_uid) mirrorQueue.push({ file, albumId: album.id, storagePath: row.storage_path, baseId: row.stream_uid })
-        } else if (file.size <= POSTER_MAX_BYTES) {
-          posterQueue.push({ file, albumId: album.id, storagePath: row.storage_path })
-        }
-      })
-      void processPosterQueue()
-      void processMirrorQueue()
-    }
-
-    const failedCount = failureMessages.length
-    if (rejected.length > 0 || failedCount > 0) {
-      const parts: string[] = []
-      if (successRows.length > 0) parts.push(`${successRows.length} uploaded`)
-      if (failedCount > 0) parts.push(`${failedCount} failed — ${failureMessages[0] ?? ''}`)
-      if (rejected.length > 0) parts.push(`${rejected.length} skipped: ${rejected[0]}`)
-      const msg = parts.join(', ')
-      setUploadError(msg); showAppToast(msg, 'error')
-    } else {
-      showAppToast(serverRejectedCount > 0
-        ? `${successRows.length} uploaded, ${serverRejectedCount} skipped by server.`
-        : `${filesArr.length - rejected.length} file${filesArr.length - rejected.length !== 1 ? 's' : ''} uploaded.`,
-        serverRejectedCount > 0 ? 'error' : undefined)
-    }
-    setUploading(false)
-    setUploadStatus(null)
   }
 
   return (

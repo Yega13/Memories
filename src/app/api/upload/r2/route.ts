@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserTierById } from '@/lib/subscriptions'
-import { uploadCapsForTier, PRO_VIDEO_BYTES } from '@/lib/media'
+import { uploadCapsForTier, PRO_IMAGE_BYTES, PRO_VIDEO_BYTES } from '@/lib/media'
 import type { R2Env } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyMimeByMagic } from '@/lib/file-magic'
@@ -13,9 +13,12 @@ export const maxDuration = 300
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Absolute ceiling regardless of tier - protects against any future bug
-// that raises caps unintentionally. Currently matches the Pro/Studio cap.
-const HARD_MAX_BYTES = PRO_VIDEO_BYTES
+// Absolute ceiling per kind — protects against any future bug that raises caps unintentionally.
+const HARD_MAX_BYTES: Record<string, number> = {
+  video: PRO_VIDEO_BYTES,
+  poster: PRO_IMAGE_BYTES,
+  image: PRO_IMAGE_BYTES,
+}
 
 const ALLOWED_VIDEO_MIMES = new Set([
   'video/mp4',
@@ -30,10 +33,18 @@ const ALLOWED_POSTER_MIMES = new Set([
   'image/png',
 ])
 
+const ALLOWED_IMAGE_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/avif',
+  'image/gif',
+])
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const FILENAME_RE = /^[a-z0-9._-]{1,128}$/i
 
-// Direct upload of a video file (or its poster) to the R2 bucket.
+// Direct upload of a video file, poster, or image to the R2 bucket.
 // Browser sends a multipart form: { file, albumId, filename, kind }.
 // Returns the object's storage_path (R2 key) and the public URL.
 //
@@ -84,14 +95,15 @@ export async function POST(req: Request) {
   if (!FILENAME_RE.test(filename)) {
     return NextResponse.json({ error: 'Invalid filename' }, { status: 400, headers: NO_STORE })
   }
-  if (kind !== 'video' && kind !== 'poster') {
+  if (kind !== 'video' && kind !== 'poster' && kind !== 'image') {
     return NextResponse.json({ error: 'Invalid kind' }, { status: 400, headers: NO_STORE })
   }
 
   // Reject anything over the absolute ceiling before we touch the DB.
-  if (file.size > HARD_MAX_BYTES) {
+  const hardMax = HARD_MAX_BYTES[kind] ?? PRO_VIDEO_BYTES
+  if (file.size > hardMax) {
     return NextResponse.json(
-      { error: `File exceeds ${HARD_MAX_BYTES} byte limit` },
+      { error: `File exceeds ${hardMax} byte limit` },
       { status: 413, headers: NO_STORE },
     )
   }
@@ -114,18 +126,17 @@ export async function POST(req: Request) {
   }
   const ownerTier = await getUserTierById(ownerRow.user_id)
   const caps = uploadCapsForTier(ownerTier)
-  // Posters are auto-generated thumbnails - they ride alongside videos
-  // and are tiny in practice, so the video cap is the natural ceiling for
-  // both. No separate poster limit needed.
-  if (file.size > caps.video) {
+  // Images use the image cap; posters ride alongside videos so use the video cap.
+  const sizeCap = kind === 'image' ? caps.image : caps.video
+  if (file.size > sizeCap) {
     return NextResponse.json(
-      { error: `File exceeds the ${caps.video}-byte limit for this album` },
+      { error: `File exceeds the ${sizeCap}-byte limit for this album` },
       { status: 413, headers: NO_STORE },
     )
   }
 
   const contentType = file.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg')
-  const allowed = kind === 'video' ? ALLOWED_VIDEO_MIMES : ALLOWED_POSTER_MIMES
+  const allowed = kind === 'video' ? ALLOWED_VIDEO_MIMES : kind === 'image' ? ALLOWED_IMAGE_MIMES : ALLOWED_POSTER_MIMES
   if (!allowed.has(contentType)) {
     return NextResponse.json({ error: `Unsupported content type: ${contentType}` }, { status: 415, headers: NO_STORE })
   }

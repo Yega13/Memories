@@ -88,8 +88,7 @@ export async function POST(req: Request) {
 
   const paths = [photo.storage_path]
   if (photo.poster_path) paths.push(photo.poster_path)
-  // Grid thumbnails live in the Supabase 'Photos' bucket alongside the original (under
-  // {albumId}/thumbs/). Only present for image rows uploaded after the thumb pipeline shipped.
+  // thumb_path is only set for old Supabase-backend image rows. R2 images always have null.
   if (photo.thumb_path) paths.push(photo.thumb_path)
 
   if (photo.storage_backend === 'stream') {

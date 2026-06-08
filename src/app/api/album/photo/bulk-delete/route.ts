@@ -113,7 +113,7 @@ export async function POST(req: Request) {
       target.push(p.storage_path)
       if (p.poster_path) target.push(p.poster_path)
     }
-    // Grid thumbnails always live in the Supabase 'Photos' bucket (only image rows have them).
+    // thumb_path is only set for old Supabase-backend image rows. R2 images always have null.
     if (p.thumb_path) supabasePaths.push(p.thumb_path)
     if (p.face_ids && p.face_ids.length > 0) faceIds.push(...p.face_ids)
   }

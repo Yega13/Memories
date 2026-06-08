@@ -66,7 +66,7 @@ export async function deleteAlbumAssetsAndRows(
       target.add(photo.storage_path)
       if (photo.poster_path) target.add(photo.poster_path)
     }
-    // Grid thumbnails always live in the Supabase 'Photos' bucket (only image rows have them).
+    // thumb_path is only set for old Supabase-backend image rows. R2 images always have null.
     if (photo.thumb_path) supabasePaths.add(photo.thumb_path)
   }
 

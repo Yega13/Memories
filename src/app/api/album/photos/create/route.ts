@@ -201,10 +201,9 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   if (!storagePath.startsWith(`${albumId}/`) || !url) return null
   if (!storageBackend || !STORAGE_BACKENDS.has(storageBackend)) return null
   if (!mediaType || !MEDIA_TYPES.has(mediaType)) return null
-  if (mediaType === 'image' && storageBackend !== 'supabase') return null
+  if (mediaType === 'image' && storageBackend !== 'supabase' && storageBackend !== 'r2') return null
   if (mediaType === 'video' && storageBackend !== 'r2' && storageBackend !== 'stream') return null
-  // Enforce that image URLs actually point to this project's Supabase storage.
-  // A bare https:// check would allow any external host to be stored and rendered.
+  // Enforce that URLs point to known storage hosts — prevents arbitrary external URLs being stored.
   if (storageBackend === 'supabase' && SUPABASE_STORAGE_BASE && !url.startsWith(SUPABASE_STORAGE_BASE)) return null
   if ((storageBackend === 'r2' || storageBackend === 'stream') && !url.startsWith('https://')) return null
 
@@ -216,10 +215,11 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
   let thumbPath: string | null = null
   let thumbUrl: string | null = null
   if (rawThumbUrl) {
-    // Accept both uploaded-thumbnail URLs (/object/public/) and on-demand transform
-    // URLs (/render/image/public/) — both are served from the same Supabase host.
+    // Accept Supabase object/transform URLs for supabase-backed rows, and any https://
+    // URL for R2-backed rows (thumb_url === url for R2 images, already validated above).
     const isValidThumb = rawThumbUrl.startsWith(SUPABASE_STORAGE_BASE || 'https://')
       || (SUPABASE_RENDER_BASE && rawThumbUrl.startsWith(SUPABASE_RENDER_BASE))
+      || (storageBackend === 'r2' && rawThumbUrl.startsWith('https://'))
     if (isValidThumb) {
       thumbUrl = mediaTextOrNull(rawThumbUrl, 2048)
       // thumb_path is only present for old-style uploaded thumbnails — preserve it when given.
