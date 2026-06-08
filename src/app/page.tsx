@@ -118,6 +118,9 @@ export default function Home() {
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Pricing
           </Link>
+          <Link href="/about" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
+            About
+          </Link>
           <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Collabs
           </Link>

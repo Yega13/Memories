@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 
 const footerLinks = [
   { href: '/', label: 'Home' },
+  { href: '/about', label: 'About' },
   { href: '/pricing', label: 'Pricing' },
   { href: '/collabs', label: 'Collabs' },
   { href: '/shared-photo-album', label: 'Shared albums' },
@@ -19,6 +20,7 @@ const footerLinks = [
 
 const footerRoutes = new Set([
   '/',
+  '/about',
   '/account',
   '/collabs',
   '/event-photo-sharing',
