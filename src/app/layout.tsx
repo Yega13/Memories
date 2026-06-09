@@ -9,18 +9,21 @@ import "./globals.css";
 const geistSans = Geist({
   variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const playfair = Playfair_Display({
   variable: "--font-serif",
   subsets: ["latin"],
   style: ["normal", "italic"],
+  display: "swap",
 });
 
 const handwriting = Playwrite_GB_J({
   variable: "--font-hand",
   weight: "400",
   adjustFontFallback: false,
+  display: "swap",
 });
 
 const montserrat = Montserrat({ variable: "--font-montserrat", subsets: ["latin"], display: "swap" });
