@@ -3,7 +3,16 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Heart, Zap, Shield, Mail, Phone } from 'lucide-react'
 import AccountNavLink from '@/components/AccountNavLink'
-import AboutGlobe from '@/components/AboutGlobe'
+import { Globe3D } from '@/components/ui/3d-globe'
+
+const GLOBE_MARKERS = [
+  { lat: 40.1792, lng:   44.4991, label: 'Armenia'       },
+  { lat: 37.0902, lng:  -95.7129, label: 'United States' },
+  { lat: 56.1304, lng: -106.3468, label: 'Canada'        },
+  { lat: 44.4268, lng:   26.1025, label: 'Romania'       },
+  { lat: 49.8153, lng:    6.1296, label: 'Luxembourg'    },
+  { lat: 55.7558, lng:   37.6173, label: 'Russia'        },
+]
 
 export const runtime = 'nodejs'
 
@@ -548,7 +557,15 @@ export default function AboutPage() {
           </div>
 
           <div className="relative z-10 mx-auto" style={{ maxWidth: '480px', padding: '1.5rem 2rem 2.5rem' }}>
-            <AboutGlobe />
+            <Globe3D
+              markers={GLOBE_MARKERS}
+              config={{
+                atmosphereColor:     '#4da6ff',
+                atmosphereIntensity: 20,
+                bumpScale:           5,
+                autoRotateSpeed:     0.4,
+              }}
+            />
           </div>
         </div>
       </section>
