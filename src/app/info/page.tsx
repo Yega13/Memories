@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import AccountNavLink from '@/components/AccountNavLink'
+import HamburgerMenu from '@/components/HamburgerMenu'
 
 export const metadata = { robots: { index: false, follow: false } }
 
@@ -230,7 +231,7 @@ export default function InfoPage() {
             draggable={false}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Pricing
           </Link>
@@ -244,7 +245,7 @@ export default function InfoPage() {
             Support
           </Link>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       <div className="hush-readable py-14">

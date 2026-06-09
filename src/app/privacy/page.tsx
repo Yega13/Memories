@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import AccountNavLink from "@/components/AccountNavLink";
+import HamburgerMenu from "@/components/HamburgerMenu";
 
 export const runtime = "nodejs";
 
@@ -143,7 +144,7 @@ export default function PrivacyPage() {
             style={{ width: "auto" }}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
             Pricing
           </Link>
@@ -157,7 +158,7 @@ export default function PrivacyPage() {
             Support
           </Link>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       <article className="hush-readable hush-fade-up py-16">

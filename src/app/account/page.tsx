@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import HamburgerMenu from '@/components/HamburgerMenu'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { hasAccountAccess } from '@/lib/access'
@@ -36,7 +37,7 @@ function AccountNav() {
           style={{ width: 'auto' }}
         />
       </Link>
-      <div className="hush-nav-links">
+      <HamburgerMenu>
         <Link href="/" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
           Home
         </Link>
@@ -49,7 +50,7 @@ function AccountNav() {
         <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
           Support
         </Link>
-      </div>
+      </HamburgerMenu>
     </nav>
   )
 }

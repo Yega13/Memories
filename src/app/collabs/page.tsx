@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import AccountNavLink from "@/components/AccountNavLink";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import { ArrowUpRight } from "lucide-react";
 
 export const runtime = "nodejs";
@@ -79,7 +80,7 @@ export default function CollabsPage() {
             draggable={false}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
             Pricing
           </Link>
@@ -93,7 +94,7 @@ export default function CollabsPage() {
             Support
           </Link>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       {/* Hero */}

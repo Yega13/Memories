@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Check, QrCode, ShieldCheck } from "lucide-react";
 import FaqList from "@/components/FaqList";
+import HamburgerMenu from "@/components/HamburgerMenu";
 
 type SeoLandingPageProps = {
   eyebrow: string;
@@ -57,7 +58,7 @@ export default function SeoLandingPage({
             draggable={false}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium" style={{ color: "#254F22" }}>
             Pricing
           </Link>
@@ -67,7 +68,7 @@ export default function SeoLandingPage({
           <Link href="/support" className="text-sm font-medium" style={{ color: "#254F22" }}>
             Support
           </Link>
-        </div>
+        </HamburgerMenu>
       </nav>
 
       <section className="hush-container-xl grid gap-10 py-10 md:grid-cols-[minmax(0,0.9fr)_minmax(360px,0.8fr)] md:items-center md:py-16">

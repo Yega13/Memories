@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import AccountNavLink from '@/components/AccountNavLink'
+import HamburgerMenu from '@/components/HamburgerMenu'
 import FaqList from '@/components/FaqList'
 import HomeHeroInteractive from '@/components/HomeHeroInteractive'
 import HomeScrollButton from '@/components/HomeScrollButton'
@@ -114,7 +115,7 @@ export default function Home() {
             draggable={false}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Pricing
           </Link>
@@ -128,7 +129,7 @@ export default function Home() {
             Support
           </Link>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       <div className="hush-home-hero relative overflow-hidden lg:min-h-[calc(100vh_-_73px)]">

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Mail, MessageCircle, Clock } from "lucide-react";
 import AccountNavLink from "@/components/AccountNavLink";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import SupportForm from "./SupportForm";
 
 export const runtime = "nodejs";
@@ -128,7 +129,7 @@ export default function SupportPage() {
             style={{ width: "auto" }}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
             Pricing
           </Link>
@@ -142,7 +143,7 @@ export default function SupportPage() {
             Support
           </span>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       {/* Hero */}

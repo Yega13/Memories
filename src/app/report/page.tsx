@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 import AccountNavLink from "@/components/AccountNavLink";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import ReportForm from "./ReportForm";
 
 export const runtime = "nodejs";
@@ -64,7 +65,7 @@ export default function ReportPage() {
             style={{ width: "auto" }}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
             Pricing
           </Link>
@@ -78,7 +79,7 @@ export default function ReportPage() {
             Support
           </Link>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       <section className="hush-readable hush-fade-up pt-12 text-center sm:pt-20">

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import Link from 'next/link'
+import HamburgerMenu from '@/components/HamburgerMenu'
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserTierById } from '@/lib/subscriptions'
@@ -127,7 +128,7 @@ export default async function CollectionPage({ params }: Props) {
             style={{ width: 'auto' }}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Home
           </Link>
@@ -140,7 +141,7 @@ export default async function CollectionPage({ params }: Props) {
           <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>
             Support
           </Link>
-        </div>
+        </HamburgerMenu>
       </nav>
 
       <section className="hush-container py-8 sm:py-12">

@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Check, ArrowRight } from "lucide-react";
 import AccountNavLink from "@/components/AccountNavLink";
+import HamburgerMenu from "@/components/HamburgerMenu";
 import CheckoutResumer from "@/components/CheckoutResumer";
 import FaqList from "@/components/FaqList";
 
@@ -323,7 +324,7 @@ export default function PricingPage() {
             style={{ width: "auto" }}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <span className="text-sm font-semibold underline underline-offset-4" style={{ color: "#254F22" }}>
             Pricing
           </span>
@@ -337,7 +338,7 @@ export default function PricingPage() {
             Support
           </Link>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       {/* Hero */}

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Heart, Zap, Shield, Mail, Phone } from 'lucide-react'
 import AccountNavLink from '@/components/AccountNavLink'
+import HamburgerMenu from '@/components/HamburgerMenu'
 import { Globe3D } from '@/components/ui/3d-globe'
 
 const GLOBE_MARKERS = [
@@ -65,13 +66,13 @@ export default function AboutPage() {
             draggable={false}
           />
         </Link>
-        <div className="hush-nav-links">
+        <HamburgerMenu>
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>Pricing</Link>
           <span className="text-sm font-semibold underline underline-offset-4" style={{ color: '#254F22' }}>About</span>
           <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>Collabs</Link>
           <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>Support</Link>
           <AccountNavLink />
-        </div>
+        </HamburgerMenu>
       </nav>
 
       {/* ── Hero ────────────────────────────────────────────────────────────── */}

@@ -388,6 +388,177 @@
   }
 }
 
+/* ── Hamburger menu — jonsuh/hamburgers elastic animation ───────────────────── */
+
+.hamburger {
+  padding: 8px 4px;
+  display: inline-block;
+  cursor: pointer;
+  transition-property: opacity, filter;
+  transition-duration: 0.15s;
+  transition-timing-function: linear;
+  font: inherit;
+  color: inherit;
+  text-transform: none;
+  background-color: transparent;
+  border: 0;
+  margin: 0;
+  overflow: visible;
+  -webkit-tap-highlight-color: transparent;
+}
+.hamburger:hover { opacity: 0.75; }
+
+.hamburger-box {
+  width: 26px;
+  height: 20px;
+  display: inline-block;
+  position: relative;
+}
+
+.hamburger-inner {
+  display: block;
+  top: 2px;
+  margin-top: -1.5px;
+}
+
+.hamburger-inner,
+.hamburger-inner::before,
+.hamburger-inner::after {
+  width: 26px;
+  height: 2.5px;
+  background-color: #254F22;
+  border-radius: 4px;
+  position: absolute;
+  transition-property: transform;
+  transition-duration: 0.15s;
+  transition-timing-function: ease;
+}
+
+.hamburger-inner::before,
+.hamburger-inner::after {
+  content: "";
+  display: block;
+}
+
+.hamburger-inner::before { top: 9px; }
+.hamburger-inner::after  { top: 18px; }
+
+/* Elastic */
+.hamburger--elastic .hamburger-inner {
+  top: 2px;
+  transition-duration: 0.275s;
+  transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.hamburger--elastic .hamburger-inner::before {
+  top: 9px;
+  transition: opacity 0.125s 0.275s ease;
+}
+.hamburger--elastic .hamburger-inner::after {
+  top: 18px;
+  transition: transform 0.275s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.hamburger--elastic.is-active .hamburger-inner {
+  transform: translate3d(0, 9px, 0) rotate(135deg);
+  transition-delay: 0.075s;
+}
+.hamburger--elastic.is-active .hamburger-inner::before {
+  transition-delay: 0s;
+  opacity: 0;
+}
+.hamburger--elastic.is-active .hamburger-inner::after {
+  transform: translate3d(0, -18px, 0) rotate(-270deg);
+  transition-delay: 0.075s;
+}
+
+/* Hidden on desktop, shown on mobile */
+.hush-hamburger {
+  display: none;
+  position: relative;
+  z-index: 51;
+}
+
+@media (max-width: 767px) {
+  .hush-hamburger-desktop {
+    display: none !important;
+  }
+
+  .hush-hamburger {
+    display: inline-block;
+  }
+}
+
+@media (min-width: 768px) {
+  .hush-mobile-overlay {
+    display: none !important;
+  }
+}
+
+/* Mobile full-screen overlay */
+.hush-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(253, 250, 245, 0.93);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+
+.hush-mobile-overlay--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hush-mobile-nav {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.25rem;
+}
+
+/* Nav links inside mobile menu — black, bold, large */
+.hush-mobile-nav a,
+.hush-mobile-nav > span {
+  font-size: 1.5rem !important;
+  font-weight: 700 !important;
+  color: #111111 !important;
+  text-decoration: none !important;
+  letter-spacing: -0.01em;
+  transition: opacity 0.15s ease;
+}
+
+.hush-mobile-nav a:hover {
+  opacity: 0.6;
+}
+
+/* Account icon in mobile menu */
+.hush-mobile-nav .hush-account-nav-link {
+  width: 54px !important;
+  height: 54px !important;
+}
+
+.hush-mobile-nav .hush-account-icon {
+  width: 1.6rem !important;
+  height: 1.6rem !important;
+  display: block !important;
+}
+
+/* Slide-up entrance animation for menu items */
+@keyframes hush-menu-in {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hush-mobile-overlay--open .hush-mobile-nav {
+  animation: hush-menu-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* ── ≤ 360px ────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 360px) {
