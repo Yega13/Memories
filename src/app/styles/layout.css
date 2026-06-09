@@ -474,7 +474,7 @@
 .hush-hamburger {
   display: none;
   position: relative;
-  z-index: 51;
+  z-index: 9999; /* above the portal overlay */
 }
 
 @media (max-width: 767px) {
@@ -493,11 +493,11 @@
   }
 }
 
-/* Mobile full-screen overlay */
+/* Mobile full-screen overlay — rendered via React portal into body */
 .hush-mobile-overlay {
   position: fixed;
   inset: 0;
-  z-index: 49;
+  z-index: 9998;
   display: flex;
   flex-direction: column;
   align-items: center;

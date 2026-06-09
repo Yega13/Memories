@@ -1,13 +1,36 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 export default function HamburgerMenu({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen]       = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const scrollYRef            = useRef(0)
 
+  useEffect(() => { setMounted(true) }, [])
+
+  // iOS-safe scroll lock: position:fixed + restore exact scroll position on close
   useEffect(() => {
-    document.body.style.overflow = open ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
+    if (open) {
+      scrollYRef.current = window.scrollY
+      const s = document.body.style
+      s.position = 'fixed'
+      s.top      = `-${scrollYRef.current}px`
+      s.left     = '0'
+      s.right    = '0'
+    } else {
+      const s = document.body.style
+      s.position = ''
+      s.top      = ''
+      s.left     = ''
+      s.right    = ''
+      window.scrollTo(0, scrollYRef.current)
+    }
+    return () => {
+      const s = document.body.style
+      s.position = s.top = s.left = s.right = ''
+    }
   }, [open])
 
   useEffect(() => {
@@ -15,6 +38,20 @@ export default function HamburgerMenu({ children }: { children: React.ReactNode 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Rendered via portal into document.body so it escapes the nav's
+  // backdrop-filter stacking context (which breaks position:fixed children)
+  const overlay = (
+    <div
+      className={`hush-mobile-overlay${open ? ' hush-mobile-overlay--open' : ''}`}
+      aria-hidden={!open}
+      onClick={() => setOpen(false)}
+    >
+      <nav className="hush-mobile-nav" onClick={e => e.stopPropagation()}>
+        {children}
+      </nav>
+    </div>
+  )
 
   return (
     <>
@@ -36,16 +73,7 @@ export default function HamburgerMenu({ children }: { children: React.ReactNode 
         </span>
       </button>
 
-      {/* Full-screen blurred overlay — mobile only */}
-      <div
-        className={`hush-mobile-overlay${open ? ' hush-mobile-overlay--open' : ''}`}
-        aria-hidden={!open}
-        onClick={() => setOpen(false)}
-      >
-        <nav className="hush-mobile-nav" onClick={e => e.stopPropagation()}>
-          {children}
-        </nav>
-      </div>
+      {mounted && createPortal(overlay, document.body)}
     </>
   )
 }
