@@ -7,7 +7,7 @@ export interface GlobeMarker {
   lat: number
   lng: number
   label: string
-  src?: string  // unused — we render dots
+  src?: string
 }
 
 interface GlobeConfig {
@@ -24,7 +24,6 @@ interface Props {
   onMarkerHover?: (marker: GlobeMarker | null) => void
 }
 
-// Atmosphere glow via Fresnel-like shader applied to the back face of a slightly larger sphere
 const VERT_ATM = /* glsl */`
   varying vec3 vNormal;
   void main() {
@@ -43,8 +42,6 @@ const FRAG_ATM = /* glsl */`
   }
 `
 
-// lat/lng degrees → position on a sphere of radius r
-// Matches standard Three.js spherical convention
 function toPos(lat: number, lng: number, r: number): THREE.Vector3 {
   const phi   = (90 - lat) * Math.PI / 180
   const theta = (lng + 180) * Math.PI / 180
@@ -55,8 +52,54 @@ function toPos(lat: number, lng: number, r: number): THREE.Vector3 {
   )
 }
 
-// Earth textures from the three-globe package CDN
 const CDN = 'https://unpkg.com/three-globe/example/img'
+
+// Reusable materials for all markers
+let _markerMats: {
+  dot:   THREE.MeshBasicMaterial
+  ring:  THREE.MeshBasicMaterial
+  glow:  THREE.MeshBasicMaterial
+  hit:   THREE.MeshBasicMaterial
+} | null = null
+
+function getMarkerMats() {
+  if (!_markerMats) {
+    _markerMats = {
+      dot:  new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }),
+      ring: new THREE.MeshBasicMaterial({ color: 0xff2828, transparent: true, opacity: 0.85, side: THREE.DoubleSide }),
+      glow: new THREE.MeshBasicMaterial({ color: 0xff5050, transparent: true, opacity: 0.30, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false }),
+      hit:  new THREE.MeshBasicMaterial({ visible: false }),
+    }
+  }
+  return _markerMats
+}
+
+function buildMarker(m: GlobeMarker): { group: THREE.Group; hitMesh: THREE.Mesh } {
+  const pos    = toPos(m.lat, m.lng, 1.022)
+  const normal = pos.clone().normalize()
+  const mats   = getMarkerMats()
+
+  const group = new THREE.Group()
+  group.position.copy(pos)
+  // Rotate group so local +Z points radially outward — all children lie flat on the surface
+  group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal)
+
+  // White filled dot at center
+  group.add(new THREE.Mesh(new THREE.CircleGeometry(0.019, 32), mats.dot))
+
+  // Red ring
+  group.add(new THREE.Mesh(new THREE.RingGeometry(0.026, 0.038, 48), mats.ring))
+
+  // Outer glow ring (additive, fades out)
+  group.add(new THREE.Mesh(new THREE.RingGeometry(0.040, 0.062, 48), mats.glow))
+
+  // Invisible hit sphere for raycasting (visible:false is ignored by raycaster)
+  const hitMesh = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), mats.hit)
+  hitMesh.userData.marker = m
+  group.add(hitMesh)
+
+  return { group, hitMesh }
+}
 
 export function Globe3D({
   markers = [],
@@ -64,28 +107,32 @@ export function Globe3D({
   onMarkerClick,
   onMarkerHover,
 }: Props) {
-  const mountRef  = useRef<HTMLDivElement>(null)
-  // Store Three.js state in a ref so pointer handlers always see current values
-  const threeRef  = useRef({
-    renderer:     null as THREE.WebGLRenderer | null,
-    camera:       null as THREE.PerspectiveCamera | null,
-    earth:        null as THREE.Mesh | null,
-    markerMeshes: [] as THREE.Mesh[],
-    raycaster:    new THREE.Raycaster(),
-    mouse:        new THREE.Vector2(),
-    rafId:        null as number | null,
-    isDragging:   false,
-    prevMouse:    { x: 0, y: 0 },
-    rotY:         0,
-    tiltX:        0.25,
+  const mountRef = useRef<HTMLDivElement>(null)
+  const threeRef = useRef({
+    renderer:    null as THREE.WebGLRenderer | null,
+    camera:      null as THREE.PerspectiveCamera | null,
+    earth:       null as THREE.Mesh | null,
+    hitMeshes:   [] as THREE.Mesh[],
+    raycaster:   new THREE.Raycaster(),
+    mouse:       new THREE.Vector2(),
+    rafId:       null as number | null,
+    // rotation state
+    rotY:        0,
+    tiltX:       0.22,
+    // drag
+    isDragging:  false,
+    prevMouse:   { x: 0, y: 0 },
+    // momentum
+    velocity:    0,       // radians/frame for Y rotation
+    isCoasting:  false,
   })
   const [tooltip, setTooltip] = useState<{ label: string; x: number; y: number } | null>(null)
 
   const {
-    atmosphereColor  = '#4da6ff',
+    atmosphereColor     = '#4da6ff',
     atmosphereIntensity = 20,
-    bumpScale        = 5,
-    autoRotateSpeed  = 0.3,
+    bumpScale           = 5,
+    autoRotateSpeed     = 0.2,
   } = config
 
   useEffect(() => {
@@ -93,10 +140,10 @@ export function Globe3D({
     if (!mount) return
     const t = threeRef.current
 
-    const w = mount.clientWidth  || 480
-    const h = mount.clientHeight || 480
+    const w = mount.clientWidth  || 400
+    const h = mount.clientHeight || 400
 
-    // ── Renderer ────────────────────────────────────────────────────────────
+    // ── Renderer ─────────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(w, h)
@@ -105,13 +152,15 @@ export function Globe3D({
 
     // ── Scene + Camera ───────────────────────────────────────────────────────
     const scene  = new THREE.Scene()
+    // Camera at z=3.0: FOV half-width = tan(22.5°)*3.0 = 1.24 > atmosphere radius 1.1
+    // This ensures the globe never gets clipped at the sides
     const camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 100)
-    camera.position.z = 2.6
+    camera.position.z = 3.0
     t.camera = camera
 
-    // ── Lighting ────────────────────────────────────────────────────────────
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55))
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6)
+    // ── Lighting — kept dim for a dark, moody look ───────────────────────────
+    scene.add(new THREE.AmbientLight(0xffffff, 0.28))
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1)
     sun.position.set(5, 3, 5)
     scene.add(sun)
 
@@ -149,27 +198,35 @@ export function Globe3D({
     })
     scene.add(new THREE.Mesh(atmGeo, atmMat))
 
-    // ── Markers (children of earth so they rotate with it) ──────────────────
-    const markerMeshes: THREE.Mesh[] = []
+    // ── Markers — white dot + red ring + outer glow, flat on surface ─────────
+    const hitMeshes: THREE.Mesh[] = []
     for (const m of markers) {
-      const pos = toPos(m.lat, m.lng, 1.022)
-      const geo = new THREE.SphereGeometry(0.026, 16, 16)
-      const mat = new THREE.MeshBasicMaterial({ color: 0xff1111 })
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.position.copy(pos)
-      mesh.userData.marker = m
-      earth.add(mesh)
-      markerMeshes.push(mesh)
+      const { group, hitMesh } = buildMarker(m)
+      earth.add(group)
+      hitMeshes.push(hitMesh)
     }
-    t.markerMeshes = markerMeshes
+    t.hitMeshes = hitMeshes
 
     // ── Animation loop ───────────────────────────────────────────────────────
     function animate() {
       t.rafId = requestAnimationFrame(animate)
-      if (!t.isDragging) {
+
+      if (t.isDragging) {
+        // rotation applied directly in pointer handler
+      } else if (t.isCoasting) {
+        t.velocity *= 0.93          // friction — decays in ~30 frames
+        if (Math.abs(t.velocity) < 0.00008) {
+          t.isCoasting = false
+          t.velocity   = 0
+        } else {
+          t.rotY += t.velocity
+          earth.rotation.y = t.rotY
+        }
+      } else {
         t.rotY += autoRotateSpeed * 0.003
         earth.rotation.y = t.rotY
       }
+
       renderer.render(scene, camera)
     }
     animate()
@@ -193,48 +250,50 @@ export function Globe3D({
       earthMat.dispose()
       atmGeo.dispose()
       atmMat.dispose()
-      for (const m of markerMeshes) {
-        m.geometry.dispose()
-        ;(m.material as THREE.Material).dispose()
-      }
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])  // intentionally static — config props don't change at runtime
+  }, [])
 
-  // ── Pointer events ─────────────────────────────────────────────────────────
+  // ── Pointer events ──────────────────────────────────────────────────────────
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const t = threeRef.current
     e.currentTarget.setPointerCapture(e.pointerId)
-    t.isDragging = true
-    t.prevMouse  = { x: e.clientX, y: e.clientY }
+    t.isDragging  = true
+    t.isCoasting  = false
+    t.velocity    = 0
+    t.prevMouse   = { x: e.clientX, y: e.clientY }
     e.currentTarget.style.cursor = 'grabbing'
     setTooltip(null)
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    const t = threeRef.current
+    const t     = threeRef.current
     const mount = mountRef.current
     if (!mount || !t.camera || !t.earth) return
 
     if (t.isDragging) {
       const dx = e.clientX - t.prevMouse.x
       const dy = e.clientY - t.prevMouse.y
-      t.rotY  += dx * 0.005
-      t.tiltX  = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, t.tiltX + dy * 0.005))
+
+      t.rotY   += dx * 0.005
+      t.tiltX   = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, t.tiltX + dy * 0.005))
       t.earth.rotation.y = t.rotY
       t.earth.rotation.x = t.tiltX
+
+      // Track last-frame velocity for momentum
+      t.velocity  = dx * 0.005
       t.prevMouse = { x: e.clientX, y: e.clientY }
       setTooltip(null)
       return
     }
 
-    // Raycast for hover
-    const rect = mount.getBoundingClientRect()
-    t.mouse.x  =  ((e.clientX - rect.left) / rect.width)  * 2 - 1
-    t.mouse.y  = -((e.clientY - rect.top)  / rect.height) * 2 + 1
+    // Hover: raycast against invisible hit spheres
+    const rect   = mount.getBoundingClientRect()
+    t.mouse.x    =  ((e.clientX - rect.left) / rect.width)  * 2 - 1
+    t.mouse.y    = -((e.clientY - rect.top)  / rect.height) * 2 + 1
     t.raycaster.setFromCamera(t.mouse, t.camera)
-    const hits = t.raycaster.intersectObjects(t.markerMeshes)
+    const hits   = t.raycaster.intersectObjects(t.hitMeshes)
     if (hits.length > 0) {
       const marker = hits[0].object.userData.marker as GlobeMarker
       setTooltip({ label: marker.label, x: e.clientX - rect.left, y: e.clientY - rect.top })
@@ -246,19 +305,22 @@ export function Globe3D({
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    threeRef.current.isDragging = false
+    const t = threeRef.current
+    t.isDragging = false
+    // Start coast only if there's meaningful velocity
+    t.isCoasting = Math.abs(t.velocity) > 0.0005
     e.currentTarget.style.cursor = 'grab'
   }
 
   function onClick(e: React.MouseEvent<HTMLDivElement>) {
-    const t = threeRef.current
+    const t     = threeRef.current
     const mount = mountRef.current
     if (!mount || !t.camera) return
-    const rect = mount.getBoundingClientRect()
-    t.mouse.x  =  ((e.clientX - rect.left) / rect.width)  * 2 - 1
-    t.mouse.y  = -((e.clientY - rect.top)  / rect.height) * 2 + 1
+    const rect  = mount.getBoundingClientRect()
+    t.mouse.x   =  ((e.clientX - rect.left) / rect.width)  * 2 - 1
+    t.mouse.y   = -((e.clientY - rect.top)  / rect.height) * 2 + 1
     t.raycaster.setFromCamera(t.mouse, t.camera)
-    const hits = t.raycaster.intersectObjects(t.markerMeshes)
+    const hits  = t.raycaster.intersectObjects(t.hitMeshes)
     if (hits.length > 0) {
       onMarkerClick?.(hits[0].object.userData.marker as GlobeMarker)
     }
@@ -278,20 +340,20 @@ export function Globe3D({
       {tooltip && (
         <div
           style={{
-            position:    'absolute',
-            left:        tooltip.x + 14,
-            top:         tooltip.y - 34,
-            background:  'rgba(255,255,255,0.96)',
-            border:      '1px solid rgba(221,213,197,0.8)',
-            borderRadius:'8px',
-            padding:     '4px 12px',
-            fontSize:    '12px',
-            fontWeight:  600,
-            color:       '#1B2E1A',
-            pointerEvents:'none',
-            whiteSpace:  'nowrap',
-            boxShadow:   '0 4px 14px rgba(0,0,0,0.18)',
-            zIndex:      10,
+            position:      'absolute',
+            left:          tooltip.x + 14,
+            top:           tooltip.y - 34,
+            background:    'rgba(255,255,255,0.96)',
+            border:        '1px solid rgba(221,213,197,0.8)',
+            borderRadius:  '8px',
+            padding:       '4px 12px',
+            fontSize:      '12px',
+            fontWeight:    600,
+            color:         '#1B2E1A',
+            pointerEvents: 'none',
+            whiteSpace:    'nowrap',
+            boxShadow:     '0 4px 14px rgba(0,0,0,0.18)',
+            zIndex:        10,
           }}
         >
           {tooltip.label}

@@ -556,14 +556,14 @@ export default function AboutPage() {
             </p>
           </div>
 
-          <div className="relative z-10 mx-auto" style={{ maxWidth: '480px', padding: '1.5rem 2rem 2.5rem' }}>
+          <div className="relative z-10 mx-auto" style={{ maxWidth: '400px', padding: '1.5rem 2rem 2.5rem' }}>
             <Globe3D
               markers={GLOBE_MARKERS}
               config={{
                 atmosphereColor:     '#4da6ff',
                 atmosphereIntensity: 20,
                 bumpScale:           5,
-                autoRotateSpeed:     0.4,
+                autoRotateSpeed:     0.2,
               }}
             />
           </div>
