@@ -64,33 +64,91 @@ export default function AboutPage() {
       </nav>
 
       {/* ── Hero ────────────────────────────────────────────────────────────── */}
-      <section className="hush-container pt-20 pb-16 md:pt-28 md:pb-20">
-        <p
-          className="text-xs uppercase font-semibold mb-5"
-          style={{ color: '#8B6F4E', letterSpacing: '0.22em' }}
-        >
-          Since April 2026 · Yerevan, Armenia
-        </p>
-        <h1
-          style={{
-            fontFamily: 'var(--font-serif)',
-            fontStyle: 'italic',
-            color: '#254F22',
-            fontSize: 'clamp(2.4rem, 5.5vw, 4.5rem)',
-            lineHeight: 1.05,
-            fontWeight: 700,
-            maxWidth: '820px',
-          }}
-        >
-          Built because your memories deserve a real home.
-        </h1>
-        <div className="mt-6 h-px w-16" style={{ background: '#C4A678' }} />
-        <p
-          className="mt-6 leading-relaxed"
-          style={{ color: '#6B5A4E', fontSize: 'clamp(1rem, 1.6vw, 1.2rem)', maxWidth: '38rem' }}
-        >
-          Not a group chat. Not a shared drive nobody checks. A real, lasting album — the kind your parents kept, rebuilt for today.
-        </p>
+      <section className="hush-container pt-16 pb-12 md:pt-24 md:pb-16">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+
+          {/* Left — text */}
+          <div>
+            <p
+              className="text-xs uppercase font-semibold mb-5"
+              style={{ color: '#8B6F4E', letterSpacing: '0.22em' }}
+            >
+              Since April 2026 · Yerevan, Armenia
+            </p>
+            <h1
+              style={{
+                fontFamily: 'var(--font-serif)',
+                fontStyle: 'italic',
+                color: '#254F22',
+                fontSize: 'clamp(2.4rem, 4.5vw, 4rem)',
+                lineHeight: 1.07,
+                fontWeight: 700,
+              }}
+            >
+              Built because your memories deserve a real home.
+            </h1>
+            <div className="mt-6 h-px w-16" style={{ background: '#C4A678' }} />
+            <p
+              className="mt-6 leading-relaxed"
+              style={{ color: '#6B5A4E', fontSize: 'clamp(1rem, 1.4vw, 1.15rem)', maxWidth: '34rem' }}
+            >
+              Not a group chat. Not a shared drive nobody checks. A real, lasting album — the kind your parents kept, rebuilt for today.
+            </p>
+          </div>
+
+          {/* Right — photo */}
+          <div className="flex justify-center lg:justify-end">
+            <div
+              className="hush-float-slow relative bg-white"
+              style={{
+                width: 'clamp(260px, 38vw, 420px)',
+                padding: '14px 14px 60px 14px',
+                transform: 'rotate(2.5deg)',
+                boxShadow: '0 24px 60px rgba(37,79,34,0.18), 0 4px 12px rgba(37,79,34,0.1)',
+                '--hush-rotate': '2.5deg',
+              } as React.CSSProperties}
+            >
+              {/* tape */}
+              <div
+                className="absolute -top-3 left-1/2"
+                style={{
+                  width: '72px',
+                  height: '24px',
+                  background: 'rgba(196, 152, 96, 0.42)',
+                  transform: 'translateX(-50%) rotate(-2deg)',
+                  borderRadius: '1px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                }}
+              />
+              <div
+                className="relative overflow-hidden"
+                style={{ aspectRatio: '4/5', background: '#F5F0E8' }}
+              >
+                <Image
+                  src="/wedding.jpg"
+                  alt="A moment worth keeping"
+                  fill
+                  sizes="(max-width: 1024px) 80vw, 38vw"
+                  className="object-cover"
+                  draggable={false}
+                />
+              </div>
+              <div className="absolute bottom-4 left-0 right-0 text-center">
+                <span
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    fontStyle: 'italic',
+                    color: '#7C4A2D',
+                    fontSize: '1.05rem',
+                  }}
+                >
+                  &ldquo;Keep it.&rdquo;
+                </span>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </section>
 
       {/* ── Divider ─────────────────────────────────────────────────────────── */}
@@ -355,13 +413,14 @@ export default function AboutPage() {
               fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)',
               fontWeight: 700,
               lineHeight: 1.15,
-              marginBottom: '2.25rem',
+              marginBottom: '2rem',
             }}
           >
             We&apos;re always happy to hear from you.
           </h2>
 
-          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-3 flex-wrap">
+          {/* Socials row — add more here as they grow */}
+          <div className="relative z-10 flex items-center justify-center gap-3 flex-wrap mb-8">
             <a
               href="https://www.instagram.com/hushare_space/"
               target="_blank"
@@ -376,37 +435,34 @@ export default function AboutPage() {
               </svg>
               @hushare_space
             </a>
+          </div>
 
-            <a
-              href="mailto:husharesupport@gmail.com"
-              className="hush-press flex items-center gap-2.5 px-6 py-3 rounded-full font-semibold text-sm"
-              style={{
-                background: 'rgba(253,250,245,0.1)',
-                color: '#FDFAF5',
-                border: '1px solid rgba(253,250,245,0.22)',
-              }}
-            >
-              <Mail className="w-4 h-4" />
-              husharesupport@gmail.com
-            </a>
+          {/* Divider */}
+          <div className="relative z-10 flex items-center gap-4 mb-6 max-w-xs mx-auto">
+            <div className="flex-1 h-px" style={{ background: 'rgba(253,250,245,0.15)' }} />
+            <span className="text-xs" style={{ color: 'rgba(253,250,245,0.35)', letterSpacing: '0.1em' }}>or reach us directly</span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(253,250,245,0.15)' }} />
+          </div>
 
-            <a
-              href="tel:+37496371135"
-              className="hush-press flex items-center gap-2.5 px-6 py-3 rounded-full font-semibold text-sm"
-              style={{
-                background: 'rgba(253,250,245,0.1)',
-                color: '#FDFAF5',
-                border: '1px solid rgba(253,250,245,0.22)',
-              }}
-            >
-              <Phone className="w-4 h-4" />
-              +374 96 37 11 35
-            </a>
+          {/* Contact info — plain text, not clickable */}
+          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-5 sm:gap-10">
+            <div className="flex items-center gap-2.5">
+              <Mail className="w-4 h-4 flex-none" style={{ color: 'rgba(253,250,245,0.5)' }} />
+              <span className="text-sm font-medium select-all" style={{ color: 'rgba(253,250,245,0.75)' }}>
+                husharesupport@gmail.com
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5">
+              <Phone className="w-4 h-4 flex-none" style={{ color: 'rgba(253,250,245,0.5)' }} />
+              <span className="text-sm font-medium select-all" style={{ color: 'rgba(253,250,245,0.75)' }}>
+                +374 96 37 11 35
+              </span>
+            </div>
           </div>
 
           <p
             className="relative z-10 mt-10 text-sm italic"
-            style={{ color: 'rgba(253,250,245,0.45)', fontFamily: 'var(--font-serif)' }}
+            style={{ color: 'rgba(253,250,245,0.4)', fontFamily: 'var(--font-serif)' }}
           >
             Made with love in Yerevan, Armenia
           </p>
