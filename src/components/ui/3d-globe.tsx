@@ -276,13 +276,13 @@ export function Globe3D({
       const dx = e.clientX - t.prevMouse.x
       const dy = e.clientY - t.prevMouse.y
 
-      t.rotY   += dx * 0.005
-      t.tiltX   = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, t.tiltX + dy * 0.005))
+      t.rotY   += dx * 0.009
+      t.tiltX   = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, t.tiltX + dy * 0.009))
       t.earth.rotation.y = t.rotY
       t.earth.rotation.x = t.tiltX
 
       // Track last-frame velocity for momentum
-      t.velocity  = dx * 0.005
+      t.velocity  = dx * 0.009
       t.prevMouse = { x: e.clientX, y: e.clientY }
       setTooltip(null)
       return
@@ -330,10 +330,11 @@ export function Globe3D({
     <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1' }}>
       <div
         ref={mountRef}
-        style={{ width: '100%', height: '100%', cursor: 'grab' }}
+        style={{ width: '100%', height: '100%', cursor: 'grab', touchAction: 'none', userSelect: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
         onPointerLeave={() => setTooltip(null)}
         onClick={onClick}
       />

@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import Image from 'next/image'
+import Link from 'next/link'
 
 // useLayoutEffect fires synchronously before any useEffect, so isMobile is
 // resolved before AccountNavLink (or any stateful child) runs its effects.
@@ -65,6 +67,22 @@ export default function HamburgerMenu({ children }: { children: React.ReactNode 
       aria-hidden={!open}
       onClick={() => setOpen(false)}
     >
+      <Link
+        href="/"
+        className="hush-mobile-logo-link"
+        aria-label="Hushare home"
+        onClick={() => setOpen(false)}
+      >
+        <Image
+          src="/logo/logo-dark-transparent.png"
+          alt="Hushare"
+          width={618}
+          height={146}
+          className="hush-mobile-logo-img"
+          style={{ width: 'auto' }}
+          draggable={false}
+        />
+      </Link>
       <nav className="hush-mobile-nav" onClick={e => e.stopPropagation()}>
         {children}
       </nav>

@@ -515,6 +515,25 @@
   pointer-events: auto;
 }
 
+.hush-mobile-logo-link {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.15s ease;
+}
+
+.hush-mobile-logo-link:hover {
+  opacity: 0.7;
+}
+
+.hush-mobile-logo-img {
+  height: 28px !important;
+  width: auto !important;
+}
+
 .hush-mobile-nav {
   display: flex;
   flex-direction: column;
