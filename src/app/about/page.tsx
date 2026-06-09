@@ -370,12 +370,124 @@ export default function AboutPage() {
           ))}
         </div>
 
-        <p
-          className="hush-reveal text-center text-sm italic mt-10"
-          style={{ color: '#8B6F4E', fontFamily: 'var(--font-serif)' }}
+      </section>
+
+      {/* ── Divider ─────────────────────────────────────────────────────────── */}
+      <div className="hush-container pb-12">
+        <div className="flex items-center gap-6">
+          <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
+          <p className="text-sm italic" style={{ color: '#B0A090', fontFamily: 'var(--font-serif)', whiteSpace: 'nowrap' }}>what&apos;s next</p>
+          <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
+        </div>
+      </div>
+
+      {/* ── What's next ─────────────────────────────────────────────────────── */}
+      <section className="hush-readable pb-24">
+        <div
+          className="hush-reveal relative overflow-hidden rounded-[20px] px-8 md:px-12 py-12"
+          style={{
+            background: '#1B2E1A',
+            boxShadow: '0 20px 56px rgba(10,20,10,0.22)',
+          }}
         >
-          And more coming — we&apos;re just getting started.
-        </p>
+          {/* subtle grain */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(rgba(255,240,200,0.4) 1px, transparent 1px)',
+              backgroundSize: '3px 3px',
+              opacity: 0.06,
+            }}
+          />
+
+          <p
+            className="relative z-10 text-xs uppercase font-semibold mb-4"
+            style={{ color: 'rgba(253,250,245,0.4)', letterSpacing: '0.22em' }}
+          >
+            On the horizon
+          </p>
+
+          <h2
+            className="relative z-10 mb-2"
+            style={{
+              fontFamily: 'var(--font-serif)',
+              fontStyle: 'italic',
+              color: '#FDFAF5',
+              fontSize: 'clamp(1.6rem, 3vw, 2.2rem)',
+              fontWeight: 700,
+              lineHeight: 1.15,
+            }}
+          >
+            We&apos;re two months old. We&apos;re just getting started.
+          </h2>
+
+          <p
+            className="relative z-10 mb-10 text-sm leading-relaxed"
+            style={{ color: 'rgba(253,250,245,0.55)', maxWidth: '32rem' }}
+          >
+            Here&apos;s what&apos;s coming — some of it we can talk about, some of it we can&apos;t yet.
+          </p>
+
+          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {([
+              {
+                label: 'AI Photo Recovery',
+                desc: 'Restore blurry, dark, or damaged shots right inside your album. No Photoshop needed.',
+                status: 'In progress',
+                statusColor: '#C4A678',
+                statusBg: 'rgba(196,166,120,0.12)',
+              },
+              {
+                label: 'Something big.',
+                desc: "We're building features we're not ready to announce yet. Follow us — you'll know when it's ready.",
+                status: 'Secret',
+                statusColor: '#9AB89A',
+                statusBg: 'rgba(154,184,154,0.1)',
+              },
+              {
+                label: 'Something bigger.',
+                desc: "Two months in and we already have plans that felt impossible at the start. Stay close.",
+                status: 'Secret',
+                statusColor: '#9AB89A',
+                statusBg: 'rgba(154,184,154,0.1)',
+              },
+            ] as const).map((item) => (
+              <div
+                key={item.label}
+                className="rounded-2xl p-5"
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
+                    style={{ color: item.statusColor, background: item.statusBg }}
+                  >
+                    {item.status}
+                  </span>
+                </div>
+                <h3
+                  className="font-semibold mb-2"
+                  style={{ color: '#FDFAF5', fontSize: '0.95rem' }}
+                >
+                  {item.label}
+                </h3>
+                <p className="text-sm leading-relaxed" style={{ color: 'rgba(253,250,245,0.5)' }}>
+                  {item.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <p
+            className="relative z-10 mt-8 text-sm italic"
+            style={{ color: 'rgba(253,250,245,0.3)', fontFamily: 'var(--font-serif)' }}
+          >
+            Follow <a href="https://www.instagram.com/hushare_space/" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(253,250,245,0.55)', textDecoration: 'underline' }}>@hushare_space</a> to be the first to know.
+          </p>
+        </div>
       </section>
 
       {/* ── Contact ─────────────────────────────────────────────────────────── */}
