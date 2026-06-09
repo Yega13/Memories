@@ -3,6 +3,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Heart, Zap, Shield, Mail, Phone } from 'lucide-react'
 import AccountNavLink from '@/components/AccountNavLink'
+import AboutGlobe from '@/components/AboutGlobe'
 
 export const runtime = 'nodejs'
 
@@ -487,6 +488,68 @@ export default function AboutPage() {
           >
             Follow <a href="https://www.instagram.com/hushare_space/" target="_blank" rel="noopener noreferrer" style={{ color: 'rgba(253,250,245,0.55)', textDecoration: 'underline' }}>@hushare_space</a> to be the first to know.
           </p>
+        </div>
+      </section>
+
+      {/* ── Divider ─────────────────────────────────────────────────────────── */}
+      <div className="hush-container pb-12">
+        <div className="flex items-center gap-6">
+          <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
+          <p className="text-sm italic" style={{ color: '#B0A090', fontFamily: 'var(--font-serif)', whiteSpace: 'nowrap' }}>our community</p>
+          <div className="flex-1 h-px" style={{ background: '#E8E0D0' }} />
+        </div>
+      </div>
+
+      {/* ── Globe ───────────────────────────────────────────────────────────── */}
+      <section className="hush-container pb-24">
+        <div
+          className="hush-reveal relative rounded-[20px] overflow-hidden"
+          style={{
+            background: '#1B2E1A',
+            boxShadow: '0 20px 56px rgba(10,20,10,0.22)',
+          }}
+        >
+          {/* grain overlay */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(rgba(255,240,200,0.4) 1px, transparent 1px)',
+              backgroundSize: '3px 3px',
+              opacity: 0.06,
+            }}
+          />
+
+          <div className="relative z-10 pt-12 pb-2 px-8 md:px-12 text-center">
+            <p
+              className="text-xs uppercase font-semibold mb-4"
+              style={{ color: 'rgba(253,250,245,0.4)', letterSpacing: '0.22em' }}
+            >
+              Our community
+            </p>
+            <h2
+              style={{
+                fontFamily: 'var(--font-serif)',
+                fontStyle: 'italic',
+                color: '#FDFAF5',
+                fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+                fontWeight: 700,
+                lineHeight: 1.15,
+                marginBottom: '0.75rem',
+              }}
+            >
+              A small team. A growing community.
+            </h2>
+            <p
+              className="text-sm"
+              style={{ color: 'rgba(253,250,245,0.5)', maxWidth: '30rem', margin: '0 auto' }}
+            >
+              From Yerevan to the world — our users are in Armenia, USA, Canada, Romania, Luxembourg, and Russia.
+            </p>
+          </div>
+
+          <div className="relative z-10 mx-auto" style={{ maxWidth: '480px', padding: '1.5rem 2rem 2.5rem' }}>
+            <AboutGlobe />
+          </div>
         </div>
       </section>
 
