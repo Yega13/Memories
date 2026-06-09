@@ -4,6 +4,7 @@ import Script from "next/script";
 import AppToastViewport from "@/components/AppToast";
 import SiteFooter from "@/components/SiteFooter";
 import InitialPreloader from "@/components/InitialPreloader";
+import BackToTop from "@/components/BackToTop";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -356,6 +357,7 @@ export default function RootLayout({
         <InitialPreloader />
         {children}
         <SiteFooter />
+        <BackToTop />
         <AppToastViewport />
       </body>
     </html>

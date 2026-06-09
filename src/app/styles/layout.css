@@ -520,7 +520,7 @@
   top: 0;
   left: 0;
   right: 0;
-  padding: 0.9rem 1.25rem;
+  padding: 1.6rem 1.25rem 0.9rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -532,7 +532,7 @@
 }
 
 .hush-mobile-logo-img {
-  height: 28px !important;
+  height: 36px !important;
   width: auto !important;
 }
 
