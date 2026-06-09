@@ -29,6 +29,11 @@ export default function HamburgerMenu({ children }: { children: React.ReactNode 
     return () => mq.removeEventListener('change', handler)
   }, [])
 
+  // Close the menu and release scroll lock when viewport switches to desktop
+  useEffect(() => {
+    if (!isMobile) setOpen(false)
+  }, [isMobile])
+
   // iOS-safe scroll lock: position:fixed + restore exact scroll position on close
   useEffect(() => {
     if (open) {
@@ -83,7 +88,7 @@ export default function HamburgerMenu({ children }: { children: React.ReactNode 
           draggable={false}
         />
       </Link>
-      <nav className="hush-mobile-nav" onClick={e => e.stopPropagation()}>
+      <nav className="hush-mobile-nav" onClick={() => setOpen(false)}>
         {children}
       </nav>
     </div>
