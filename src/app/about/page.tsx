@@ -66,9 +66,10 @@ export default function AboutPage() {
           />
         </Link>
         <div className="hush-nav-links">
-          <Link href="/pricing" className="text-sm font-medium" style={{ color: '#254F22' }}>Pricing</Link>
-          <Link href="/collabs" className="text-sm font-medium" style={{ color: '#254F22' }}>Collabs</Link>
-          <Link href="/support" className="text-sm font-medium" style={{ color: '#254F22' }}>Support</Link>
+          <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>Pricing</Link>
+          <span className="text-sm font-semibold underline underline-offset-4" style={{ color: '#254F22' }}>About</span>
+          <Link href="/collabs" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>Collabs</Link>
+          <Link href="/support" className="text-sm font-medium hover:underline" style={{ color: '#254F22' }}>Support</Link>
           <AccountNavLink />
         </div>
       </nav>
