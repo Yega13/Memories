@@ -41,9 +41,11 @@ export default function SeoLandingPage({
       />
 
       <nav
-        className="hush-nav flex items-center justify-between"
+        className="hush-nav sticky top-0 z-50 flex items-center justify-between"
         style={{
           background: "rgba(253, 250, 245, 0.9)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
           borderBottom: "1px solid rgba(221, 213, 197, 0.75)",
         }}
       >

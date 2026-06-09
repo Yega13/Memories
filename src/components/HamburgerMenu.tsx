@@ -1,25 +1,43 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+
+// useLayoutEffect fires synchronously before any useEffect, so isMobile is
+// resolved before AccountNavLink (or any stateful child) runs its effects.
+// That means children mount exactly once — in the desktop div on desktop,
+// or in the portal overlay on mobile — never in both simultaneously.
+// Falls back to useEffect on the server (where window doesn't exist).
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 export default function HamburgerMenu({ children }: { children: React.ReactNode }) {
   const [open, setOpen]       = useState(false)
   const [mounted, setMounted] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const scrollYRef            = useRef(0)
+  const hasOpenedRef          = useRef(false)
 
-  useEffect(() => { setMounted(true) }, [])
+  useIsomorphicLayoutEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mq.matches)
+    setMounted(true)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
 
   // iOS-safe scroll lock: position:fixed + restore exact scroll position on close
   useEffect(() => {
     if (open) {
+      hasOpenedRef.current = true
       scrollYRef.current = window.scrollY
       const s = document.body.style
       s.position = 'fixed'
       s.top      = `-${scrollYRef.current}px`
       s.left     = '0'
       s.right    = '0'
-    } else {
+    } else if (hasOpenedRef.current) {
       const s = document.body.style
       s.position = ''
       s.top      = ''
@@ -55,12 +73,15 @@ export default function HamburgerMenu({ children }: { children: React.ReactNode 
 
   return (
     <>
-      {/* Desktop nav links — hidden below 768px via CSS */}
-      <div className="hush-nav-links hush-hamburger-desktop">
-        {children}
-      </div>
+      {/* Desktop nav links — only rendered when not mobile, so stateful
+          children (AccountNavLink) mount exactly once per page */}
+      {!isMobile && (
+        <div className="hush-nav-links hush-hamburger-desktop">
+          {children}
+        </div>
+      )}
 
-      {/* Mobile hamburger button — elastic animation (jonsuh/hamburgers) */}
+      {/* Hamburger button — always in DOM so CSS can show/hide without CLS */}
       <button
         type="button"
         aria-label={open ? 'Close menu' : 'Open menu'}
@@ -73,7 +94,8 @@ export default function HamburgerMenu({ children }: { children: React.ReactNode 
         </span>
       </button>
 
-      {mounted && createPortal(overlay, document.body)}
+      {/* Portal overlay — mobile only, mounted after layout detection */}
+      {mounted && isMobile && createPortal(overlay, document.body)}
     </>
   )
 }
