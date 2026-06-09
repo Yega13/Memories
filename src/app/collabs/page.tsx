@@ -83,6 +83,9 @@ export default function CollabsPage() {
           <Link href="/pricing" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
             Pricing
           </Link>
+          <Link href="/about" className="text-sm font-medium hover:underline" style={{ color: "#254F22" }}>
+            About
+          </Link>
           <span className="text-sm font-semibold underline underline-offset-4" style={{ color: "#254F22" }}>
             Collabs
           </span>

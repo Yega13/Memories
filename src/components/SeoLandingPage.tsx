@@ -61,6 +61,9 @@ export default function SeoLandingPage({
           <Link href="/pricing" className="text-sm font-medium" style={{ color: "#254F22" }}>
             Pricing
           </Link>
+          <Link href="/about" className="text-sm font-medium" style={{ color: "#254F22" }}>
+            About
+          </Link>
           <Link href="/support" className="text-sm font-medium" style={{ color: "#254F22" }}>
             Support
           </Link>
