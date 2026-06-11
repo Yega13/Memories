@@ -1,3 +1,9 @@
+// ─── Back-to-top button ───────────────────────────────────────────────────────
+
+// Custom window event fired whenever fixed bottom bars appear/disappear so that
+// the BackToTop component can recalculate its position immediately.
+export const BTT_UPDATE_EVENT = 'btt-update'
+
 // ─── Gesture: arrange drag / select mode ──────────────────────────────────────
 
 // Desktop only: how long the user must hold before entering select mode.

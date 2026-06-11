@@ -119,6 +119,23 @@ let r2PresignWorking = true
 // / 4 workers = 25-50 s wasted just on failed Stream calls in a video-heavy batch.
 let streamAvailable = true
 
+// Reads a Blob as ArrayBuffer. Tries the modern Promise API first; falls back to the
+// legacy FileReader API which uses a different Blink code path and succeeds on some
+// Android/Samsung devices where Blob.arrayBuffer() is denied by the content provider.
+function readBlobSafe(blob: Blob): Promise<ArrayBuffer> {
+  return blob.arrayBuffer().catch(
+    () => new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (reader.result instanceof ArrayBuffer) resolve(reader.result)
+        else reject(new Error('FileReader returned no data'))
+      }
+      reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'))
+      reader.readAsArrayBuffer(blob)
+    }),
+  )
+}
+
 async function uploadVideoMultipart(
   file: File,
   albumId: string,
@@ -139,28 +156,27 @@ async function uploadVideoMultipart(
   let fileBuffer: ArrayBuffer | null = null
   if (isMobileChunk && file.size <= 100 * 1024 * 1024) {
     try {
-      fileBuffer = await file.arrayBuffer()
+      fileBuffer = await readBlobSafe(file)
     } catch {
-      // Full pre-read failed. Two possible causes:
+      // Full pre-read failed even with FileReader fallback. Two possible causes:
       //   (a) Memory pressure — device can't fit the whole file in RAM. Per-chunk reads
       //       (5 MB at a time) will still work. Fall through.
-      //   (b) Dead content URI — Android messaging apps (WhatsApp, Telegram) provide
-      //       temporary URIs that expire. Per-chunk reads will also fail.
-      // Distinguish by probing a tiny slice: if even 1 KB fails, the URI is dead.
+      //   (b) Dead content URI — file is inaccessible. Per-chunk reads will also fail.
+      // Probe with 1 KB to distinguish: if that also fails, bail out now.
       try {
-        await file.slice(0, 1024).arrayBuffer()
+        await readBlobSafe(file.slice(0, 1024))
         // Probe succeeded → memory pressure only. Fall through to per-chunk reads.
       } catch {
-        throw new Error(`Cannot read "${file.name}" — save the video to your device's gallery first, then upload it`)
+        throw new Error(`Cannot access "${file.name}" — copy the video to your Downloads folder, then upload from there`)
       }
     }
   } else if (isMobileChunk) {
-    // Large file (> 100 MB) — can't buffer the whole thing. Probe first KB to catch
-    // dead content URIs (messaging app shares) before starting the network upload.
+    // Large file (> 100 MB) — can't buffer the whole thing. Probe first KB to detect
+    // inaccessible files before starting the network upload.
     try {
-      await file.slice(0, 1024).arrayBuffer()
+      await readBlobSafe(file.slice(0, 1024))
     } catch {
-      throw new Error(`Cannot read "${file.name}" — save the video to your device's gallery first, then upload it`)
+      throw new Error(`Cannot access "${file.name}" — copy the video to your Downloads folder, then upload from there`)
     }
   }
 
@@ -200,28 +216,27 @@ async function uploadVideoMultipart(
     if (chunk instanceof ArrayBuffer) {
       chunkBytes = chunk
     } else {
-      // Try reading the whole chunk at once. If that fails (Samsung Cloud-synced files
-      // download incrementally; low-memory devices can't allocate a 5 MB buffer in one
-      // shot), fall back to reading in 256 KB pieces and concatenating. This recovers
-      // cases that a single large arrayBuffer() call cannot.
+      // Try reading the whole chunk at once (fast path).
+      // If that fails, fall back to 256 KB pieces — helps when the device can't
+      // allocate a 5 MB buffer in one shot or the content provider streams data
+      // incrementally. readBlobSafe tries Blob.arrayBuffer() then FileReader so
+      // Samsung Galaxy files that fail the Promise API still have a chance to succeed.
       try {
-        chunkBytes = await chunk.arrayBuffer()
+        chunkBytes = await readBlobSafe(chunk)
       } catch {
         const PIECE = 256 * 1024
-        const pieces: ArrayBuffer[] = []
+        const merged = new Uint8Array(chunk.size)
         try {
           let pos = 0
           while (pos < chunk.size) {
-            pieces.push(await chunk.slice(pos, Math.min(pos + PIECE, chunk.size)).arrayBuffer())
-            pos += PIECE
+            const end = Math.min(pos + PIECE, chunk.size)
+            const piece = await readBlobSafe(chunk.slice(pos, end))
+            merged.set(new Uint8Array(piece), pos)
+            pos = end
           }
         } catch {
           throw new Error(`Failed to read chunk ${partNumber} from file — re-add the video and try again`)
         }
-        const total = pieces.reduce((n, p) => n + p.byteLength, 0)
-        const merged = new Uint8Array(total)
-        let offset = 0
-        for (const p of pieces) { merged.set(new Uint8Array(p), offset); offset += p.byteLength }
         chunkBytes = merged.buffer
       }
     }

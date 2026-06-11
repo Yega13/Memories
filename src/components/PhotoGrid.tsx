@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { type Album, type Photo } from '@/lib/supabase'
 import { DEFAULT_SLIDESHOW_INTERVAL_MS, type SlideshowAnimation } from '@/lib/media-display'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX } from '@/lib/media-text'
-import { SUPPRESS_CLICK_AFTER_REORDER_MS } from '@/lib/constants'
+import { SUPPRESS_CLICK_AFTER_REORDER_MS, BTT_UPDATE_EVENT } from '@/lib/constants'
 import { showAppToast } from '@/components/AppToast'
 import PhotoSettingsModal from '@/components/photo-grid/PhotoSettingsModal'
 import SlideshowPickerModal from '@/components/SlideshowPickerModal'
@@ -62,6 +62,17 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
     selectMode, selectedIds, bulkDeleting,
     enterSelectMode, exitSelectMode, toggleSelection, selectAll, bulkDeleteSelected,
   } = useSelectMode({ slug, arrangeMode, onPhotoDeleted })
+
+  // Callback ref on the bulk-select toolbar: measures the real element height so BackToTop
+  // raises itself by the exact amount, not a hardcoded estimate.
+  const selectBarRef = useCallback((el: HTMLDivElement | null) => {
+    if (el) {
+      document.documentElement.dataset.bttBarHeight = String(el.offsetHeight)
+    } else {
+      delete document.documentElement.dataset.bttBarHeight
+    }
+    window.dispatchEvent(new Event(BTT_UPDATE_EVENT))
+  }, [])
 
   const {
     reorderDraggingId, reorderTargetId, reorderSaving, dragGhostPointer,
@@ -559,6 +570,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
 
       {isOwner && selectMode && (
         <div
+          ref={selectBarRef}
           className="fixed bottom-0 left-0 right-0 z-[200] flex items-center justify-between gap-3 px-4 py-4 sm:px-6"
           style={{
             background: 'rgba(253,250,245,0.96)',
