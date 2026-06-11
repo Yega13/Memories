@@ -240,6 +240,8 @@ export function Globe3D({
 
       renderer.render(scene, camera)
 
+      if (!mount) return
+
       // Project all markers and expose the 3 most camera-facing ones as labels
       const w2 = mount.clientWidth  / 2
       const h2 = mount.clientHeight / 2
