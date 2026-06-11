@@ -295,9 +295,9 @@ export default function LightboxOverlay({
                   : current.url
               }
               alt={current.caption || ''}
-              className="block max-h-[min(70vh,760px)] max-w-full object-contain"
+              className="block w-full max-h-[min(70vh,760px)] max-w-full object-contain"
               ref={(node) => onMediaNodeChange(node)}
-              style={{ ...mediaZoomStyle(current), transition: 'opacity 0.15s ease' }}
+              style={{ ...mediaZoomStyle(current), transition: 'opacity 0.2s ease', opacity: (current.thumb_url && !lightboxOriginalLoadedIds.has(current.id)) ? 0.7 : 1 }}
               onLoad={(e) => {
                 if (e.currentTarget.src.endsWith(current.url) || !current.thumb_url) {
                   onSetOriginalLoaded((prev) => {
