@@ -249,6 +249,7 @@ export default function LightboxOverlay({
               src={current.mirror_url ?? current.url}
               poster={current.poster_url || undefined}
               controls
+              preload="auto"
               autoPlay={slideshowMode ? !slideshowPaused : videoAutoplay}
               playsInline
               onLoadedMetadata={(e) => { e.currentTarget.volume = 0.5 }}

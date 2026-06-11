@@ -34,16 +34,27 @@ export function usePhotoGridObservers(
     grid.querySelectorAll<HTMLElement>('[data-photo-id]').forEach((tile) => observer.observe(tile))
     window.addEventListener('resize', measureTiles)
 
-    // Pre-warm thumbnails before they enter the viewport. A larger margin helps fast
-    // up/down scrolling without hammering the network.
+    // Pre-warm thumbnails and video first-chunks before tiles enter the viewport.
     const preloadObserver = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue
-          const imgEl = entry.target.querySelector<HTMLImageElement>('img')
-          if (imgEl?.src) {
-            const loader = new window.Image()
-            loader.src = imgEl.src
+          const tile = entry.target as HTMLElement
+          const videoUrl = tile.dataset.videoUrl
+          if (videoUrl) {
+            // Fetch the first 1 MB so the <video preload="auto"> element can start
+            // playing almost immediately when the lightbox opens.
+            fetch(videoUrl, {
+              headers: { Range: 'bytes=0-1048575' },
+              credentials: 'omit',
+              cache: 'force-cache',
+            }).catch(() => {})
+          } else {
+            const imgEl = tile.querySelector<HTMLImageElement>('img')
+            if (imgEl?.src) {
+              const loader = new window.Image()
+              loader.src = imgEl.src
+            }
           }
           preloadObserver.unobserve(entry.target)
         }

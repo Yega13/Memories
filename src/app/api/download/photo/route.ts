@@ -62,14 +62,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  const rangeHeader = req.headers.get('range')
   let upstream: Response
   try {
-    upstream = await fetch(rawUrl)
+    upstream = await fetch(rawUrl, rangeHeader ? { headers: { Range: rangeHeader } } : undefined)
   } catch {
     return NextResponse.json({ error: 'Fetch failed' }, { status: 502 })
   }
 
-  if (!upstream.ok) {
+  if (!upstream.ok && upstream.status !== 206) {
     return NextResponse.json({ error: `Upstream ${upstream.status}` }, { status: 502 })
   }
 
@@ -119,9 +120,12 @@ export async function GET(req: Request) {
   const responseHeaders: Record<string, string> = {
     'Content-Type': contentType,
     'Content-Disposition': disposition,
+    'Accept-Ranges': 'bytes',
     ...NO_STORE,
   }
   if (contentLength) responseHeaders['Content-Length'] = contentLength
+  const contentRange = upstream.headers.get('content-range')
+  if (contentRange) responseHeaders['Content-Range'] = contentRange
 
-  return new NextResponse(upstream.body, { headers: responseHeaders })
+  return new NextResponse(upstream.body, { status: upstream.status, headers: responseHeaders })
 }

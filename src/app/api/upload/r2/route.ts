@@ -174,7 +174,7 @@ export async function POST(req: Request) {
     // Pass the Blob directly — avoids buffering the whole file into an ArrayBuffer
     // inside the Worker, which would hit the 128 MB memory limit for large videos.
     await bucket.put(key, file, {
-      httpMetadata: { contentType },
+      httpMetadata: { contentType, cacheControl: 'public, max-age=31536000, immutable' },
     })
   } catch (e) {
     console.error('[upload/r2] put failed:', e instanceof Error ? e.message : String(e))

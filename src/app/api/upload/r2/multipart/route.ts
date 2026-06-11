@@ -76,7 +76,7 @@ export async function POST(req: Request) {
 
     const key = `${albumId}/${filename}`
     try {
-      const upload = await bucket.createMultipartUpload(key, { httpMetadata: { contentType } })
+      const upload = await bucket.createMultipartUpload(key, { httpMetadata: { contentType, cacheControl: 'public, max-age=31536000, immutable' } })
       return NextResponse.json({ uploadId: upload.uploadId, key }, { headers: NO_STORE })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)

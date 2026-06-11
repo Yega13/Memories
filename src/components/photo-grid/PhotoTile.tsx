@@ -105,6 +105,7 @@ const PhotoTile = React.memo(function PhotoTile({
       <div
         className={`${isReorderMode ? 'hush-reorder-ring ' : ''}${isReorderDragging || isReorderTarget ? 'hush-reorder-ring-solid ' : ''}hush-photo-tile relative aspect-square overflow-hidden cursor-pointer`}
         data-photo-id={photo.id}
+        data-video-url={isVideo ? (photo.mirror_url ?? photo.url) : undefined}
         style={{
           background: '#EDE7DB',
           borderRadius: mediaRadius,

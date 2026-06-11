@@ -62,7 +62,21 @@ export function useLightboxMedia({ lightbox, currentId, viewerPhotos }: Options)
       const i = lightbox + delta
       if (i < 0 || i >= viewer.length) continue
       const photo = viewer[i]
-      if (!photo || photo.media_type === 'video' || !photo.url) continue
+      if (!photo || !photo.url) continue
+      if (photo.media_type === 'video') {
+        // Pre-warm the HTTP cache for the current video and its immediate neighbors so
+        // the <video preload="auto"> element finds the first chunk already cached.
+        if (Math.abs(delta) > 1) continue
+        const videoUrl = photo.mirror_url ?? photo.url
+        if (!videoUrl) continue
+        // Fetch the first 4 MB — enough for a short clip to begin playing immediately.
+        fetch(videoUrl, {
+          headers: { Range: 'bytes=0-4194303' },
+          credentials: 'omit',
+          cache: 'force-cache',
+        }).catch(() => {})
+        continue
+      }
       const loader = new window.Image()
       // Cast: fetchPriority is widely supported but not in all DOM lib versions.
       ;(loader as HTMLImageElement & { fetchPriority?: string }).fetchPriority = delta === 0 ? 'high' : 'low'
