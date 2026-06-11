@@ -132,6 +132,19 @@ async function uploadVideoMultipart(
   // at the direct presigned URL path (browser → R2, no Worker in the way).
   r2PresignWorking = true
 
+  const isMobileChunk = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
+  // iOS can release the File handle while the video waits behind many other uploads in the queue.
+  // Pre-read into ArrayBuffer upfront so every chunk has live bytes even after iOS GCs the reference.
+  // 100 MB cap keeps the peak memory footprint manageable on older devices.
+  let fileBuffer: ArrayBuffer | null = null
+  if (isMobileChunk && file.size <= 100 * 1024 * 1024) {
+    try {
+      fileBuffer = await file.arrayBuffer()
+    } catch {
+      throw new Error('Failed to read video file — please re-add it and try again')
+    }
+  }
+
   // Step 1: init
   const initRes = await fetch('/api/upload/r2/multipart?action=init', {
     method: 'POST',
@@ -156,17 +169,17 @@ async function uploadVideoMultipart(
 
   async function uploadChunkOnce(
     partNumber: number,
-    chunk: Blob,
+    chunk: Blob | ArrayBuffer,
     chunkStart: number,
     chunkEnd: number,
   ): Promise<{ partNumber: number; etag: string }> {
     // Eagerly read chunk bytes into memory. Avoids iOS file-handle expiry: if iOS has
     // released the temporary file reference after several minutes (common during long
     // uploads), a lazy Blob.slice silently sends 0 bytes and the XHR fires onerror.
-    // Reading to ArrayBuffer here surfaces that as a clear error instead.
+    // When chunk is already an ArrayBuffer (fileBuffer path) we skip the extra copy.
     let chunkBytes: ArrayBuffer
     try {
-      chunkBytes = await chunk.arrayBuffer()
+      chunkBytes = chunk instanceof ArrayBuffer ? chunk : await chunk.arrayBuffer()
     } catch {
       throw new Error(`Failed to read chunk ${partNumber} from file — re-add the video and try again`)
     }
@@ -258,7 +271,9 @@ async function uploadVideoMultipart(
       const myIdx = chunkCursor++
       const chunkStart = myIdx * CHUNK_SIZE
       const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, file.size)
-      const chunk = file.slice(chunkStart, chunkEnd)
+      const chunk = fileBuffer
+        ? fileBuffer.slice(chunkStart, chunkEnd)
+        : file.slice(chunkStart, chunkEnd)
       const partNumber = myIdx + 1
 
       let part: { partNumber: number; etag: string } | null = null
@@ -302,11 +317,11 @@ async function uploadVideoMultipart(
   // Mobile also gets fewer retries (3 vs 8) and smaller max backoff (5s vs 15s): a carrier that
   // drops a 70-second 5 MB transfer will keep dropping it — retrying 8 times wastes ~67 s per
   // failed video and is the reason bulk video batches drag to 7+ minutes.
-  const isMobileChunk = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
   const maxChunkAttempts = isMobileChunk ? 5 : 8
   const maxChunkBackoffMs = isMobileChunk ? 5_000 : 15_000
   const chunkConcurrency = Math.min(isMobileChunk ? 1 : R2_MULTIPART_CONCURRENCY, totalChunks)
   await Promise.all(Array.from({ length: chunkConcurrency }, () => chunkWorker()))
+  fileBuffer = null  // all chunks dispatched — release so GC can reclaim before the complete round-trip
 
   const parts = partResults.filter((p): p is { partNumber: number; etag: string } => p !== null)
 
@@ -1303,18 +1318,14 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     let lastVideoErr: Error = new Error('Video upload failed')
 
     if (isMobileVideo && item.file.size <= SINGLE_FILE_MOBILE_LIMIT) {
-      // On mobile, FormData single-file POST is more reliable than raw binary chunk XHR.
-      // iOS/Android can silently cancel application/octet-stream XHR bodies above a few MB,
-      // causing "Network error on chunk 1". Try single-file first; multipart is the fallback.
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          videoRes = await uploadToR2(item.file, album.id, filename, 'video', onProgress, signal)
-          break
-        } catch (e) {
-          lastVideoErr = e instanceof Error ? e : new Error(String(e))
-          if (lastVideoErr.name === 'AbortError') throw lastVideoErr
-          if (attempt < 3) await wait(Math.min(3000 * attempt, 8000))
-        }
+      // On mobile, FormData single-file POST avoids raw octet-stream XHR which iOS/Android
+      // can silently cancel on large bodies. uploadToR2 retries up to 5× internally — no
+      // outer retry loop needed; fall straight to multipart if all attempts fail.
+      try {
+        videoRes = await uploadToR2(item.file, album.id, filename, 'video', onProgress, signal)
+      } catch (e) {
+        lastVideoErr = e instanceof Error ? e : new Error(String(e))
+        if (lastVideoErr.name === 'AbortError') throw lastVideoErr
       }
     }
 
