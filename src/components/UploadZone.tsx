@@ -288,10 +288,35 @@ async function uploadVideoMultipart(
       })
     }
 
-    // Worker proxy path: fetch() is more reliable than XHR for large binary bodies on
-    // mobile — iOS Safari can silently cancel XHR with application/octet-stream bodies
-    // above a few MB, manifesting as onerror with no status code.
+    // Worker proxy path.
+    // When chunkBytes is a Blob (Samsung Galaxy content:// URI files): Chrome's Fetch API
+    // reads Blob bodies via Blink's blob storage → openFileDescriptor() → Samsung blocks it
+    // → "Failed to fetch". XHR uses Android's legacy ContentResolver.openInputStream() path
+    // which Samsung allows. Use XHR for Blob bodies, fetch for ArrayBuffer (better on iOS Safari
+    // where XHR can silently cancel large octet-stream bodies).
     const params = new URLSearchParams({ action: 'chunk', uploadId: uploadId!, key: key!, partNumber: String(partNumber) })
+    if (chunkBytes instanceof Blob) {
+      return new Promise<{ partNumber: number; etag: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', `/api/upload/r2/multipart?${params}`)
+        xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+        xhr.timeout = R2_CHUNK_UPLOAD_TIMEOUT_MS
+        xhr.onload = () => {
+          let body: { error?: string; partNumber?: number; etag?: string } = {}
+          try { body = JSON.parse(xhr.responseText) } catch {}
+          if (xhr.status >= 200 && xhr.status < 300 && body.partNumber && body.etag) {
+            resolve({ partNumber: body.partNumber, etag: body.etag })
+          } else {
+            const err = new Error(body.error || `Chunk ${partNumber} failed: ${xhr.status}`)
+            ;(err as Error & { status?: number }).status = xhr.status
+            reject(err)
+          }
+        }
+        xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}: Failed to fetch`))
+        xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
+        xhr.send(chunkBytes)
+      })
+    }
     const ac = new AbortController()
     const timer = setTimeout(() => ac.abort(), R2_CHUNK_UPLOAD_TIMEOUT_MS)
     let res: Response
