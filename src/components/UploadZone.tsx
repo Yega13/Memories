@@ -141,7 +141,9 @@ async function uploadVideoMultipart(
     try {
       fileBuffer = await file.arrayBuffer()
     } catch {
-      throw new Error('Failed to read video file — please re-add it and try again')
+      // Memory pressure or platform restriction — fall through to per-chunk reads.
+      // If iOS later expires the file handle mid-upload, chunk N will surface the error then.
+      fileBuffer = null
     }
   }
 
@@ -1640,19 +1642,6 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         <div className="mt-4 text-sm p-3 rounded-lg flex items-start justify-between gap-3" style={{ background: '#FEE2E2', color: '#C0392B' }}>
           <p>{uploadError}</p>
           <button type="button" onClick={() => { setUploadError(''); setUploadStatus(null) }} className="font-semibold hover:underline flex-none" style={{ color: '#7A2A1F' }}>Dismiss</button>
-        </div>
-      )}
-      {uploading && uploadStatus && (
-        <div className="mt-3">
-          <p className="text-xs font-semibold" style={{ color: '#254F22' }}>
-            Uploading {uploadStatus.percent}%…
-          </p>
-          <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: '#E8E0D0' }}>
-            <div
-              className="h-full"
-              style={{ width: `${uploadStatus.percent}%`, background: '#8B6F4E', transition: 'width 2s ease-out' }}
-            />
-          </div>
         </div>
       )}
       {pending.length > 0 && (

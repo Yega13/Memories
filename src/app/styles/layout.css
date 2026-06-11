@@ -558,16 +558,21 @@
   opacity: 0.6;
 }
 
-/* Account icon in mobile menu */
+/* Account link in mobile menu — show text, not icon */
 .hush-mobile-nav .hush-account-nav-link {
-  width: 54px !important;
-  height: 54px !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
 }
 
 .hush-mobile-nav .hush-account-icon {
-  width: 1.6rem !important;
-  height: 1.6rem !important;
-  display: block !important;
+  display: none !important;
+}
+
+.hush-mobile-nav .hush-account-label-full {
+  display: inline !important;
 }
 
 /* Slide-up entrance animation for menu items */
