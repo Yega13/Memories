@@ -15,7 +15,9 @@ export default function BackToTop() {
       const scrollY      = window.scrollY
       const docHeight    = document.documentElement.scrollHeight
       const winHeight    = window.innerHeight
-      const distFromBottom = docHeight - scrollY - winHeight
+      // Clamp to 0 — iOS rubber-band overscroll makes scrollY exceed the page
+      // height, producing a negative value that inflates targetBottom.
+      const distFromBottom = Math.max(0, docHeight - scrollY - winHeight)
 
       setVisible(scrollY > 280)
 
@@ -38,7 +40,7 @@ export default function BackToTop() {
         position:      'fixed',
         right:         '1.25rem',
         bottom:        `${bottom}px`,
-        zIndex:        9990,
+        zIndex:        80,
         width:         '42px',
         height:        '42px',
         borderRadius:  '50%',

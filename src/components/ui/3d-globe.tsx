@@ -109,24 +109,28 @@ export function Globe3D({
 }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
   const threeRef = useRef({
-    renderer:    null as THREE.WebGLRenderer | null,
-    camera:      null as THREE.PerspectiveCamera | null,
-    earth:       null as THREE.Mesh | null,
-    hitMeshes:   [] as THREE.Mesh[],
-    raycaster:   new THREE.Raycaster(),
-    mouse:       new THREE.Vector2(),
-    rafId:       null as number | null,
+    renderer:     null as THREE.WebGLRenderer | null,
+    camera:       null as THREE.PerspectiveCamera | null,
+    earth:        null as THREE.Mesh | null,
+    hitMeshes:    [] as THREE.Mesh[],
+    markerGroups: [] as Array<{ group: THREE.Group; marker: GlobeMarker }>,
+    raycaster:    new THREE.Raycaster(),
+    mouse:        new THREE.Vector2(),
+    rafId:        null as number | null,
     // rotation state
-    rotY:        0,
-    tiltX:       0.22,
+    rotY:         0,
+    tiltX:        0.22,
     // drag
-    isDragging:  false,
-    prevMouse:   { x: 0, y: 0 },
+    isDragging:   false,
+    prevMouse:    { x: 0, y: 0 },
     // momentum
-    velocity:    0,       // radians/frame for Y rotation
-    isCoasting:  false,
+    velocity:     0,
+    isCoasting:   false,
   })
-  const [tooltip, setTooltip] = useState<{ label: string; x: number; y: number } | null>(null)
+  const [tooltip, setTooltip]           = useState<{ label: string; x: number; y: number } | null>(null)
+  const [visibleLabels, setVisibleLabels] = useState<Array<{ label: string; x: number; y: number }>>([])
+  const setVisibleLabelsRef = useRef(setVisibleLabels)
+  setVisibleLabelsRef.current = setVisibleLabels
 
   const {
     atmosphereColor     = '#4da6ff',
@@ -199,22 +203,29 @@ export function Globe3D({
     scene.add(new THREE.Mesh(atmGeo, atmMat))
 
     // ── Markers — white dot + red ring + outer glow, flat on surface ─────────
-    const hitMeshes: THREE.Mesh[] = []
+    const hitMeshes:    THREE.Mesh[] = []
+    const markerGroups: Array<{ group: THREE.Group; marker: GlobeMarker }> = []
     for (const m of markers) {
       const { group, hitMesh } = buildMarker(m)
       earth.add(group)
       hitMeshes.push(hitMesh)
+      markerGroups.push({ group, marker: m })
     }
-    t.hitMeshes = hitMeshes
+    t.hitMeshes    = hitMeshes
+    t.markerGroups = markerGroups
 
     // ── Animation loop ───────────────────────────────────────────────────────
+    // Reusable vectors — allocated once, mutated each frame to avoid GC pressure
+    const _wp  = new THREE.Vector3()
+    const _ndc = new THREE.Vector3()
+
     function animate() {
       t.rafId = requestAnimationFrame(animate)
 
       if (t.isDragging) {
         // rotation applied directly in pointer handler
       } else if (t.isCoasting) {
-        t.velocity *= 0.93          // friction — decays in ~30 frames
+        t.velocity *= 0.93
         if (Math.abs(t.velocity) < 0.00008) {
           t.isCoasting = false
           t.velocity   = 0
@@ -228,6 +239,27 @@ export function Globe3D({
       }
 
       renderer.render(scene, camera)
+
+      // Project all markers and expose the 3 most camera-facing ones as labels
+      const w2 = mount.clientWidth  / 2
+      const h2 = mount.clientHeight / 2
+      const scored = t.markerGroups.map(({ group, marker }) => {
+        group.getWorldPosition(_wp)
+        const facing = _wp.z          // camera is at z=3 → positive Z = facing viewer
+        _ndc.copy(_wp).project(camera)
+        return {
+          label:  marker.label,
+          x:      (_ndc.x  + 1) * w2,
+          y:      (-_ndc.y + 1) * h2,
+          facing,
+        }
+      })
+      const top3 = scored
+        .filter(p => p.facing > 0.15) // only front hemisphere, with a small margin
+        .sort((a, b) => b.facing - a.facing)
+        .slice(0, 3)
+        .map(({ label, x, y }) => ({ label, x, y }))
+      setVisibleLabelsRef.current(top3)
     }
     animate()
 
@@ -338,6 +370,32 @@ export function Globe3D({
         onPointerLeave={() => setTooltip(null)}
         onClick={onClick}
       />
+      {/* Always-visible labels for the 3 most camera-facing markers */}
+      {visibleLabels.map(lbl => (
+        <div
+          key={lbl.label}
+          style={{
+            position:      'absolute',
+            left:          lbl.x,
+            top:           lbl.y - 36,
+            transform:     'translateX(-50%)',
+            background:    'rgba(255,255,255,0.92)',
+            border:        '1px solid rgba(221,213,197,0.7)',
+            borderRadius:  '6px',
+            padding:       '2px 9px',
+            fontSize:      '11px',
+            fontWeight:    500,
+            color:         '#1B2E1A',
+            pointerEvents: 'none',
+            whiteSpace:    'nowrap',
+            boxShadow:     '0 2px 8px rgba(0,0,0,0.14)',
+            zIndex:        9,
+          }}
+        >
+          {lbl.label}
+        </div>
+      ))}
+
       {tooltip && (
         <div
           style={{

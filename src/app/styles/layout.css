@@ -543,11 +543,11 @@
   gap: 2.25rem;
 }
 
-/* Nav links inside mobile menu — black, bold, large */
+/* Nav links inside mobile menu — black, thin, large */
 .hush-mobile-nav a,
 .hush-mobile-nav > span {
   font-size: 1.5rem !important;
-  font-weight: 700 !important;
+  font-weight: 300 !important;
   color: #111111 !important;
   text-decoration: none !important;
   letter-spacing: -0.01em;

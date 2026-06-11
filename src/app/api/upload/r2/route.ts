@@ -84,14 +84,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid albumId' }, { status: 400, headers: NO_STORE })
   }
 
-  // Per-album rate limit: caps total uploads regardless of how many IPs are used.
-  const albumLimit = await checkRateLimit(`r2_upload_album:${albumId}`, 3600, 5000)
-  if (!albumLimit.ok) {
-    return NextResponse.json(
-      { error: 'This album has reached its upload limit. Please try again later.' },
-      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(albumLimit.retryAfterSeconds) } },
-    )
-  }
   if (!FILENAME_RE.test(filename)) {
     return NextResponse.json({ error: 'Invalid filename' }, { status: 400, headers: NO_STORE })
   }
@@ -108,14 +100,26 @@ export async function POST(req: Request) {
     )
   }
 
-  // Tier-aware per-album cap. The owner's tier dictates the cap for every
-  // uploader on the album. Anonymous albums (no user_id) get the free cap.
+  // Album rate-limit check and DB owner lookup are independent — run in parallel
+  // to cut one sequential Supabase round-trip off every upload.
   const admin = createAdminClient()
-  const { data: ownerRow, error: ownerErr } = await admin
-    .from('albums')
-    .select('user_id')
-    .eq('id', albumId)
-    .maybeSingle<{ user_id: string | null }>()
+  const [albumLimit, ownerResult] = await Promise.all([
+    checkRateLimit(`r2_upload_album:${albumId}`, 3600, 5000),
+    admin
+      .from('albums')
+      .select('user_id')
+      .eq('id', albumId)
+      .maybeSingle<{ user_id: string | null }>(),
+  ])
+
+  if (!albumLimit.ok) {
+    return NextResponse.json(
+      { error: 'This album has reached its upload limit. Please try again later.' },
+      { status: 429, headers: { ...NO_STORE, 'Retry-After': String(albumLimit.retryAfterSeconds) } },
+    )
+  }
+
+  const { data: ownerRow, error: ownerErr } = ownerResult
   if (ownerErr) {
     console.error('[upload/r2] album lookup error:', ownerErr.message, 'albumId:', albumId)
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
@@ -124,7 +128,24 @@ export async function POST(req: Request) {
     console.error('[upload/r2] album not found for id:', albumId)
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
-  const ownerTier = await getUserTierById(ownerRow.user_id)
+
+  const contentType = file.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg')
+  const allowed = kind === 'video' ? ALLOWED_VIDEO_MIMES : kind === 'image' ? ALLOWED_IMAGE_MIMES : ALLOWED_POSTER_MIMES
+  if (!allowed.has(contentType)) {
+    return NextResponse.json({ error: `Unsupported content type: ${contentType}` }, { status: 415, headers: NO_STORE })
+  }
+
+  // Tier lookup (up to 2 Supabase calls for free users) and magic-byte check
+  // are independent — run in parallel to cut another sequential round-trip.
+  const [ownerTier, magicOk] = await Promise.all([
+    getUserTierById(ownerRow.user_id),
+    verifyMimeByMagic(file, contentType),
+  ])
+
+  if (!magicOk) {
+    return NextResponse.json({ error: 'File content does not match declared type' }, { status: 415, headers: NO_STORE })
+  }
+
   const caps = uploadCapsForTier(ownerTier)
   // Images use the image cap; posters ride alongside videos so use the video cap.
   const sizeCap = kind === 'image' ? caps.image : caps.video
@@ -133,16 +154,6 @@ export async function POST(req: Request) {
       { error: `File exceeds the ${sizeCap}-byte limit for this album` },
       { status: 413, headers: NO_STORE },
     )
-  }
-
-  const contentType = file.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg')
-  const allowed = kind === 'video' ? ALLOWED_VIDEO_MIMES : kind === 'image' ? ALLOWED_IMAGE_MIMES : ALLOWED_POSTER_MIMES
-  if (!allowed.has(contentType)) {
-    return NextResponse.json({ error: `Unsupported content type: ${contentType}` }, { status: 415, headers: NO_STORE })
-  }
-  const magicOk = await verifyMimeByMagic(file, contentType)
-  if (!magicOk) {
-    return NextResponse.json({ error: 'File content does not match declared type' }, { status: 415, headers: NO_STORE })
   }
 
   const ctx = getCloudflareContext()
