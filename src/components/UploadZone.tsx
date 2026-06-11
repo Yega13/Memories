@@ -133,17 +133,34 @@ async function uploadVideoMultipart(
   r2PresignWorking = true
 
   const isMobileChunk = typeof window !== 'undefined' && window.matchMedia('(hover: none), (pointer: coarse)').matches
-  // iOS can release the File handle while the video waits behind many other uploads in the queue.
-  // Pre-read into ArrayBuffer upfront so every chunk has live bytes even after iOS GCs the reference.
-  // 100 MB cap keeps the peak memory footprint manageable on older devices.
+  // iOS/Android can release the File handle while the video waits behind other uploads.
+  // Pre-read into ArrayBuffer upfront so every chunk has live bytes even after the OS GCs the reference.
+  // 100 MB cap keeps peak memory manageable on older devices.
   let fileBuffer: ArrayBuffer | null = null
   if (isMobileChunk && file.size <= 100 * 1024 * 1024) {
     try {
       fileBuffer = await file.arrayBuffer()
     } catch {
-      // Memory pressure or platform restriction — fall through to per-chunk reads.
-      // If iOS later expires the file handle mid-upload, chunk N will surface the error then.
-      fileBuffer = null
+      // Full pre-read failed. Two possible causes:
+      //   (a) Memory pressure — device can't fit the whole file in RAM. Per-chunk reads
+      //       (5 MB at a time) will still work. Fall through.
+      //   (b) Dead content URI — Android messaging apps (WhatsApp, Telegram) provide
+      //       temporary URIs that expire. Per-chunk reads will also fail.
+      // Distinguish by probing a tiny slice: if even 1 KB fails, the URI is dead.
+      try {
+        await file.slice(0, 1024).arrayBuffer()
+        // Probe succeeded → memory pressure only. Fall through to per-chunk reads.
+      } catch {
+        throw new Error(`Cannot read "${file.name}" — save the video to your device's gallery first, then upload it`)
+      }
+    }
+  } else if (isMobileChunk) {
+    // Large file (> 100 MB) — can't buffer the whole thing. Probe first KB to catch
+    // dead content URIs (messaging app shares) before starting the network upload.
+    try {
+      await file.slice(0, 1024).arrayBuffer()
+    } catch {
+      throw new Error(`Cannot read "${file.name}" — save the video to your device's gallery first, then upload it`)
     }
   }
 
@@ -180,10 +197,33 @@ async function uploadVideoMultipart(
     // uploads), a lazy Blob.slice silently sends 0 bytes and the XHR fires onerror.
     // When chunk is already an ArrayBuffer (fileBuffer path) we skip the extra copy.
     let chunkBytes: ArrayBuffer
-    try {
-      chunkBytes = chunk instanceof ArrayBuffer ? chunk : await chunk.arrayBuffer()
-    } catch {
-      throw new Error(`Failed to read chunk ${partNumber} from file — re-add the video and try again`)
+    if (chunk instanceof ArrayBuffer) {
+      chunkBytes = chunk
+    } else {
+      // Try reading the whole chunk at once. If that fails (Samsung Cloud-synced files
+      // download incrementally; low-memory devices can't allocate a 5 MB buffer in one
+      // shot), fall back to reading in 256 KB pieces and concatenating. This recovers
+      // cases that a single large arrayBuffer() call cannot.
+      try {
+        chunkBytes = await chunk.arrayBuffer()
+      } catch {
+        const PIECE = 256 * 1024
+        const pieces: ArrayBuffer[] = []
+        try {
+          let pos = 0
+          while (pos < chunk.size) {
+            pieces.push(await chunk.slice(pos, Math.min(pos + PIECE, chunk.size)).arrayBuffer())
+            pos += PIECE
+          }
+        } catch {
+          throw new Error(`Failed to read chunk ${partNumber} from file — re-add the video and try again`)
+        }
+        const total = pieces.reduce((n, p) => n + p.byteLength, 0)
+        const merged = new Uint8Array(total)
+        let offset = 0
+        for (const p of pieces) { merged.set(new Uint8Array(p), offset); offset += p.byteLength }
+        chunkBytes = merged.buffer
+      }
     }
 
     // Try presigned URL first — browser PUTs directly to R2, Worker not in data path.
@@ -1182,7 +1222,10 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
               const src = bitmap ?? imgEl!
               const tiny = await tinyPreviewFromSource(src)
               let comp: File | undefined
-              try { comp = await encodeFromSource(src, sourceFile) } catch { /* uploadItem re-processes */ }
+              const isGif = file.type === 'image/gif' || /\.gif$/i.test(file.name)
+              if (!isGif) {
+                try { comp = await encodeFromSource(src, sourceFile) } catch { /* uploadItem re-processes */ }
+              }
               return { preview: tiny || URL.createObjectURL(file), compressed: comp }
             } finally {
               bitmap?.close()
@@ -1264,6 +1307,25 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   async function uploadItem(item: PendingItem, onProgress?: (pct: number) => void, signal?: AbortSignal): Promise<PhotoInsertRow> {
     // ── Image path ────────────────────────────────────────────────────────────
     if (item.kind === 'image') {
+      // GIF: upload original file unchanged so animation is preserved. The browser
+      // autoplays animated GIFs in <img> tags natively — no video tag needed.
+      if (item.file.type === 'image/gif' || /\.gif$/i.test(item.file.name)) {
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.gif`
+        const r2Result = await uploadToR2(item.file, album.id, filename, 'image', onProgress, signal)
+        return {
+          storage_path: r2Result.storage_path,
+          storage_backend: 'r2',
+          url: r2Result.url,
+          caption: item.caption.trim() || null,
+          author_name: item.author.trim() || null,
+          media_type: 'image',
+          poster_path: null, poster_url: null,
+          stream_uid: null, stream_iframe_url: null, stream_thumbnail_url: null,
+          thumb_path: null, thumb_url: r2Result.url,
+          duration_seconds: null,
+        }
+      }
+
       // Use the file pre-compressed during addFiles; fall back if pre-compression failed.
       const processed = item.compressed ?? await processImageForUpload(item.file)
       const ext = extensionFor(processed, 'image')
