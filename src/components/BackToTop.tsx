@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { ArrowUp } from 'lucide-react'
 
 // How far from the bottom (px) to start nudging the button up above the footer
-const FOOTER_HEIGHT = 220
+const FOOTER_HEIGHT = 147
 
 export default function BackToTop() {
   const [visible, setVisible] = useState(false)

@@ -25,12 +25,14 @@ type StreamUploadResult = {
 }
 
 // Single XHR attempt — no retry logic here, that lives in uploadToR2.
+// signal: optional AbortSignal so background uploads can be cancelled before uploadAll starts.
 function uploadToR2Once(
   file: File | Blob,
   albumId: string,
   filename: string,
   kind: 'video' | 'poster' | 'image',
   onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
 ): Promise<R2UploadResult> {
   const form = new FormData()
   form.append('file', file)
@@ -60,6 +62,11 @@ function uploadToR2Once(
     }
     xhr.onerror = () => reject(new Error('Network error during R2 upload'))
     xhr.ontimeout = () => reject(new Error('R2 upload timed out'))
+    // Wire up the AbortSignal so the caller can cancel this XHR (e.g. when uploadAll starts).
+    if (signal) {
+      if (signal.aborted) { xhr.abort(); reject(new DOMException('Upload cancelled', 'AbortError')); return }
+      signal.addEventListener('abort', () => { xhr.abort(); reject(new DOMException('Upload cancelled', 'AbortError')) }, { once: true })
+    }
     xhr.send(form)
   })
 }
@@ -67,19 +74,25 @@ function uploadToR2Once(
 // Retries uploadToR2Once up to 5 times with exponential backoff. Transient network
 // drops (carrier proxy resets, brief Cloudflare hiccups) are the primary failure mode
 // for poster uploads, small videos, and images — a single retry loop catches them all.
+// signal: optional AbortSignal that cancels the current attempt and stops retrying.
 async function uploadToR2(
   file: File | Blob,
   albumId: string,
   filename: string,
   kind: 'video' | 'poster' | 'image',
   onProgress?: (percent: number) => void,
+  signal?: AbortSignal,
 ): Promise<R2UploadResult> {
   let lastError: Error = new Error('Upload failed')
   for (let attempt = 1; attempt <= 5; attempt++) {
+    // Stop immediately if the caller cancelled (e.g. uploadAll is taking over).
+    if (signal?.aborted) throw new DOMException('Upload cancelled', 'AbortError')
     try {
-      return await uploadToR2Once(file, albumId, filename, kind, onProgress)
+      return await uploadToR2Once(file, albumId, filename, kind, onProgress, signal)
     } catch (e) {
       lastError = e instanceof Error ? e : new Error(String(e))
+      // AbortError = intentional cancellation, not a network failure — don't retry.
+      if (lastError.name === 'AbortError') throw lastError
       // Rate limit / definitive server rejection — retrying won't help, surface immediately.
       if (/upload limit reached|rate limit/i.test(lastError.message)) throw lastError
       if (attempt < 5) await wait(Math.min(1500 * attempt, 8000))
@@ -997,6 +1010,9 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   // Semaphore for background uploads: limits concurrency so 100 prepared files don't
   // all fire XHRs simultaneously (which causes network congestion and "failed to fetch").
   const bgSem = useRef<{ n: number; q: Array<() => void> }>({ n: 0, q: [] })
+  // AbortController for background XHRs. Replaced on each addFiles call and aborted at the
+  // start of uploadAll so in-flight background XHRs don't add to the uploadAll concurrency.
+  const bgAbortController = useRef<AbortController>(new AbortController())
 
 
   const caps = album.upload_caps ?? DEFAULT_UPLOAD_CAPS
@@ -1039,6 +1055,8 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     if (!files) return
     bgUploads.current.clear()
     bgSem.current = { n: 0, q: [] }
+    // Fresh controller for this batch of background uploads.
+    bgAbortController.current = new AbortController()
     setPreparing(true)
 
     const MAX_FILES = 150
@@ -1182,9 +1200,12 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
         const bgItem = itemSlots[myIndex]
         if (bgItem) {
           bgUploads.current.set(file, { status: 'uploading' })
-          startBgUpload(() => uploadItem(bgItem).then(row => {
+          const bgSignal = bgAbortController.current.signal
+          startBgUpload(() => uploadItem(bgItem, undefined, bgSignal).then(row => {
             bgUploads.current.set(file, { status: 'done', row })
           }).catch(() => {
+            // AbortError (uploadAll cancelled the XHR) and genuine failures both mark
+            // the item 'failed' so uploadAll re-uploads it through its own worker pool.
             bgUploads.current.set(file, { status: 'failed' })
           }))
         }
@@ -1223,7 +1244,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
     })
   }
 
-  async function uploadItem(item: PendingItem, onVideoProgress?: (pct: number) => void): Promise<PhotoInsertRow> {
+  async function uploadItem(item: PendingItem, onProgress?: (pct: number) => void, signal?: AbortSignal): Promise<PhotoInsertRow> {
     // ── Image path ────────────────────────────────────────────────────────────
     if (item.kind === 'image') {
       // Use the file pre-compressed during addFiles; fall back if pre-compression failed.
@@ -1231,7 +1252,7 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       const ext = extensionFor(processed, 'image')
       const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
       // Upload to R2 — zero egress cost vs Supabase Storage which bills per GB served.
-      const r2Result = await uploadToR2(processed, album.id, filename, 'image')
+      const r2Result = await uploadToR2(processed, album.id, filename, 'image', onProgress, signal)
       return {
         storage_path: r2Result.storage_path,
         storage_backend: 'r2',
@@ -1287,10 +1308,11 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       // causing "Network error on chunk 1". Try single-file first; multipart is the fallback.
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          videoRes = await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
+          videoRes = await uploadToR2(item.file, album.id, filename, 'video', onProgress, signal)
           break
         } catch (e) {
           lastVideoErr = e instanceof Error ? e : new Error(String(e))
+          if (lastVideoErr.name === 'AbortError') throw lastVideoErr
           if (attempt < 3) await wait(Math.min(3000 * attempt, 8000))
         }
       }
@@ -1303,11 +1325,12 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       for (let vAttempt = 1; vAttempt <= maxVideoAttempts; vAttempt++) {
         try {
           videoRes = (isMobileVideo || item.file.size > MULTIPART_THRESHOLD)
-            ? await uploadVideoMultipart(item.file, album.id, filename, onVideoProgress)
-            : await uploadToR2(item.file, album.id, filename, 'video', onVideoProgress)
+            ? await uploadVideoMultipart(item.file, album.id, filename, onProgress)
+            : await uploadToR2(item.file, album.id, filename, 'video', onProgress, signal)
           break
         } catch (e) {
           lastVideoErr = e instanceof Error ? e : new Error(String(e))
+          if (lastVideoErr.name === 'AbortError') throw lastVideoErr
           if (vAttempt < maxVideoAttempts) await wait(4000)
         }
       }
@@ -1333,6 +1356,11 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
   async function uploadAll() {
     if (pending.length === 0) return
     const queue = [...pending]
+    // Cancel all in-flight background XHRs before starting uploadAll workers so we never
+    // have background XHRs and uploadAll XHRs running simultaneously. On mobile this was
+    // causing up to CONCURRENCY×2 simultaneous connections which saturated the radio and
+    // produced "network error during R2 upload" for ~35% of files in a 100-photo batch.
+    bgAbortController.current.abort()
     // Drain the bg upload queue and mark every file still in 'uploading' state as
     // 'failed'. Without this, files that were queued but never started keep status
     // 'uploading' forever and workers spin-wait on them indefinitely (deadlock).
@@ -1373,6 +1401,22 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
       const concurrency = Math.min(coarsePointer ? UPLOAD_CONCURRENCY_MOBILE : UPLOAD_CONCURRENCY_DESKTOP, queue.length)
       let completed = 0
       let cursor = 0
+      // Per-slot upload progress (0–100). Allows the progress bar to move continuously
+      // as each file's bytes transfer rather than jumping only when whole files complete.
+      // Each slot contributes (slotPct / 100) * (90 / total) to the overall percentage.
+      const slotProgress = new Array(queue.length).fill(0)
+      // Running sum avoids O(n) reduce on every XHR progress tick.
+      let progressSum = 0
+      let lastProgressAt = 0
+
+      function computeOverallPercent(): number {
+        return Math.max(4, Math.min(90, Math.round((progressSum / queue.length) * 90 / 100)))
+      }
+
+      function updateSlotProgress(index: number, pct: number) {
+        progressSum += pct - slotProgress[index]
+        slotProgress[index] = pct
+      }
 
       setUploadStatus({ fileName: `${queue.length} item${queue.length === 1 ? '' : 's'}`, index: 0, total: queue.length, phase: 'Uploading', percent: 0 })
 
@@ -1384,19 +1428,28 @@ export default function UploadZone({ album, onPhotosUploaded }: Props) {
             const bg = bgUploads.current.get(item.file)
             if (bg?.status === 'done') {
               rows[myIndex] = { ...bg.row, caption: item.caption.trim() || null, author_name: item.author.trim() || null }
+              updateSlotProgress(myIndex, 100)
             } else {
-              const base = Math.max(4, Math.round((completed / queue.length) * 90))
-              const next = Math.max(4, Math.round(((completed + 1) / queue.length) * 90))
-              rows[myIndex] = await uploadItem(item, (videoPct) => {
-                setUploadStatus(s => s ? { ...s, percent: Math.round(base + (next - base) * videoPct / 100) } : s)
+              // Report per-file XHR progress so the bar moves smoothly during each upload.
+              // Throttled to 4 Hz — the CSS transition handles visual smoothing, extra
+              // re-renders beyond that frequency just burn CPU with no visible benefit.
+              rows[myIndex] = await uploadItem(item, (filePct) => {
+                updateSlotProgress(myIndex, filePct)
+                const now = Date.now()
+                if (now - lastProgressAt >= 250) {
+                  lastProgressAt = now
+                  setUploadStatus(s => s ? { ...s, percent: computeOverallPercent() } : s)
+                }
               })
+              updateSlotProgress(myIndex, 100)
             }
             URL.revokeObjectURL(item.preview)
           } catch (e) {
+            updateSlotProgress(myIndex, 100) // count as "done" for progress purposes even on failure
             failureMessages.push(`${item.file.name}: ${e instanceof Error ? e.message : String(e)}`)
           }
           completed++
-          setUploadStatus({ fileName: item.file.name, index: completed, total: queue.length, phase: completed === queue.length ? 'Saving to album' : 'Uploading', percent: Math.max(4, Math.round((completed / queue.length) * 90)) })
+          setUploadStatus({ fileName: item.file.name, index: completed, total: queue.length, phase: completed === queue.length ? 'Saving to album' : 'Uploading', percent: computeOverallPercent() })
         }
       }
 
