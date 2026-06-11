@@ -158,27 +158,14 @@ async function uploadVideoMultipart(
     try {
       fileBuffer = await readBlobSafe(file)
     } catch {
-      // Full pre-read failed even with FileReader fallback. Two possible causes:
-      //   (a) Memory pressure — device can't fit the whole file in RAM. Per-chunk reads
-      //       (5 MB at a time) will still work. Fall through.
-      //   (b) Dead content URI — file is inaccessible. Per-chunk reads will also fail.
-      // Probe with 1 KB to distinguish: if that also fails, bail out now.
-      try {
-        await readBlobSafe(file.slice(0, 1024))
-        // Probe succeeded → memory pressure only. Fall through to per-chunk reads.
-      } catch {
-        throw new Error(`Cannot access "${file.name}" — copy the video to your Downloads folder, then upload from there`)
-      }
-    }
-  } else if (isMobileChunk) {
-    // Large file (> 100 MB) — can't buffer the whole thing. Probe first KB to detect
-    // inaccessible files before starting the network upload.
-    try {
-      await readBlobSafe(file.slice(0, 1024))
-    } catch {
-      throw new Error(`Cannot access "${file.name}" — copy the video to your Downloads folder, then upload from there`)
+      // Full pre-read failed. Per-chunk reads will escalate through three fallbacks:
+      // (1) full-chunk arrayBuffer/FileReader, (2) 256 KB pieces, (3) direct Blob
+      // streaming via XHR — Samsung Galaxy auto-generated videos (_all_N.mp4) fail
+      // all memory-read APIs but succeed when the Blob is passed directly to XHR.
     }
   }
+  // No probe / bail-out: we can't distinguish "truly inaccessible" from "streaming only"
+  // without actually attempting the upload. Let chunk-level errors surface naturally.
 
   // Step 1: init
   const initRes = await fetch('/api/upload/r2/multipart?action=init', {
@@ -212,20 +199,23 @@ async function uploadVideoMultipart(
     // released the temporary file reference after several minutes (common during long
     // uploads), a lazy Blob.slice silently sends 0 bytes and the XHR fires onerror.
     // When chunk is already an ArrayBuffer (fileBuffer path) we skip the extra copy.
-    let chunkBytes: ArrayBuffer
+    let chunkBytes: ArrayBuffer | Blob
     if (chunk instanceof ArrayBuffer) {
       chunkBytes = chunk
     } else {
-      // Try reading the whole chunk at once (fast path).
-      // If that fails, fall back to 256 KB pieces — helps when the device can't
-      // allocate a 5 MB buffer in one shot or the content provider streams data
-      // incrementally. readBlobSafe tries Blob.arrayBuffer() then FileReader so
-      // Samsung Galaxy files that fail the Promise API still have a chance to succeed.
+      // Three-layer fallback, escalating from fastest to most compatible:
+      // (1) readBlobSafe: Blob.arrayBuffer() → FileReader (ArrayBuffer in memory, retryable)
+      // (2) 256 KB pieces: for devices that can't allocate a 5 MB buffer at once
+      // (3) direct Blob: pass Blob straight to XHR/fetch without pre-reading.
+      //     Samsung Galaxy auto-generated videos (_all_N.mp4) block all arrayBuffer()
+      //     reads but their ContentProvider exposes an InputStream that XHR/fetch use
+      //     internally when given a Blob body — no pre-read needed.
       try {
         chunkBytes = await readBlobSafe(chunk)
       } catch {
         const PIECE = 256 * 1024
         const merged = new Uint8Array(chunk.size)
+        let piecesOk = false
         try {
           let pos = 0
           while (pos < chunk.size) {
@@ -234,10 +224,9 @@ async function uploadVideoMultipart(
             merged.set(new Uint8Array(piece), pos)
             pos = end
           }
-        } catch {
-          throw new Error(`Failed to read chunk ${partNumber} from file — re-add the video and try again`)
-        }
-        chunkBytes = merged.buffer
+          piecesOk = true
+        } catch { /* fall through to direct Blob streaming */ }
+        chunkBytes = piecesOk ? merged.buffer : chunk
       }
     }
 
@@ -254,6 +243,12 @@ async function uploadVideoMultipart(
         if (presignRes.ok) {
           const data = await presignRes.json() as { url?: string }
           presignedUrl = data.url ?? null
+        } else {
+          // Any non-ok response from the presign endpoint (501 = not configured,
+          // 403 = bad credentials, 500 = transient) means we can't get a presigned
+          // URL right now. Disable for the rest of this video so subsequent chunks
+          // skip this round-trip and go straight to the Worker proxy.
+          r2PresignWorking = false
         }
       } catch { /* network error getting presigned URL → fall through */ }
     }

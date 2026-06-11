@@ -37,7 +37,7 @@ export const SWIPE_RESET_ANIMATE_MS = 180
 
 // IntersectionObserver rootMargin for preloading full-resolution images.
 // Larger margin = more aggressive prefetch during fast scrolling.
-export const GRID_PRELOAD_MARGIN_PX = 900
+export const GRID_PRELOAD_MARGIN_PX = 2000
 
 // ─── Arrange-mode auto-scroll ─────────────────────────────────────────────────
 

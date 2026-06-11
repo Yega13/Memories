@@ -235,6 +235,12 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
     }
     setFlippedPhotoId(null)
     clearSlideshow()
+    // Fire video fetch before React renders the lightbox so the network request
+    // starts one render cycle (~50-100ms) earlier than <video preload="auto">.
+    if (clicked?.media_type === 'video') {
+      const videoUrl = clicked.mirror_url ?? clicked.url
+      if (videoUrl) fetch(videoUrl, { headers: { Range: 'bytes=0-4194303' }, credentials: 'omit', cache: 'force-cache' }).catch(() => {})
+    }
     openLightbox(index)
   }
 

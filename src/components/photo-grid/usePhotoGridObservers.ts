@@ -53,6 +53,7 @@ export function usePhotoGridObservers(
             const imgEl = tile.querySelector<HTMLImageElement>('img')
             if (imgEl?.src) {
               const loader = new window.Image()
+              loader.fetchPriority = 'high'
               loader.src = imgEl.src
             }
           }
