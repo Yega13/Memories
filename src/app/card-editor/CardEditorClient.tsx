@@ -127,6 +127,7 @@ export default function CardEditorClient() {
   const [guides, setGuides] = useState({ v: false, h: false, vx: CX, hy: CY })
   const [fontsReady, setFontsReady] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [dlFormat, setDlFormat] = useState<'png' | 'pdf'>('png')
   const [loadedImgs, setLoadedImgs] = useState<Record<string, HTMLImageElement>>({})
   const [rightTab, setRightTab] = useState<'props'|'layers'>('props')
   const [stageW, setStageW] = useState(LW)
@@ -495,10 +496,20 @@ export default function CardEditorClient() {
     setSelectedId(null); setTransforming(false); setDownloading(true)
     await new Promise(r => setTimeout(r, 80))
     try {
-      const url = stageRef.current.toDataURL({ pixelRatio: dlRatio, mimeType: 'image/png' })
-      const a = document.createElement('a')
-      a.download = `${(initialTitle || 'card').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-table-card.png`
-      a.href = url; a.click()
+      const slug = (initialTitle || 'card').replace(/[^a-z0-9]/gi, '-').toLowerCase()
+
+      if (dlFormat === 'pdf') {
+        const dataUrl = stageRef.current.toDataURL({ pixelRatio: dlRatio, mimeType: 'image/jpeg' })
+        const { jsPDF } = await import('jspdf')
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' })
+        pdf.addImage(dataUrl, 'JPEG', 0, 0, 148, 210)
+        pdf.save(`${slug}-table-card.pdf`)
+      } else {
+        const url = stageRef.current.toDataURL({ pixelRatio: dlRatio, mimeType: 'image/png' })
+        const a = document.createElement('a')
+        a.download = `${slug}-table-card.png`
+        a.href = url; a.click()
+      }
     } finally { setDownloading(false) }
   }
 
@@ -642,12 +653,21 @@ export default function CardEditorClient() {
             className="px-2 py-1.5 text-sm hover:opacity-70 transition" style={{ color: '#DDD' }}>+</button>
         </div>
 
-        <button onClick={download} disabled={downloading}
-          className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-3 py-2 transition hover:opacity-90 disabled:opacity-40"
-          style={{ background: '#254F22', color: '#FDFAF5' }}>
-          <Download className="w-3.5 h-3.5" />
-          {downloading ? '…' : <><span className="hidden sm:inline">Download</span> PNG</>}
-        </button>
+        <div className="flex items-center rounded-lg overflow-hidden" style={{ background: '#1E401B' }}>
+          {(['png', 'pdf'] as const).map(f => (
+            <button key={f} onClick={() => setDlFormat(f)}
+              className="px-2 py-2 text-[10px] font-bold transition"
+              style={{ background: dlFormat === f ? '#254F22' : 'transparent', color: dlFormat === f ? '#FDFAF5' : '#6EE7B7' }}>
+              {f.toUpperCase()}
+            </button>
+          ))}
+          <button onClick={download} disabled={downloading}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 transition hover:opacity-90 disabled:opacity-40"
+            style={{ background: '#254F22', color: '#FDFAF5' }}>
+            <Download className="w-3.5 h-3.5" />
+            {downloading ? '…' : <><span className="hidden sm:inline">Download</span> {dlFormat.toUpperCase()}</>}
+          </button>
+        </div>
       </div>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}

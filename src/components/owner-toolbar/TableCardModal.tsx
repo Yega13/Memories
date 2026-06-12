@@ -209,6 +209,7 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
   const router = useRouter()
   const [style, setStyle] = useState<CardStyle>('branded')
   const [downloading, setDownloading] = useState(false)
+  const [dlFormat, setDlFormat] = useState<'png' | 'pdf'>('png')
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const heading = albumTitle || 'Capture the Moment'
@@ -224,10 +225,19 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
     try {
       const off = document.createElement('canvas')
       await (style === 'branded' ? renderBrandedCard : renderBWCard)(off, heading, shareUrl, 1200)
-      const link = document.createElement('a')
-      link.download = `${(albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-table-card.png`
-      link.href = off.toDataURL('image/png')
-      link.click()
+      const slug = (albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()
+
+      if (dlFormat === 'pdf') {
+        const { jsPDF } = await import('jspdf')
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' })
+        pdf.addImage(off.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 148, 210)
+        pdf.save(`${slug}-table-card.pdf`)
+      } else {
+        const link = document.createElement('a')
+        link.download = `${slug}-table-card.png`
+        link.href = off.toDataURL('image/png')
+        link.click()
+      }
     } finally {
       setDownloading(false)
     }
@@ -299,6 +309,15 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
                 : 'Elegant B&W, double border, corner brackets — Playfair Display.'}
               {' '}1200×1700 px, print-ready.
             </p>
+            <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #DDD5C5' }}>
+              {(['png', 'pdf'] as const).map(f => (
+                <button key={f} onClick={() => setDlFormat(f)}
+                  className="flex-1 py-1.5 text-xs font-semibold transition"
+                  style={{ background: dlFormat === f ? '#254F22' : '#F5F0E8', color: dlFormat === f ? '#FDFAF5' : '#5C3D2E' }}>
+                  {f.toUpperCase()}
+                </button>
+              ))}
+            </div>
             <button
               onClick={handleDownload}
               disabled={downloading}
@@ -306,7 +325,7 @@ export default function TableCardModal({ shareUrl, albumTitle, onClose }: Props)
               style={{ background: '#254F22', color: '#FDFAF5' }}
             >
               <Download className="w-4 h-4" />
-              {downloading ? 'Generating…' : 'Download PNG'}
+              {downloading ? 'Generating…' : `Download ${dlFormat.toUpperCase()}`}
             </button>
             <p className="text-xs" style={{ color: '#A89880' }}>
               A5 / 5×7&quot; — table cards, tent cards, signage

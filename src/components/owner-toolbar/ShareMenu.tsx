@@ -17,12 +17,31 @@ type Props = {
   onCopy: (type: 'share' | 'owner') => void
 }
 
-async function downloadQr(shareUrl: string, albumTitle: string) {
+async function downloadQr(shareUrl: string, albumTitle: string, format: 'png' | 'svg') {
   const QRCode = (await import('qrcode')).default
+  const slug = (albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()
+
+  if (format === 'svg') {
+    const svgString = await QRCode.toString(shareUrl, {
+      type: 'svg', width: 600, margin: 2,
+      color: { dark: '#254F22', light: '#FFFFFF' },
+    })
+    const blob = new Blob([svgString], { type: 'image/svg+xml' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.download = `${slug}-qr.svg`
+    link.href = url
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    return
+  }
+
   const canvas = document.createElement('canvas')
   await QRCode.toCanvas(canvas, shareUrl, { width: 600, margin: 2, color: { dark: '#254F22', light: '#FFFFFF' } })
   const link = document.createElement('a')
-  link.download = `${(albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-qr.png`
+  link.download = `${slug}-qr.png`
   link.href = canvas.toDataURL('image/png')
   link.click()
 }
@@ -33,6 +52,7 @@ function TableCardView({ shareUrl, albumTitle, onBack }: { shareUrl: string; alb
   const router = useRouter()
   const [style, setStyle] = useState<CardStyle>('branded')
   const [downloading, setDownloading] = useState(false)
+  const [dlFormat, setDlFormat] = useState<'png' | 'pdf'>('png')
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const heading = albumTitle || 'Capture the Moment'
 
@@ -47,10 +67,19 @@ function TableCardView({ shareUrl, albumTitle, onBack }: { shareUrl: string; alb
     try {
       const off = document.createElement('canvas')
       await (style === 'branded' ? renderBrandedCard : renderBWCard)(off, heading, shareUrl, 1200)
-      const link = document.createElement('a')
-      link.download = `${(albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()}-table-card.png`
-      link.href = off.toDataURL('image/png')
-      link.click()
+      const slug = (albumTitle || 'album').replace(/[^a-z0-9]/gi, '-').toLowerCase()
+
+      if (dlFormat === 'pdf') {
+        const { jsPDF } = await import('jspdf')
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a5' })
+        pdf.addImage(off.toDataURL('image/jpeg', 0.95), 'JPEG', 0, 0, 148, 210)
+        pdf.save(`${slug}-table-card.pdf`)
+      } else {
+        const link = document.createElement('a')
+        link.download = `${slug}-table-card.png`
+        link.href = off.toDataURL('image/png')
+        link.click()
+      }
     } finally { setDownloading(false) }
   }
 
@@ -95,11 +124,20 @@ function TableCardView({ shareUrl, albumTitle, onBack }: { shareUrl: string; alb
             {style === 'branded' ? 'Hushare red & white, Playfair Display.' : 'Elegant B&W, double border.'}
             {' '}Print-ready 1200×1700 px.
           </p>
+          <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #DDD5C5' }}>
+            {(['png', 'pdf'] as const).map(f => (
+              <button key={f} onClick={() => setDlFormat(f)}
+                className="flex-1 py-1 text-xs font-semibold transition"
+                style={{ background: dlFormat === f ? '#254F22' : '#F5F0E8', color: dlFormat === f ? '#FDFAF5' : '#5C3D2E' }}>
+                {f.toUpperCase()}
+              </button>
+            ))}
+          </div>
           <button onClick={handleDownload} disabled={downloading}
             className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold rounded-xl py-2.5 transition hover:opacity-90 disabled:opacity-50"
             style={{ background: '#254F22', color: '#FDFAF5' }}>
             <Download className="w-3.5 h-3.5" />
-            {downloading ? 'Generating…' : 'Download PNG'}
+            {downloading ? 'Generating…' : `Download ${dlFormat.toUpperCase()}`}
           </button>
           <p className="text-xs" style={{ color: '#A89880' }}>A5 / 5×7&quot;</p>
         </div>
@@ -113,6 +151,7 @@ function TableCardView({ shareUrl, albumTitle, onBack }: { shareUrl: string; alb
 export default function ShareMenu({ copied, ownerUrl, shareUrl, albumTitle, onClose, onCopy }: Props) {
   const [view, setView] = useState<'main' | 'tablecard'>('main')
   const [qrDataUrl, setQrDataUrl] = useState('')
+  const [qrFormat, setQrFormat] = useState<'png' | 'svg'>('png')
 
   useEffect(() => {
     let cancelled = false
@@ -191,14 +230,23 @@ export default function ShareMenu({ copied, ownerUrl, shareUrl, albumTitle, onCl
                   QR code
                 </p>
                 <p className="text-xs leading-relaxed" style={{ color: '#7C5C3E' }}>Guests scan this to open the album.</p>
-                <div className="mt-2 flex gap-2 flex-wrap">
+                <div className="mt-2 flex gap-2 flex-wrap items-center">
+                  <div className="flex rounded-lg overflow-hidden" style={{ border: '1px solid #DDD5C5' }}>
+                    {(['png', 'svg'] as const).map(f => (
+                      <button key={f} onClick={() => setQrFormat(f)}
+                        className="px-2.5 py-1 text-xs font-semibold transition"
+                        style={{ background: qrFormat === f ? '#254F22' : '#F5F0E8', color: qrFormat === f ? '#FDFAF5' : '#5C3D2E' }}>
+                        {f.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
                   <button
                     className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2.5 py-1.5 transition hover:opacity-80"
                     style={{ background: '#254F22', color: '#FDFAF5' }}
-                    onClick={() => downloadQr(shareUrl, albumTitle)}
+                    onClick={() => downloadQr(shareUrl, albumTitle, qrFormat)}
                   >
                     <Download className="w-3 h-3" />
-                    Download PNG
+                    Download {qrFormat.toUpperCase()}
                   </button>
                   <button
                     className="flex items-center gap-1.5 text-xs font-semibold rounded-lg px-2.5 py-1.5 transition hover:opacity-80"

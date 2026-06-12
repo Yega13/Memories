@@ -159,9 +159,9 @@ async function uploadVideoMultipart(
       fileBuffer = await readBlobSafe(file)
     } catch {
       // Full pre-read failed. Per-chunk reads will escalate through three fallbacks:
-      // (1) full-chunk arrayBuffer/FileReader, (2) 256 KB pieces, (3) direct Blob
-      // streaming via XHR — Samsung Galaxy auto-generated videos (_all_N.mp4) fail
-      // all memory-read APIs but succeed when the Blob is passed directly to XHR.
+      // (1) full-chunk arrayBuffer/FileReader, (2) 256 KB pieces, (3) direct Blob via XHR.
+      // Samsung Galaxy auto-generated videos (_all_N.mp4) block all arrayBuffer() reads;
+      // XHR may still be able to stream them via Android's openInputStream() path.
     }
   }
   // No probe / bail-out: we can't distinguish "truly inaccessible" from "streaming only"
@@ -208,8 +208,8 @@ async function uploadVideoMultipart(
       // (2) 256 KB pieces: for devices that can't allocate a 5 MB buffer at once
       // (3) direct Blob: pass Blob straight to XHR/fetch without pre-reading.
       //     Samsung Galaxy auto-generated videos (_all_N.mp4) block all arrayBuffer()
-      //     reads but their ContentProvider exposes an InputStream that XHR/fetch use
-      //     internally when given a Blob body — no pre-read needed.
+      //     reads. XHR uses Android's ContentResolver.openInputStream() path which
+      //     Samsung allows; fetch() uses openFileDescriptor() which Samsung blocks.
       try {
         chunkBytes = await readBlobSafe(chunk)
       } catch {
@@ -312,7 +312,7 @@ async function uploadVideoMultipart(
             reject(err)
           }
         }
-        xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}: Failed to fetch`))
+        xhr.onerror = () => reject(new Error(`Network error on chunk ${partNumber}: XHR failed`))
         xhr.ontimeout = () => reject(new Error(`Timeout on chunk ${partNumber}`))
         xhr.send(chunkBytes)
       })
