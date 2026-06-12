@@ -25,6 +25,7 @@
     "file-saver": "^2.0.5",
     "file-type": "^22.0.1",
     "heic2any": "^0.0.4",
+    "jspdf": "^2.5.1",
     "jszip": "^3.10.1",
     "konva": "^10.3.0",
     "lucide-react": "^1.8.0",
