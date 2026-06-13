@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 
 // Only allow fetching from our own storage hosts — prevents SSRF
 const ALLOWED_HOSTS = new Set([
-  'zleajzevvhugkwlqlolt.supabase.co',
+  'lteovnkplhowfvbzpalp.supabase.co',
   'videos.hushare.space',
 ])
 

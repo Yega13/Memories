@@ -76,7 +76,7 @@ export function canonicalStockAlbumBackgroundValue(value: string): string | null
 // so we must reject anything not in this allowlist to prevent CSS injection.
 const ALLOWED_BG_URL_PREFIXES = [
   'https://images.pexels.com/',
-  'https://zleajzevvhugkwlqlolt.supabase.co/storage/v1/object/public/',
+  'https://lteovnkplhowfvbzpalp.supabase.co/storage/v1/object/public/',
 ]
 
 export function resolveAlbumBackgroundImage(value: string): string {

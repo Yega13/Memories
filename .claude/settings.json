@@ -50,7 +50,10 @@
       "Bash(del \"c:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\src\\\\components\\\\DraggableCard.tsx\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\" -Force)",
       "Bash(ls -la \"c:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\\" | head -30)",
-      "Read(//c/Users/yegan/OneDrive/Desktop/**)"
+      "Read(//c/Users/yegan/OneDrive/Desktop/**)",
+      "PowerShell(cd \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\"; $content = Get-Content \"Supabase Snippet Find Duplicate Photo Locations.csv\" -Raw; $lines = $content -split \"`n\"; \"Total lines: $\\($lines.Count\\)\"; \"Has quoted fields: $\\($content -match '\\\\\"'\\)\"; \"Has CRLF: $\\($content -match '\\\\r\\\\n'\\)\")",
+      "PowerShell(cd \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\"; $lines = Get-Content \"Supabase Snippet Find Duplicate Photo Locations.csv\"; $bad = $lines | Where-Object { \\($_ -split ','\\).Count -ne 5 }; \"Lines with wrong column count: $\\($bad.Count\\)\"; $bad | Select-Object -First 5)",
+      "Bash(xargs grep -l \"photos\\\\|insert\")"
     ]
   }
 }

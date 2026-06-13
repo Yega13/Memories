@@ -328,7 +328,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${playfair.variable} ${handwriting.variable} ${montserrat.variable} ${raleway.variable} ${oswald.variable} ${dancingScript.variable} h-full antialiased`}
     >
       <head>
-        <link rel="preconnect" href="https://zleajzevvhugkwlqlolt.supabase.co" />
+        <link rel="preconnect" href="https://lteovnkplhowfvbzpalp.supabase.co" />
         <link rel="preconnect" href="https://videos.hushare.space" />
         <link rel="preconnect" href="https://iframe.videodelivery.net" />
         <link rel="preconnect" href="https://videodelivery.net" />

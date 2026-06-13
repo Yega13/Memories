@@ -17,8 +17,8 @@ binding = "R2_VIDEOS"
 bucket_name = "hushare-videos"
 
 [vars]
-NEXT_PUBLIC_SUPABASE_URL = "https://zleajzevvhugkwlqlolt.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsZWFqemV2dmh1Z2t3bHFsb2x0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2ODgwOTksImV4cCI6MjA5MjI2NDA5OX0.2_vNkn2aLkwiUpQYLuZx_tmXI42QGUNRyUUYuXp_ehw"
+NEXT_PUBLIC_SUPABASE_URL = "https://lteovnkplhowfvbzpalp.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0ZW92bmtwbGhvd2Z2YnpwYWxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzM4NDYsImV4cCI6MjA5NjkwOTg0Nn0.RFXskvyUoaR4Ha2qfuujAi4cgI9K95lTjwjDAy8QYJQ"
 RESEND_DOMAIN_VERIFIED = "true"
 R2_PUBLIC_HOST = "videos.hushare.space"
 
