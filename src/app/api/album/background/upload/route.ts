@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
+import { r2PathFromBackgroundTheme } from '@/lib/storage-path'
+import type { R2Env } from '@/lib/r2'
 
 export const runtime = 'nodejs'
 
@@ -45,20 +48,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }
 
-  const admin = createAdminClient()
+  const ctx = getCloudflareContext()
+  const env = ctx?.env as R2Env | undefined
+  const r2 = env?.R2_VIDEOS
+  const publicHost = env?.R2_PUBLIC_HOST ?? process.env.R2_PUBLIC_HOST ?? 'videos.hushare.space'
+
+  if (!r2) {
+    console.error('[album/background/upload] R2_VIDEOS binding not available')
+    return NextResponse.json({ error: 'Storage not configured' }, { status: 500, headers: NO_STORE })
+  }
+
   const ext = EXT_BY_TYPE[file.type]
   const path = `${access.album.id}/backgrounds/${randomUUID()}.${ext}`
-  const { error: uploadError } = await admin.storage
-    .from('Photos')
-    .upload(path, file, { contentType: file.type, cacheControl: '31536000', upsert: false })
 
-  if (uploadError) {
-    console.error('[album/background/upload] storage upload failed:', uploadError.message)
+  try {
+    await r2.put(path, file, {
+      httpMetadata: { contentType: file.type, cacheControl: 'public, max-age=31536000' },
+    })
+  } catch (err) {
+    console.error('[album/background/upload] R2 upload failed:', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Could not upload background' }, { status: 500, headers: NO_STORE })
   }
 
-  const publicUrl = admin.storage.from('Photos').getPublicUrl(path).data.publicUrl
+  const publicUrl = `https://${publicHost}/${path}`
   const background_theme = `image:${publicUrl}`
+
+  const admin = createAdminClient()
   const { error: updateError } = await admin
     .from('albums')
     .update({ background_theme })
@@ -66,25 +81,16 @@ export async function POST(req: Request) {
 
   if (updateError) {
     console.error('[album/background/upload] album update failed:', updateError.message)
-    await admin.storage.from('Photos').remove([path])
+    r2.delete([path]).catch((e) => console.error('[album/background/upload] R2 rollback failed:', e))
     return NextResponse.json({ error: 'Could not save background' }, { status: 500, headers: NO_STORE })
   }
 
-  // Delete all other background files for this album (list-based, no URL parsing needed)
-  try {
-    const folder = `${access.album.id}/backgrounds`
-    const { data: existing } = await admin.storage.from('Photos').list(folder)
-    if (existing && existing.length > 0) {
-      const toDelete = existing
-        .map((f) => `${folder}/${f.name}`)
-        .filter((p) => p !== path)
-      if (toDelete.length > 0) {
-        const { error: rmErr } = await admin.storage.from('Photos').remove(toDelete)
-        if (rmErr) console.error('[album/background/upload] old backgrounds remove failed:', rmErr.message)
-      }
-    }
-  } catch (err) {
-    console.error('[album/background/upload] background cleanup failed:', err instanceof Error ? err.message : String(err))
+  // Delete the previous background file from R2 (best-effort)
+  const oldPath = r2PathFromBackgroundTheme(access.album.background_theme, publicHost)
+  if (oldPath && oldPath !== path) {
+    r2.delete([oldPath]).catch((e) =>
+      console.error('[album/background/upload] old background cleanup failed:', e),
+    )
   }
 
   return NextResponse.json({ ok: true, background_theme }, { headers: NO_STORE })

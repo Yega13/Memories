@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
+import { getCloudflareContext } from '@opennextjs/cloudflare'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { isValidAlbumBackground, normalizeAlbumBackground } from '@/lib/album-background'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyOwnerViaCookie } from '@/lib/album-owner-access'
-import { storagePathFromPublicPhotoUrl } from '@/lib/storage-path'
+import { storagePathFromPublicPhotoUrl, r2PathFromBackgroundTheme } from '@/lib/storage-path'
+import type { R2Env } from '@/lib/r2'
 
 export const runtime = 'nodejs'
 
@@ -53,20 +55,38 @@ export async function POST(req: Request) {
     )
   }
 
-  // If switching away from a custom image (to stock/color/null), delete all uploaded background files
-  const previousWasCustom = !!storagePathFromPublicPhotoUrl(access.album.background_theme)
-  const nextIsCustom = !!storagePathFromPublicPhotoUrl(background_theme)
+  // If switching away from a custom image (to stock/color/null), delete the old background file
+  const ctx = getCloudflareContext()
+  const r2Env = ctx?.env as R2Env | undefined
+  const publicHost = r2Env?.R2_PUBLIC_HOST ?? process.env.R2_PUBLIC_HOST ?? 'videos.hushare.space'
+
+  const prevTheme = access.album.background_theme
+  const prevR2Path = r2PathFromBackgroundTheme(prevTheme, publicHost)
+  const prevSupabasePath = storagePathFromPublicPhotoUrl(prevTheme)
+  const previousWasCustom = !!(prevR2Path || prevSupabasePath)
+
+  const nextIsCustom = !!(r2PathFromBackgroundTheme(background_theme, publicHost) || storagePathFromPublicPhotoUrl(background_theme))
+
   if (previousWasCustom && !nextIsCustom) {
-    try {
-      const folder = `${access.album.id}/backgrounds`
-      const { data: existing } = await admin.storage.from('Photos').list(folder)
-      if (existing && existing.length > 0) {
-        const toDelete = existing.map((f) => `${folder}/${f.name}`)
-        const { error: rmErr } = await admin.storage.from('Photos').remove(toDelete)
-        if (rmErr) console.error('[album/background] old background remove failed:', rmErr.message)
+    // Delete R2-backed background
+    if (prevR2Path && r2Env?.R2_VIDEOS) {
+      r2Env.R2_VIDEOS.delete([prevR2Path]).catch((e) =>
+        console.error('[album/background] R2 background cleanup failed:', e instanceof Error ? e.message : e),
+      )
+    }
+    // Delete legacy Supabase-backed background (best-effort; may fail on new project)
+    if (prevSupabasePath) {
+      try {
+        const folder = `${access.album.id}/backgrounds`
+        const { data: existing } = await admin.storage.from('Photos').list(folder)
+        if (existing && existing.length > 0) {
+          const toDelete = existing.map((f) => `${folder}/${f.name}`)
+          const { error: rmErr } = await admin.storage.from('Photos').remove(toDelete)
+          if (rmErr) console.error('[album/background] Supabase background remove failed:', rmErr.message)
+        }
+      } catch (err) {
+        console.error('[album/background] Supabase background cleanup failed:', err instanceof Error ? err.message : String(err))
       }
-    } catch (err) {
-      console.error('[album/background] background cleanup failed:', err instanceof Error ? err.message : String(err))
     }
   }
 

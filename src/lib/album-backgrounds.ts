@@ -77,6 +77,7 @@ export function canonicalStockAlbumBackgroundValue(value: string): string | null
 const ALLOWED_BG_URL_PREFIXES = [
   'https://images.pexels.com/',
   'https://lteovnkplhowfvbzpalp.supabase.co/storage/v1/object/public/',
+  'https://videos.hushare.space/',
 ]
 
 export function resolveAlbumBackgroundImage(value: string): string {
