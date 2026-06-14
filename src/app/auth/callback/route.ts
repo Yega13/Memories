@@ -2,11 +2,9 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { hasAccountAccess } from '@/lib/access'
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase'
 
 export const runtime = 'nodejs'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
 
 // Magic-link / OAuth landing route. Supabase redirects here with a `code`
 // query param after the user clicks the email link or completes the OAuth
