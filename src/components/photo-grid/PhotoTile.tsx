@@ -92,6 +92,12 @@ const PhotoTile = React.memo(function PhotoTile({
     ? (posterBroken.has(photo.id) ? '' : (photo.stream_thumbnail_url || photo.poster_url || ''))
     : (photo.thumb_url || photo.url)
   const isBroken = broken.has(photo.id)
+  // Direct video URL for inline-thumbnail fallback (used when thumbSrc is empty).
+  // R2 videos: photo.url is a direct mp4 URL we can put in <video src>.
+  // Stream videos: photo.url is an iframe URL — use mirror_url instead (if available).
+  const videoThumbSrc = isVideo && !thumbSrc && !isBroken
+    ? (photo.stream_uid === null ? photo.url : (photo.mirror_url ?? null))
+    : null
   const mediaRadius = computeMediaRadius(photo, album, forceGlobalRadius, settingsPhoto, settingsRadius)
   const filter = computeMediaFilter(photo, album, settingsPhoto, settingsFilter)
   const mediaName = photo.caption?.trim() || photo.author_name?.trim() || ''
@@ -165,6 +171,26 @@ const PhotoTile = React.memo(function PhotoTile({
               }
             }}
             onContextMenu={(e) => handlers.current.toggleGridCardBack(photo, e)}
+          />
+        ) : videoThumbSrc ? (
+          // No pre-generated poster — load the video itself so the browser renders a
+          // visible frame. preload="metadata" downloads only the moov atom (a few KB),
+          // keeping per-tile network cost minimal. onLoadedMetadata then seeks to 5% of
+          // the video's duration (same target as generateVideoPoster) so the browser
+          // issues one keyframe range-request and paints a real, non-black frame.
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video
+            src={videoThumbSrc}
+            preload="metadata"
+            muted
+            playsInline
+            draggable={false}
+            onLoadedMetadata={(e) => { const v = e.currentTarget; v.currentTime = Math.min(0.5, (v.duration || 1) * 0.05) }}
+            className="hush-media-img object-cover"
+            style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
+              '--hush-media-filter': filter,
+            } as React.CSSProperties}
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-3 text-center" style={{ background: '#E8E0D2' }}>

@@ -51,30 +51,33 @@ export type PosterResult = {
 export async function generateVideoPoster(file: File): Promise<PosterResult | null> {
   const url = URL.createObjectURL(file)
   const video = document.createElement('video')
-  video.preload = 'metadata'
+  // preload='auto' tells the browser to buffer eagerly. For blob: URLs (local files)
+  // this has no network cost. 'metadata' was used before but iOS Safari strictly
+  // respects it and never fires loadeddata, causing every poster job to time out.
+  video.preload = 'auto'
   video.muted = true
   video.playsInline = true
-  video.crossOrigin = 'anonymous'
   video.src = url
 
   try {
+    // loadedmetadata fires as soon as the moov atom is parsed — reliable on all browsers
+    // including iOS Safari. loadeddata (the previous listener) requires frame pixel data
+    // to be available, which 'preload=metadata' actively prevents on strict browsers.
     await new Promise<void>((resolve, reject) => {
-      const onLoaded = () => resolve()
-      const onError = () => reject(new Error('video decode failed'))
-      video.addEventListener('loadeddata', onLoaded, { once: true })
-      video.addEventListener('error', onError, { once: true })
+      video.addEventListener('loadedmetadata', () => resolve(), { once: true })
+      video.addEventListener('error', () => reject(new Error('video decode failed')), { once: true })
     })
 
+    // Seek to 5% of duration (capped at 0.5 s) to avoid black leader frames.
     const target = Math.min(0.5, Math.max(0, (video.duration || 1) * 0.05))
-    if (Number.isFinite(target) && target > 0) {
-      await new Promise<void>((resolve, reject) => {
-        const onSeeked = () => resolve()
-        const onError = () => reject(new Error('seek failed'))
-        video.addEventListener('seeked', onSeeked, { once: true })
-        video.addEventListener('error', onError, { once: true })
-        video.currentTime = target
-      })
-    }
+    video.currentTime = target
+
+    // seeked fires once the browser has decoded the frame at the new position —
+    // at that point drawImage will capture real pixel data, not a black frame.
+    await new Promise<void>((resolve, reject) => {
+      video.addEventListener('seeked', () => resolve(), { once: true })
+      video.addEventListener('error', () => reject(new Error('seek failed')), { once: true })
+    })
 
     const w = video.videoWidth
     const h = video.videoHeight
