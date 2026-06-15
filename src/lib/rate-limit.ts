@@ -25,9 +25,7 @@ export async function checkRateLimit(
       .gte('created_at', since)
 
     if (countError) {
-      // Fail closed on all DB errors — a transient outage is less bad than a DoS window.
-      // Ensure the migration has run before deploying; a missing table will block requests.
-      console.warn('[rate-limit] count failed — failing closed:', countError.message)
+      console.warn('[rate-limit] count failed — failing closed:', JSON.stringify(countError))
       return { ok: false, retryAfterSeconds: 60 }
     }
 
