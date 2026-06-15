@@ -35,7 +35,7 @@ export async function POST(req: Request) {
 
   // 30 albums per hour per IP. Fail-open: if the rate_limit_events table doesn't exist
   // yet the request is allowed through. Run the 20260522 migration to activate this.
-  const rl = await checkRateLimit(clientIpKey(req, 'album_create'), 60 * 60, 30)
+  const rl = await checkRateLimit(clientIpKey(req, 'album_create'), 60 * 60, 30, { failOpen: true })
   if (!rl.ok) {
     return NextResponse.json(
       { error: 'Too many albums created. Please try again later.' },

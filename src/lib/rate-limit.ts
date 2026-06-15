@@ -4,16 +4,13 @@ type RateLimitResult =
   | { ok: true }
   | { ok: false; retryAfterSeconds: number }
 
-/**
- * Sliding-window rate limiter backed by the `rate_limit_events` Supabase table.
- * Fails CLOSED on DB errors: a transient outage is safer than allowing unlimited requests.
- * Apply the migration in supabase/migrations/20260522_rate_limit_events.sql before deploying.
- */
 export async function checkRateLimit(
   key: string,
   windowSeconds: number,
   maxRequests: number,
+  options?: { failOpen?: boolean },
 ): Promise<RateLimitResult> {
+  const failOpen = options?.failOpen ?? false
   try {
     const admin = createAdminClient()
     const since = new Date(Date.now() - windowSeconds * 1000).toISOString()
@@ -25,8 +22,8 @@ export async function checkRateLimit(
       .gte('created_at', since)
 
     if (countError) {
-      console.warn('[rate-limit] count failed — failing closed:', JSON.stringify(countError))
-      return { ok: false, retryAfterSeconds: 60 }
+      console.warn('[rate-limit] count failed:', JSON.stringify({ message: countError.message, code: countError.code, details: countError.details, hint: countError.hint }), 'failOpen:', failOpen)
+      return failOpen ? { ok: true } : { ok: false, retryAfterSeconds: 60 }
     }
 
     if (count != null && count >= maxRequests) {
@@ -43,8 +40,8 @@ export async function checkRateLimit(
 
     return { ok: true }
   } catch (err) {
-    console.error('[rate-limit] unexpected error — failing closed:', err)
-    return { ok: false, retryAfterSeconds: 60 }
+    console.error('[rate-limit] unexpected error:', err, 'failOpen:', failOpen)
+    return failOpen ? { ok: true } : { ok: false, retryAfterSeconds: 60 }
   }
 }
 

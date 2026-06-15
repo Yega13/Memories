@@ -87,7 +87,7 @@ export async function POST(req: Request) {
   // Per-album rate limit: caps total uploads regardless of how many IPs are attacking.
   // Prevents a distributed attacker from flooding one album from many IPs.
   // 5000/hour allows a large event (wedding, festival) with hundreds of guests uploading freely.
-  const albumRl = await checkRateLimit(`photo_upload_album:${albumId}`, 60 * 60, 5000)
+  const albumRl = await checkRateLimit(`photo_upload_album:${albumId}`, 60 * 60, 5000, { failOpen: true })
   if (!albumRl.ok) {
     return NextResponse.json(
       { error: 'Album upload limit reached. Please try again later.' },
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
 
   // 500 upload batches per 10 min per IP — allows fast bulk uploads from one device
   // while still blocking scripted floods.
-  const rl = await checkRateLimit(clientIpKey(req, `photo_upload:${albumId}`), 10 * 60, 500)
+  const rl = await checkRateLimit(clientIpKey(req, `photo_upload:${albumId}`), 10 * 60, 500, { failOpen: true })
   if (!rl.ok) {
     return NextResponse.json(
       { error: 'Upload rate limit exceeded. Please slow down.' },
