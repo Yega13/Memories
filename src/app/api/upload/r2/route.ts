@@ -57,7 +57,7 @@ export async function POST(req: Request) {
   if (forbidden) return forbidden
 
   // Per-IP rate limit: 500 uploads/hour prevents a single source from flooding storage.
-  const ipLimit = await checkRateLimit(clientIpKey(req, 'r2_upload'), 3600, 500)
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'r2_upload'), 3600, 500, { failOpen: true })
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: 'Upload limit reached. Please wait before uploading more files.' },
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
   // to cut one sequential Supabase round-trip off every upload.
   const admin = createAdminClient()
   const [albumLimit, ownerResult] = await Promise.all([
-    checkRateLimit(`r2_upload_album:${albumId}`, 3600, 5000),
+    checkRateLimit(`r2_upload_album:${albumId}`, 3600, 5000, { failOpen: true }),
     admin
       .from('albums')
       .select('user_id')

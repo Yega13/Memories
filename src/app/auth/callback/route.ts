@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { hasAccountAccess } from '@/lib/access'
-import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase'
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/config'
 
 export const runtime = 'nodejs'
 

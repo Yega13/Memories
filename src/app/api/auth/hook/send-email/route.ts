@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import { supabaseUrl as SUPABASE_URL } from '@/lib/supabase/config'
 
 export const runtime = 'nodejs'
 
@@ -17,7 +18,6 @@ function verifyWebhook(secret: string, id: string, timestamp: string, body: stri
   })
 }
 
-const SUPABASE_URL = 'https://lteovnkplhowfvbzpalp.supabase.co'
 const SITE_URL = 'https://hushare.space'
 
 type ActionType =

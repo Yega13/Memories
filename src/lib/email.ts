@@ -3,8 +3,7 @@ const FALLBACK_FROM = 'Hushare <onboarding@resend.dev>'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
-const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
+const SITE_URL = 'https://hushare.space'
 
 function escapeHtml(str: string): string {
   return str
@@ -51,6 +50,7 @@ export async function sendPhotoNotificationEmail(
   albumUrl: string,
   photoCount: number,
 ) {
+  const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
   const noun = photoCount === 1 ? 'photo' : 'photos'
   const subject = `${photoCount} new ${noun} added to "${albumTitle}"`
 
@@ -95,6 +95,7 @@ export async function sendBillingReminderEmail(
   renewalDate: string,
   accountUrl: string,
 ) {
+  const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
   const tierLabel = tier === 'studio' ? 'Studio' : 'Pro'
   const subject = `Your Hushare ${tierLabel} plan renews tomorrow`
 
@@ -146,6 +147,7 @@ export async function sendExpiryWarningEmail(
   albumUrl: string,
   daysLeft: number,
 ) {
+  const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
   const subject = `Your Hushare album "${albumTitle}" will be deleted in ${daysLeft} days`
 
   const html = `

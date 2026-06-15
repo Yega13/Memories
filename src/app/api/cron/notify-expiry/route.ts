@@ -11,7 +11,7 @@ const RETIRE_AFTER_DAYS = 365
 const WARN_BEFORE_DAYS = 30
 const WARN_AFTER_DAYS = RETIRE_AFTER_DAYS - WARN_BEFORE_DAYS // 335
 const BATCH_SIZE = 50
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
+const SITE_URL = 'https://hushare.space'
 
 type ExpiryCandidate = {
   id: string

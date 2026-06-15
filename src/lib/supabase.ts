@@ -5,8 +5,8 @@ import type { UploadCaps } from '@/lib/media'
 export type { MediaDisplayFilter, MediaHoverEffect, MobileGridColumns, SlideshowAnimation } from '@/lib/media-display'
 export type { UploadCaps } from '@/lib/media'
 
-export const supabaseUrl = 'https://lteovnkplhowfvbzpalp.supabase.co'
-export const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0ZW92bmtwbGhvd2Z2YnpwYWxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzM4NDYsImV4cCI6MjA5NjkwOTg0Nn0.RFXskvyUoaR4Ha2qfuujAi4cgI9K95lTjwjDAy8QYJQ'
+export { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/config'
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/config'
 
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)
 

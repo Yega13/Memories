@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { supabaseUrl } from '@/lib/supabase/config'
 import { cookieNameForAlbum, verifyAccessToken } from '@/lib/album-password'
 import { stripExifFromJpeg } from '@/lib/exif'
 
@@ -8,7 +9,7 @@ export const runtime = 'nodejs'
 
 // Only allow fetching from our own storage hosts — prevents SSRF
 const ALLOWED_HOSTS = new Set([
-  'lteovnkplhowfvbzpalp.supabase.co',
+  new URL(supabaseUrl).hostname,
   'videos.hushare.space',
 ])
 

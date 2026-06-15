@@ -65,7 +65,7 @@ export async function GET(req: Request) {
   }
 
   // Prevent slug enumeration: limits resolution attempts per IP.
-  const rl = await checkRateLimit(clientIpKey(req, 'album_resolve'), 60, 30)
+  const rl = await checkRateLimit(clientIpKey(req, 'album_resolve'), 60, 30, { failOpen: true })
   if (!rl.ok) {
     return NextResponse.json(
       { error: 'Too many requests. Please slow down.' },

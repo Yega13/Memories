@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
   // Per-album rate limit: 10 batches per 10 minutes prevents a runaway loop or
   // a compromised token from deleting an entire album in seconds.
-  const rl = await checkRateLimit(`bulk_delete:${access.album.id}`, 10 * 60, 10)
+  const rl = await checkRateLimit(`bulk_delete:${access.album.id}`, 10 * 60, 10, { failOpen: true })
   if (!rl.ok) {
     return NextResponse.json(
       { error: 'Too many delete requests. Please wait a few minutes.' },

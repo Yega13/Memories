@@ -1,10 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { supabaseUrl, supabaseAnonKey } from '@/lib/supabase/config'
 
-const supabaseUrl = 'https://lteovnkplhowfvbzpalp.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0ZW92bmtwbGhvd2Z2YnpwYWxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzM4NDYsImV4cCI6MjA5NjkwOTg0Nn0.RFXskvyUoaR4Ha2qfuujAi4cgI9K95lTjwjDAy8QYJQ'
-
-function applySecurityHeaders(response: NextResponse, request: NextRequest) {
+function applySecurityHeaders(response: NextResponse) {
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('X-Frame-Options', 'DENY')
@@ -38,7 +36,7 @@ export async function middleware(request: NextRequest) {
     // Network error or Supabase unavailable — non-fatal, let the request through.
   }
 
-  return applySecurityHeaders(response, request)
+  return applySecurityHeaders(response)
 }
 
 export const config = {

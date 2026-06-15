@@ -31,6 +31,26 @@ const PROTECTED_MANAGEMENT_SLUGS = new Set([
   'talixfans',
 ])
 
+function checkProtectedManagement<T extends AlbumOwnerBase>(
+  album: T,
+  cleanSlug: string,
+  user: { id?: string; email?: string } | null,
+): AccessOk<T> | AccessFail | null {
+  const rawEmails = process.env.PROTECTED_MANAGEMENT_EMAILS
+  if (!rawEmails) return null
+  const managementEmails = new Set<string>(
+    rawEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+  )
+  const isProtected =
+    PROTECTED_MANAGEMENT_SLUGS.has(cleanSlug) ||
+    (album.custom_slug ? PROTECTED_MANAGEMENT_SLUGS.has(album.custom_slug) : false)
+  if (!isProtected) return null
+  const email = user?.email?.toLowerCase()
+  if (!email || !managementEmails.has(email)) {
+    return { ok: false, status: 403, error: "You don't have access", reason: 'access_denied' }
+  }
+  return { ok: true, album, userId: user?.id ?? null }
+}
 
 export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwnerBase>(
   slug: string,
@@ -63,19 +83,8 @@ export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwn
     data: { user },
   } = await supabase.auth.getUser()
 
-  const PROTECTED_MANAGEMENT_EMAILS: Set<string> | null = process.env.PROTECTED_MANAGEMENT_EMAILS
-    ? new Set(process.env.PROTECTED_MANAGEMENT_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
-    : null
-
-  const protectedManagement = PROTECTED_MANAGEMENT_EMAILS !== null &&
-    (PROTECTED_MANAGEMENT_SLUGS.has(cleanSlug) || (album.custom_slug ? PROTECTED_MANAGEMENT_SLUGS.has(album.custom_slug) : false))
-  if (protectedManagement) {
-    const email = user?.email?.toLowerCase()
-    if (!email || !PROTECTED_MANAGEMENT_EMAILS!.has(email)) {
-      return { ok: false, status: 403, error: "You don't have access", reason: 'access_denied' }
-    }
-    return { ok: true, album, userId: user?.id ?? null }
-  }
+  const protectedResult = checkProtectedManagement(album, cleanSlug, user)
+  if (protectedResult !== null) return protectedResult
 
   if (user) {
     await admin.from('albums').update({ user_id: user.id }).eq('id', album.id).is('user_id', null)
@@ -134,19 +143,8 @@ export async function verifyOwnerViaCookie<T extends AlbumOwnerBase = AlbumOwner
     data: { user },
   } = await supabase.auth.getUser()
 
-  const PROTECTED_MANAGEMENT_EMAILS: Set<string> | null = process.env.PROTECTED_MANAGEMENT_EMAILS
-    ? new Set(process.env.PROTECTED_MANAGEMENT_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
-    : null
-
-  const protectedManagement = PROTECTED_MANAGEMENT_EMAILS !== null &&
-    (PROTECTED_MANAGEMENT_SLUGS.has(cleanSlug) || (album.custom_slug ? PROTECTED_MANAGEMENT_SLUGS.has(album.custom_slug) : false))
-  if (protectedManagement) {
-    const email = user?.email?.toLowerCase()
-    if (!email || !PROTECTED_MANAGEMENT_EMAILS!.has(email)) {
-      return { ok: false, status: 403, error: "You don't have access", reason: 'access_denied' }
-    }
-    return { ok: true, album, userId: user?.id ?? null }
-  }
+  const protectedResult = checkProtectedManagement(album, cleanSlug, user)
+  if (protectedResult !== null) return protectedResult
 
   if (user) {
     await admin.from('albums').update({ user_id: user.id }).eq('id', album.id).is('user_id', null)

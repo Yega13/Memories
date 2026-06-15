@@ -84,7 +84,7 @@ export async function verifyWebhookSignature(
   if (!id || !timestamp || !signatureHeader) return false
 
   const ts = Number(timestamp)
-  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 3600) return false
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false
 
   const keyMaterial = new TextEncoder().encode(secret)
   const cryptoKey = await crypto.subtle.importKey(

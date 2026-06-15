@@ -30,8 +30,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: access.error }, { status: access.status, headers: NO_STORE })
   }
 
+  const admin = createAdminClient()
+
   if (photoId !== null) {
-    const admin = createAdminClient()
     const { data: photo } = await admin
       .from('photos')
       .select('id, album_id')
@@ -43,7 +44,6 @@ export async function POST(req: Request) {
     }
   }
 
-  const admin = createAdminClient()
   const { error } = await admin
     .from('albums')
     .update({ cover_photo_id: photoId })

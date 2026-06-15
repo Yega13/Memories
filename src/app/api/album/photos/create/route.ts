@@ -4,17 +4,14 @@ import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { MEDIA_AUTHOR_MAX, MEDIA_CAPTION_MAX, mediaTextOrNull } from '@/lib/media-text'
 import { sendPhotoNotificationEmail } from '@/lib/email'
 import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
+import { supabaseUrl } from '@/lib/supabase/config'
 
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
-// Supabase storage base URL — all images stored via the supabase backend must come from here.
-// Prevents crafted API calls from storing arbitrary external URLs that render in album viewers.
-const SUPABASE_STORAGE_BASE = 'https://lteovnkplhowfvbzpalp.supabase.co/storage/v1/object/public/'
-// On-demand image transform endpoint — used as thumb_url for new uploads instead of a
-// separately uploaded thumbnail file. Both prefixes share the same Supabase host.
-const SUPABASE_RENDER_BASE = 'https://lteovnkplhowfvbzpalp.supabase.co/storage/v1/render/image/public/'
+const SUPABASE_STORAGE_BASE = `${supabaseUrl}/storage/v1/object/public/`
+const SUPABASE_RENDER_BASE = `${supabaseUrl}/storage/v1/render/image/public/`
 
 type PhotoRow = {
   storage_path?: string
@@ -256,7 +253,6 @@ function numberOrNull(value: unknown) {
 }
 
 const NOTIFICATION_COOLDOWN_MS = 6 * 60 * 60 * 1000 // 6 hours between notification emails
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
 
 type NotifiableAlbum = {
   id: string
@@ -296,8 +292,9 @@ async function maybeNotifyOwner(
     const email = user?.email
     if (!email) return
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
     const publicSlug = album.custom_slug || album.slug
-    const albumUrl = `${SITE_URL}/${publicSlug}`
+    const albumUrl = `${siteUrl}/${publicSlug}`
 
     await sendPhotoNotificationEmail(email, album.title, albumUrl, photoCount)
   } catch (err) {

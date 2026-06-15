@@ -6,7 +6,7 @@ import { timingSafeEqual } from '@/lib/timing-safe'
 export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
+const SITE_URL = 'https://hushare.space'
 const BATCH_SIZE = 50
 
 type UpcomingRenewal = {
