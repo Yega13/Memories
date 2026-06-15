@@ -17,14 +17,8 @@ function verifyWebhook(secret: string, id: string, timestamp: string, body: stri
   })
 }
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://hushare.space'
-const RESEND_API_KEY = process.env.RESEND_API_KEY
-const HOOK_SECRET = process.env.SUPABASE_AUTH_HOOK_SECRET
-const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
-const FROM = process.env.RESEND_DOMAIN_VERIFIED === 'true'
-  ? 'Hushare <noreply@hushare.space>'
-  : 'Hushare <onboarding@resend.dev>'
+const SUPABASE_URL = 'https://lteovnkplhowfvbzpalp.supabase.co'
+const SITE_URL = 'https://hushare.space'
 
 type ActionType =
   | 'signup'
@@ -59,6 +53,7 @@ function buildEmail(
   ctaUrl: string,
   ctaLabel: string,
 ): { html: string; text: string } {
+  const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? 'Hushare, Yerevan, Armenia'
   const html = `
 <div style="font-family:-apple-system,system-ui,sans-serif;color:#254F22;max-width:560px;margin:0 auto;padding:24px;">
   <h2 style="margin:0 0 16px;font-size:18px;">${heading}</h2>
@@ -77,6 +72,10 @@ function buildEmail(
 }
 
 async function sendViaResend(to: string, subject: string, html: string, text: string) {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY
+  const FROM = process.env.RESEND_DOMAIN_VERIFIED === 'true'
+    ? 'Hushare <noreply@hushare.space>'
+    : 'Hushare <onboarding@resend.dev>'
   if (!RESEND_API_KEY) {
     console.error('[auth-hook] RESEND_API_KEY not set')
     return
@@ -93,6 +92,7 @@ async function sendViaResend(to: string, subject: string, html: string, text: st
 
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
+  const HOOK_SECRET = process.env.SUPABASE_AUTH_HOOK_SECRET
 
   if (!HOOK_SECRET) {
     console.error('[auth-hook] SUPABASE_AUTH_HOOK_SECRET is not set — refusing all requests')

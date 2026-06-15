@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   const { data: album } = await admin
     .from('albums')
     .select('id, password_hash')
-    .eq('slug', slug)
+    .or(`slug.eq.${slug},custom_slug.eq.${slug}`)
     .maybeSingle<{ id: string; password_hash: string | null }>()
 
   // Don't reveal whether the album exists - both bad-password and unknown

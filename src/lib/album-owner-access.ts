@@ -31,11 +31,6 @@ const PROTECTED_MANAGEMENT_SLUGS = new Set([
   'talixfans',
 ])
 
-// Set via Cloudflare secret: PROTECTED_MANAGEMENT_EMAILS (comma-separated list of admin emails)
-// If the env var is not configured the feature is disabled (anyone with the owner token can access).
-const PROTECTED_MANAGEMENT_EMAILS: Set<string> | null = process.env.PROTECTED_MANAGEMENT_EMAILS
-  ? new Set(process.env.PROTECTED_MANAGEMENT_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
-  : null
 
 export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwnerBase>(
   slug: string,
@@ -67,6 +62,10 @@ export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwn
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  const PROTECTED_MANAGEMENT_EMAILS: Set<string> | null = process.env.PROTECTED_MANAGEMENT_EMAILS
+    ? new Set(process.env.PROTECTED_MANAGEMENT_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
+    : null
 
   const protectedManagement = PROTECTED_MANAGEMENT_EMAILS !== null &&
     (PROTECTED_MANAGEMENT_SLUGS.has(cleanSlug) || (album.custom_slug ? PROTECTED_MANAGEMENT_SLUGS.has(album.custom_slug) : false))
@@ -134,6 +133,10 @@ export async function verifyOwnerViaCookie<T extends AlbumOwnerBase = AlbumOwner
   const {
     data: { user },
   } = await supabase.auth.getUser()
+
+  const PROTECTED_MANAGEMENT_EMAILS: Set<string> | null = process.env.PROTECTED_MANAGEMENT_EMAILS
+    ? new Set(process.env.PROTECTED_MANAGEMENT_EMAILS.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))
+    : null
 
   const protectedManagement = PROTECTED_MANAGEMENT_EMAILS !== null &&
     (PROTECTED_MANAGEMENT_SLUGS.has(cleanSlug) || (album.custom_slug ? PROTECTED_MANAGEMENT_SLUGS.has(album.custom_slug) : false))

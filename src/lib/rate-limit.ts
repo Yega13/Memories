@@ -44,7 +44,8 @@ export async function checkRateLimit(
     }
 
     return { ok: true }
-  } catch {
+  } catch (err) {
+    console.error('[rate-limit] unexpected error — failing closed:', err)
     return { ok: false, retryAfterSeconds: 60 }
   }
 }

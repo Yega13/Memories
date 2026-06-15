@@ -1,8 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder'
+const supabaseUrl = 'https://lteovnkplhowfvbzpalp.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0ZW92bmtwbGhvd2Z2YnpwYWxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzM4NDYsImV4cCI6MjA5NjkwOTg0Nn0.RFXskvyUoaR4Ha2qfuujAi4cgI9K95lTjwjDAy8QYJQ'
 
 function applySecurityHeaders(response: NextResponse, request: NextRequest) {
   response.headers.set('X-Content-Type-Options', 'nosniff')
