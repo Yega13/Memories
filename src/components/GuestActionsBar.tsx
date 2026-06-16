@@ -31,7 +31,7 @@ const btnBase: React.CSSProperties = {
 }
 
 export default function GuestActionsBar({ album, photos, shareUrl, onOpenSlideshow, onOpenFaceFinder }: Props) {
-  const { zipping, zipDone, zipTotal, downloadZip } = useZipDownload(photos, album.title ?? '')
+  const { zipping, zipDone, zipTotal, downloadZip } = useZipDownload(photos, album.title ?? '', album.id)
 
   const [shareOpen, setShareOpen] = useState(false)
   const [copied, setCopied] = useState(false)

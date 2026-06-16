@@ -351,13 +351,13 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
   useEffect(() => {
     function onPopState() {
       if (!lightboxHistoryRef.current) return
+      // Set to false BEFORE calling closeLightbox so it won't trigger history.back() again
       lightboxHistoryRef.current = false
-      setLightbox(null)
-      clearSlideshow()
+      closeLightbox()
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
-  }, [clearSlideshow])
+  }, [closeLightbox])
 
   useEffect(() => {
     setFlippedPhotoId(null)

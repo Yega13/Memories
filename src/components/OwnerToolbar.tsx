@@ -113,7 +113,7 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
   const [revealError, setRevealError] = useState('')
   const [revealSaved, setRevealSaved] = useState(false)
 
-  const { zipping, zipDone, zipTotal, downloadZip } = useZipDownload(photos, album.title ?? '')
+  const { zipping, zipDone, zipTotal, downloadZip } = useZipDownload(photos, album.title ?? '', album.id)
 
   const [allowGuestDownloads, setAllowGuestDownloads] = useState(album.allow_guest_downloads !== false)
 

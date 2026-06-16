@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
+import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/server'
 import { hasAccountAccess } from '@/lib/access'
 import LoginForm from './LoginForm'
@@ -39,11 +41,21 @@ export default async function LoginPage({ searchParams }: Props) {
     >
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
+          <Link href="/" className="inline-block mb-6" aria-label="Go to Hushare home">
+            <Image
+              src="/logo/logo-dark-transparent.png"
+              alt="Hushare"
+              width={618}
+              height={146}
+              style={{ width: 'auto', height: '48px' }}
+              priority
+            />
+          </Link>
           <h1
             className="text-3xl font-bold mb-2"
             style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
           >
-            Sign in to Hushare
+            Sign in
           </h1>
           <p className="text-sm" style={{ color: '#5C4A3C' }}>
             Continue with Google or get a magic link by email.

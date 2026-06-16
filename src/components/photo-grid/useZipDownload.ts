@@ -8,7 +8,7 @@ import type { Photo } from '@/lib/supabase'
 
 const CONCURRENCY = 16
 
-export function useZipDownload(photos: Photo[], albumTitle: string) {
+export function useZipDownload(photos: Photo[], albumTitle: string, albumId?: string) {
   const [zipping, setZipping] = useState(false)
   const [zipDone, setZipDone] = useState(0)
   const [zipTotal, setZipTotal] = useState(0)
@@ -48,7 +48,8 @@ export function useZipDownload(photos: Photo[], albumTitle: string) {
       })
 
       async function fetchBlob(sourceUrl: string, filename: string): Promise<Blob> {
-        const proxyUrl = `/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=${encodeURIComponent(filename)}`
+        let proxyUrl = `/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=${encodeURIComponent(filename)}`
+        if (albumId) proxyUrl += `&album_id=${encodeURIComponent(albumId)}`
         const res = await fetch(proxyUrl)
         if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
         return res.blob()
