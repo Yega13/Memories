@@ -68,7 +68,7 @@ export async function POST(req: Request) {
       )
     }
     if (error.code !== '23505') {
-      console.error('[album/create] insert failed:', error.message)
+      console.error('[album/create] insert failed:', error.code, error.message)
       return NextResponse.json({ error: 'Could not create album' }, { status: 500, headers: NO_STORE })
     }
   }
