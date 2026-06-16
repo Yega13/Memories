@@ -4,7 +4,7 @@ const KEY_BITS = 256
 const MIN_VERIFY_ITERATIONS = 50_000
 const PBKDF2_ITERATIONS = 310_000
 
-export const MIN_PASSWORD_LEN = 10
+export const MIN_PASSWORD_LEN = 4
 export const MAX_PASSWORD_LEN = 128
 
 export async function hashPassword(password: string): Promise<string> {

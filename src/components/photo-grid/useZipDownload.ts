@@ -47,8 +47,9 @@ export function useZipDownload(photos: Photo[], albumTitle: string) {
         return { sourceUrl, filename }
       })
 
-      async function fetchBlob(url: string): Promise<Blob> {
-        const res = await fetch(url)
+      async function fetchBlob(sourceUrl: string, filename: string): Promise<Blob> {
+        const proxyUrl = `/api/download/photo?url=${encodeURIComponent(sourceUrl)}&name=${encodeURIComponent(filename)}`
+        const res = await fetch(proxyUrl)
         if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
         return res.blob()
       }
@@ -59,7 +60,7 @@ export function useZipDownload(photos: Photo[], albumTitle: string) {
           const idx = nextIdx++
           if (idx >= tasks.length) break
           const { sourceUrl, filename } = tasks[idx]
-          const blob = await fetchBlob(sourceUrl)
+          const blob = await fetchBlob(sourceUrl, filename)
           // STORE compression — photos are already compressed, re-compressing wastes CPU.
           zip.file(filename, blob, { compression: 'STORE' })
           setZipDone((d) => d + 1)
