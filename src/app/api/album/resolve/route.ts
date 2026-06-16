@@ -111,14 +111,14 @@ async function buildResponse(album: FullAlbum, cachedTier?: Awaited<ReturnType<t
   // Owner tier drives both the upload cap returned to the client AND the
   // password-enforcement decision. Use the cached value when available (custom-slug
   // path already fetched it) to save a DB round-trip on every album load.
-  const ownerTier = cachedTier ?? await getUserTierById(album.user_id)
+  const ownerTier = cachedTier ?? (album.user_id ? await getUserTierById(album.user_id) : 'free')
   const upload_caps = uploadCapsForTier(ownerTier)
 
   // Once a password exists, enforce it regardless of the owner's current tier.
   // Downgrading a paid account must not silently expose a protected album.
   const passwordEnforced = !!album.password_hash
 
-  if (passwordEnforced) {
+  if (passwordEnforced && album.password_hash) {
     const cookieStore = await cookies()
     const cookie = cookieStore.get(cookieNameForAlbum(album.id))?.value
     const verified = cookie != null && await verifyAccessToken(cookie, album.password_hash, album.id)
