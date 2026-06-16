@@ -16,6 +16,14 @@ export type Subscription = {
   updated_at: string
 }
 
+function isSubActive(sub: { status: string; current_period_end: string | null }): boolean {
+  if (sub.status === 'active' || sub.status === 'trialing') return true
+  if (sub.status === 'canceled' || sub.status === 'past_due') {
+    return !!sub.current_period_end && new Date(sub.current_period_end) > new Date()
+  }
+  return false
+}
+
 export async function getActiveSubscription(userId: string): Promise<Subscription | null> {
   const supabase = await createServerClient()
   const { data, error } = await supabase
@@ -30,16 +38,8 @@ export async function getActiveSubscription(userId: string): Promise<Subscriptio
     console.error('[subscriptions] query failed:', error.message)
     return null
   }
-  if (!data) return null
-
-  if (data.status === 'active' || data.status === 'trialing') return data
-
-  if (data.status === 'canceled' || data.status === 'past_due') {
-    if (!data.current_period_end) return null
-    if (new Date(data.current_period_end) > new Date()) return data
-  }
-
-  return null
+  if (!data || !isSubActive(data)) return null
+  return data
 }
 
 export async function isActiveSubscriber(user: { id?: string } | null | undefined): Promise<boolean> {
@@ -76,12 +76,7 @@ export async function getUserTierById(userId: string | null | undefined): Promis
     .limit(1)
     .maybeSingle<Subscription>()
 
-  if (sub) {
-    if (sub.status === 'active' || sub.status === 'trialing') return sub.tier
-    if ((sub.status === 'canceled' || sub.status === 'past_due') && sub.current_period_end) {
-      if (new Date(sub.current_period_end) > new Date()) return sub.tier
-    }
-  }
+  if (sub && isSubActive(sub)) return sub.tier
 
   const { data: authData } = await admin.auth.admin.getUserById(userId)
   if (isAccountAdmin({ email: authData?.user?.email })) return 'studio'

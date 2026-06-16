@@ -58,8 +58,12 @@ export default function AccountNavLink() {
   async function handleSignOut() {
     if (signingOut) return
     setSigningOut(true)
-    await supabase.auth.signOut()
-    router.refresh()
+    try {
+      await supabase.auth.signOut()
+      router.refresh()
+    } finally {
+      setSigningOut(false)
+    }
   }
 
   if (state.kind === 'loading') {

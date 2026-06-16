@@ -23,13 +23,12 @@ export function uploadCapsForTier(tier: Tier): UploadCaps {
 
 export const DEFAULT_UPLOAD_CAPS: UploadCaps = uploadCapsForTier('free')
 
-const VIDEO_MIME_PREFIXES = ['video/']
 const IMAGE_EXT_FALLBACK = /\.(jpe?g|png|gif|webp|heic|heif|avif)$/i
 const VIDEO_EXT_FALLBACK = /\.(mp4|mov|m4v|webm|ogg)$/i
 
 export function detectKind(file: File): MediaKind | null {
   if (file.type.startsWith('image/')) return 'image'
-  if (VIDEO_MIME_PREFIXES.some((p) => file.type.startsWith(p))) return 'video'
+  if (file.type.startsWith('video/')) return 'video'
   if (IMAGE_EXT_FALLBACK.test(file.name)) return 'image'
   if (VIDEO_EXT_FALLBACK.test(file.name)) return 'video'
   return null

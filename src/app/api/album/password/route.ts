@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   const admin = createAdminClient()
   const album = access.album
   const raw = body.password
-  const isClear = raw === null || raw === undefined || (typeof raw === 'string' && raw === '')
+  const isClear = raw == null || (typeof raw === 'string' && raw === '')
   if (isClear) {
     const { error } = await admin
       .from('albums')

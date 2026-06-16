@@ -134,8 +134,8 @@ async function handlePost(req: Request) {
   const ownerAccess = await verifyOwnerViaCookie(slug)
   if (!ownerAccess.ok) return NextResponse.json({ error: ownerAccess.error }, { status: ownerAccess.status, headers: NO_STORE })
 
-  const { admin, album } = await resolveAlbum(slug)
-  if (!album) return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  const admin = createAdminClient()
+  const album = ownerAccess.album
   if (!await isStudioAlbum(album)) {
     return NextResponse.json({ error: 'Face Finder is not enabled for this album' }, { status: 403, headers: NO_STORE })
   }

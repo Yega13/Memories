@@ -20,6 +20,9 @@ type CollectionSummary = {
 }
 
 export async function GET(req: Request) {
+  const forbidden = forbidCrossSiteRequest(req)
+  if (forbidden) return forbidden
+
   const { searchParams } = new URL(req.url)
   const albumSlug = (searchParams.get('slug') ?? '').trim()
 

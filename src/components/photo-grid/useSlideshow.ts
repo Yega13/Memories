@@ -4,7 +4,6 @@ import type { Photo } from '@/lib/supabase'
 
 type Options = {
   photos: Photo[]
-  isOwner: boolean
   slideshowRequestId: number
   lightbox: number | null
   onSetLightboxIndex: (index: number | null) => void
@@ -29,7 +28,6 @@ export type Slideshow = {
 
 export function useSlideshow({
   photos,
-  isOwner,
   slideshowRequestId,
   lightbox,
   onSetLightboxIndex,

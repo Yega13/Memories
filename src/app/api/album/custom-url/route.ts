@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   }
   const album = access.album
 
-  const isClear = rawCustom === null || rawCustom === undefined || (typeof rawCustom === 'string' && rawCustom.trim() === '')
+  const isClear = rawCustom == null || (typeof rawCustom === 'string' && rawCustom.trim() === '')
   if (isClear) {
     const { error } = await admin
       .from('albums')

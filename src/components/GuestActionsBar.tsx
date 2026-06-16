@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { Check, Copy, Download, Loader2, Play, QrCode, Search, Share2, X } from 'lucide-react'
 import { showAppToast } from '@/components/AppToast'
@@ -79,7 +79,10 @@ export default function GuestActionsBar({ album, photos, shareUrl, onOpenSlidesh
   }
 
   const hasFaceFinder = album.face_finder_enabled && photos.some((p) => p.media_type !== 'video')
-  const downloadableCount = photos.filter((p) => p.storage_backend !== 'stream' || !!p.mirror_url).length
+  const downloadableCount = useMemo(
+    () => photos.filter((p) => p.storage_backend !== 'stream' || !!p.mirror_url).length,
+    [photos],
+  )
 
   return (
     <div style={{ background: '#F5F0E8', borderBottom: '1px solid #DDD5C5' }}>

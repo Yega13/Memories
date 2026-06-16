@@ -12,9 +12,13 @@ export default function SignOutButton() {
   async function onClick() {
     if (busy) return
     setBusy(true)
-    await supabase.auth.signOut()
-    router.replace('/login')
-    router.refresh()
+    try {
+      await supabase.auth.signOut()
+      router.replace('/login')
+      router.refresh()
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

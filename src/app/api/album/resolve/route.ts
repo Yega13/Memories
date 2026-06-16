@@ -50,7 +50,7 @@ type FullAlbum = {
   allow_guest_downloads: boolean
 }
 
-type PublicAlbum = Omit<FullAlbum, 'user_id' | 'owner_token' | 'password_hash' | 'retired_at' | 'cover_photo_id'> & { cover_photo_id: string | null }
+type PublicAlbum = Omit<FullAlbum, 'user_id' | 'owner_token' | 'password_hash' | 'retired_at'>
 
 const SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, media_radius, video_autoplay, media_filter, media_hover, mobile_grid_columns, slideshow_interval_ms, slideshow_animation, cover_photo_id, reveal_at, created_at, retired_at, user_id, owner_token, password_hash, allow_guest_downloads'
 const LEGACY_SELECT_COLUMNS = 'id, slug, custom_slug, title, description, background_theme, created_at, retired_at, user_id, owner_token, password_hash'
@@ -118,7 +118,7 @@ async function buildResponse(album: FullAlbum, cachedTier?: Awaited<ReturnType<t
   // Downgrading a paid account must not silently expose a protected album.
   const passwordEnforced = !!album.password_hash
 
-  if (passwordEnforced && album.password_hash) {
+  if (passwordEnforced) {
     const cookieStore = await cookies()
     const cookie = cookieStore.get(cookieNameForAlbum(album.id))?.value
     const verified = cookie != null && await verifyAccessToken(cookie, album.password_hash, album.id)
@@ -209,7 +209,7 @@ async function lookupAlbum(
       console.error('[album/resolve] legacy album lookup failed:', legacyError.message)
       return null
     }
-    return legacy ? { ...legacy, media_radius: 12, video_autoplay: true, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade', reveal_at: null, allow_guest_downloads: true } : null
+    return legacy ? { ...legacy, cover_photo_id: null, media_radius: 12, video_autoplay: true, media_filter: 'none', media_hover: 'none', mobile_grid_columns: 3, slideshow_interval_ms: 4200, slideshow_animation: 'fade', reveal_at: null, allow_guest_downloads: true } : null
   }
 
   console.error('[album/resolve] album lookup failed:', error.message)

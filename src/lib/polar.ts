@@ -111,7 +111,7 @@ export async function verifyWebhookSignature(
 
 type ProductMap = Record<string, { tier: 'pro' | 'studio'; cycle: 'monthly' | 'yearly' }>
 
-export function getProductMap(): ProductMap {
+function getProductMap(): ProductMap {
   const proMonthly = process.env.POLAR_PRODUCT_PRO_MONTHLY
   const proYearly = process.env.POLAR_PRODUCT_PRO_YEARLY
   const studioMonthly = process.env.POLAR_PRODUCT_STUDIO_MONTHLY

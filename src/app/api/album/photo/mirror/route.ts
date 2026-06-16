@@ -93,9 +93,11 @@ export async function POST(req: Request) {
     ? streamFilename.slice(0, -7)
     : ''
   if (streamUid) {
-    deleteStreamVideo(streamUid).catch((e) =>
-      console.error('[photo/mirror] Stream delete failed (non-fatal):', streamUid, e instanceof Error ? e.message : e),
-    )
+    try {
+      await deleteStreamVideo(streamUid)
+    } catch (e) {
+      console.error('[photo/mirror] Stream delete failed (non-fatal):', streamUid, e instanceof Error ? e.message : e)
+    }
   }
 
   return NextResponse.json({ ok: true, mirrored: true }, { headers: NO_STORE })

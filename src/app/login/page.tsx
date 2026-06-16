@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: Props) {
     if (await hasAccountAccess(user)) {
       redirect(requestedNext ?? '/account')
     }
-    redirect(requestedNext && requestedNext !== '/account' ? requestedNext : '/')
+    redirect('/')
   }
 
   return (

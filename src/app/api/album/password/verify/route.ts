@@ -15,6 +15,8 @@ export const runtime = 'nodejs'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
+const SLUG_RE = /^[a-zA-Z0-9._-]{1,200}$/
+
 // Rate-limiting policy. Tuned so a typo'ing legit user never hits the wall
 // (10 tries is generous), but a brute-force attempt still gets locked out fast.
 const WINDOW_SECONDS = 5 * 60        // sliding window we count failures in
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
   }
   const slug = String(body.slug ?? '').trim()
   const password = String(body.password ?? '')
-  if (!slug || !password) {
+  if (!slug || !SLUG_RE.test(slug) || !password) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400, headers: NO_STORE })
   }
   if (password.length > MAX_PASSWORD_LEN) {

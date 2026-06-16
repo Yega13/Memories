@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
   const slug = String(body.slug ?? '').trim()
   const mediaRadius = clampMediaRadius(body.media_radius)
-  const videoAutoplay = Boolean(body.video_autoplay)
+  const videoAutoplay = body.video_autoplay !== false
   const rawMediaFilter = body.media_filter ?? 'none'
   const mediaFilter = isMediaDisplayFilter(rawMediaFilter) ? rawMediaFilter : null
   const rawMediaHover = body.media_hover ?? 'none'
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   if (!mediaHover) {
     return NextResponse.json({ error: 'Invalid hover effect' }, { status: 400, headers: NO_STORE })
   }
-  if (!mobileGridColumns) {
+  if (mobileGridColumns == null) {
     return NextResponse.json({ error: 'Invalid mobile grid' }, { status: 400, headers: NO_STORE })
   }
   if (slideshowIntervalMs == null) {

@@ -93,7 +93,7 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
     slideshowActive, slideshowPaused, slideshowPickerOpen, slideshowSelectedIds, slideshowPhotoIds,
     slideshowMode, setSlideshowActive, setSlideshowPaused, setSlideshowPickerOpen, setSlideshowSelectedIds,
     toggleSlideshowPick, startSlideshow, clearSlideshow, removeFromSlideshow,
-  } = useSlideshow({ photos, isOwner, slideshowRequestId, lightbox, onSetLightboxIndex: setLightbox })
+  } = useSlideshow({ photos, slideshowRequestId, lightbox, onSetLightboxIndex: setLightbox })
 
   const viewerPhotos = slideshowPhotoIds
     ? slideshowPhotoIds
@@ -353,10 +353,11 @@ export default function PhotoGrid({ album, photos, isOwner, slug, forceGlobalRad
       if (!lightboxHistoryRef.current) return
       lightboxHistoryRef.current = false
       setLightbox(null)
+      clearSlideshow()
     }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
-  }, [])
+  }, [clearSlideshow])
 
   useEffect(() => {
     setFlippedPhotoId(null)
