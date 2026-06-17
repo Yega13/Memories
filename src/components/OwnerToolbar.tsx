@@ -265,7 +265,6 @@ export default function OwnerToolbar({ album, photos, ownerToken, userTier, medi
       }
       onAlbumUpdated({ password_protected: result.password_protected })
       setPasswordSaved(true)
-      showAppToast(action === 'clear' ? 'Password removed.' : 'Password saved.')
       setPasswordInput('')
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Network error'
