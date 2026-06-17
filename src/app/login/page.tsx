@@ -36,33 +36,38 @@ export default async function LoginPage({ searchParams }: Props) {
 
   return (
     <main
-      className="min-h-screen flex items-center justify-center px-4 py-16"
+      className="min-h-screen flex flex-col px-4"
       style={{ background: '#FDFAF5' }}
     >
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-block mb-6" aria-label="Go to Hushare home">
-            <Image
-              src="/logo/logo-dark-transparent.png"
-              alt="Hushare"
-              width={618}
-              height={146}
-              style={{ width: 'auto', height: '48px' }}
-              priority
-            />
-          </Link>
-          <h1
-            className="text-3xl font-bold mb-2"
-            style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
-          >
-            Sign in
-          </h1>
-          <p className="text-sm" style={{ color: '#5C4A3C' }}>
-            Continue with Google or get a magic link by email.
-          </p>
-        </div>
+      <div className="pt-8 text-center">
+        <Link href="/" className="inline-block" aria-label="Go to Hushare home">
+          <Image
+            src="/logo/logo-dark-transparent.png"
+            alt="Hushare"
+            width={618}
+            height={146}
+            style={{ width: 'auto', height: '32px' }}
+            priority
+          />
+        </Link>
+      </div>
 
-        <LoginForm />
+      <div className="flex-1 flex items-center justify-center py-8">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <h1
+              className="text-3xl font-bold mb-2"
+              style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}
+            >
+              Sign in
+            </h1>
+            <p className="text-sm" style={{ color: '#5C4A3C' }}>
+              Continue with Google or get a magic link by email.
+            </p>
+          </div>
+
+          <LoginForm />
+        </div>
       </div>
     </main>
   )

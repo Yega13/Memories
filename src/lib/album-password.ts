@@ -1,8 +1,9 @@
 
 const LEGACY_HASH_VERSION = 'hmac-sha256-v1'
 const KEY_BITS = 256
-const MIN_VERIFY_ITERATIONS = 50_000
-const PBKDF2_ITERATIONS = 310_000
+const MIN_VERIFY_ITERATIONS = 5_000
+const MAX_VERIFY_ITERATIONS = 15_000  // Cloudflare Workers CPU budget; rejects pre-reduction 310k hashes
+const PBKDF2_ITERATIONS = 10_000
 
 export const MIN_PASSWORD_LEN = 4
 export const MAX_PASSWORD_LEN = 128
@@ -34,6 +35,12 @@ export async function verifyPassword(password: string, stored: string): Promise<
   if (parts.length !== 4 || parts[0] !== 'pbkdf2') return false
   const iterations = Number.parseInt(parts[1], 10)
   if (!Number.isFinite(iterations) || iterations < MIN_VERIFY_ITERATIONS) return false
+  if (iterations > MAX_VERIFY_ITERATIONS) {
+    // Hash was created with too many iterations (pre-reduction, e.g. 310,000).
+    // Running it would exceed Cloudflare Workers CPU budget. The album owner must reset the password.
+    console.error(`[album-password] hash has ${iterations} iterations (max ${MAX_VERIFY_ITERATIONS}) — album password must be reset`)
+    return false
+  }
   let salt: Uint8Array<ArrayBuffer>
   let expected: Uint8Array<ArrayBuffer>
   try {
