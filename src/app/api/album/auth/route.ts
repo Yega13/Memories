@@ -30,5 +30,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ isOwner: false }, { headers: NO_STORE })
   }
 
-  return NextResponse.json({ isOwner: true, ownerToken: access.album.owner_token }, { headers: NO_STORE })
+  // TODO: remove dbg_uid after diagnosing account linking
+  return NextResponse.json({ isOwner: true, ownerToken: access.album.owner_token, dbg_uid: access.userId }, { headers: NO_STORE })
 }

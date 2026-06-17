@@ -21,7 +21,9 @@ export async function POST(req: Request) {
   if (forbidden) return forbidden
 
   // Per-IP rate limit: prevents token brute-forcing even from many albums simultaneously.
-  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_login'), 300, 10)
+  // failOpen: if the rate_limit_events table doesn't exist yet (migration 20260522 not applied),
+  // allow the request through rather than permanently blocking owner-login with a 429.
+  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_login'), 300, 10, { failOpen: true })
   if (!ipRl.ok) {
     return NextResponse.json(
       { error: 'Too many attempts. Please wait before trying again.' },
@@ -43,7 +45,7 @@ export async function POST(req: Request) {
   }
 
   // Per-slug rate limit: caps attempts against a specific album from distributed IPs.
-  const slugRl = await checkRateLimit(`owner_login_slug:${slug}`, 300, 20)
+  const slugRl = await checkRateLimit(`owner_login_slug:${slug}`, 300, 20, { failOpen: true })
   if (!slugRl.ok) {
     return NextResponse.json(
       { error: 'Too many attempts on this album. Please wait.' },

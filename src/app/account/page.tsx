@@ -487,9 +487,9 @@ export default async function AccountPage({ searchParams }: Props) {
                 ))}
                 {(recentAlbums ?? []).length === 0 && (
                   <div className="rounded-xl px-4 py-6 text-center" style={{ background: '#FDFAF5', border: '1px solid #E8E0D2' }}>
-                    <p className="font-semibold" style={{ color: '#254F22' }}>No linked albums yet</p>
+                    <p className="font-semibold" style={{ color: '#254F22' }}>No albums yet</p>
                     <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed" style={{ color: '#5C4A3C' }}>
-                      Albums appear here after you use a paid feature or add an album to a collection.
+                      Albums you create while signed in appear here automatically. If you created one before signing in, open it with your owner link while signed in and it will show up here.
                     </p>
                     <Link
                       href="/"

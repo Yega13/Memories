@@ -44,9 +44,14 @@ export async function POST(req: Request) {
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // getUser() can return null in Cloudflare Workers Route Handlers when the middleware-refreshed
+  // session cookie isn't forwarded to the handler's request. Fall back to getSession() which
+  // reads the JWT from the cookie directly without a Supabase network round-trip.
+  let { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    user = session?.user ?? null
+  }
   let admin: ReturnType<typeof createAdminClient>
   try {
     admin = createAdminClient()
@@ -66,16 +71,29 @@ export async function POST(req: Request) {
       ? { slug: nextSlug, owner_token: nextOwnerToken, title, user_id: user.id, video_autoplay: true }
       : { slug: nextSlug, owner_token: nextOwnerToken, title, video_autoplay: true }
 
-    const { error } = await admin.from('albums').insert(row)
+    let { error } = await admin.from('albums').insert(row)
+
+    // 42703 = column does not exist. The video_autoplay column was added in migration
+    // 20260504_album_media_display_settings.sql which may not yet be applied in production.
+    // Retry without it so album creation never hard-fails due to a pending migration.
+    if (error?.code === '42703') {
+      console.warn('[album/create] video_autoplay column missing — retrying without it. Apply 20260504_album_media_display_settings.sql migration.')
+      const fallbackRow = user
+        ? { slug: nextSlug, owner_token: nextOwnerToken, title, user_id: user.id }
+        : { slug: nextSlug, owner_token: nextOwnerToken, title }
+      ;({ error } = await admin.from('albums').insert(fallbackRow))
+    }
+
     if (!error) {
       return NextResponse.json(
-        { slug: nextSlug, owner_token: nextOwnerToken },
+        // TODO: remove dbg_uid after diagnosing account linking
+        { slug: nextSlug, owner_token: nextOwnerToken, dbg_uid: user?.id ?? null },
         { headers: NO_STORE },
       )
     }
     if (error.code !== '23505') {
       console.error('[album/create] insert failed:', error.code, error.message)
-      return NextResponse.json({ error: 'Could not create album' }, { status: 500, headers: NO_STORE })
+      return NextResponse.json({ error: `DBG:${error.code}:${error.message}` }, { status: 500, headers: NO_STORE })
     }
   }
 

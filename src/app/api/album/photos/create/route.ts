@@ -52,14 +52,15 @@ export async function POST(req: Request) {
   }
 
   const admin = createAdminClient()
-  // Select without guest_uploads_enabled — the column was added in migration
-  // 20260531_albums_guest_uploads_enabled.sql which may not be applied on all envs yet.
-  // guest_uploads_enabled defaults to true per migration; check it separately below.
+  // Omit migration-added columns (guest_uploads_enabled, last_notification_at) from the
+  // primary lookup so a missing migration never turns a valid album into a 404.
+  // guest_uploads_enabled is checked separately below; last_notification_at is fetched
+  // inside maybeNotifyOwner which handles its own absence gracefully.
   const { data: album, error: albumErr } = await admin
     .from('albums')
-    .select('id, user_id, title, slug, custom_slug, last_notification_at')
+    .select('id, user_id, title, slug, custom_slug')
     .eq('id', albumId)
-    .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null; last_notification_at: string | null }>()
+    .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null }>()
   if (albumErr) {
     console.error('[photos/create] album lookup error:', albumErr.message, 'albumId:', albumId)
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
@@ -226,7 +227,10 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
     }
   }
 
-  return {
+  // Only include optional columns when they have a value. If the column doesn't yet
+  // exist in production (migration not applied), PostgREST returns 42703 even for
+  // null values — omitting them entirely lets the DB default kick in instead.
+  const full: Record<string, unknown> = {
     album_id: albumId,
     storage_path: storagePath,
     storage_backend: storageBackend,
@@ -243,6 +247,7 @@ function shapePhotoRow(albumId: string, row: PhotoRow) {
     thumb_url: thumbUrl,
     duration_seconds: numberOrNull(row.duration_seconds),
   }
+  return Object.fromEntries(Object.entries(full).filter(([, v]) => v !== null)) as typeof full & { storage_path: string }
 }
 
 function numberOrNull(value: unknown) {
@@ -260,7 +265,6 @@ type NotifiableAlbum = {
   title: string
   slug: string
   custom_slug: string | null
-  last_notification_at: string | null
 }
 
 async function maybeNotifyOwner(
@@ -270,7 +274,19 @@ async function maybeNotifyOwner(
 ) {
   if (!album.user_id) return
 
-  const lastSent = album.last_notification_at ? new Date(album.last_notification_at).getTime() : 0
+  // last_notification_at was added in migration 20260514_album_notifications.sql which may
+  // not be applied in production. Fetch it separately so a missing column never turns an
+  // upload into a 404. The Supabase client returns errors in the result, not as thrown
+  // exceptions, so we check the error field rather than using try/catch here.
+  const { data: notifData, error: notifErr } = await admin
+    .from('albums')
+    .select('last_notification_at')
+    .eq('id', album.id)
+    .maybeSingle<{ last_notification_at: string | null }>()
+  if (notifErr) return // column not yet migrated or DB error — skip notification silently
+
+  const lastSent = notifData?.last_notification_at
+    ? new Date(notifData.last_notification_at).getTime() : 0
   if (Date.now() - lastSent < NOTIFICATION_COOLDOWN_MS) return
 
   try {

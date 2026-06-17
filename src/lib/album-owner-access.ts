@@ -79,9 +79,11 @@ export async function verifyAlbumOwnerAccess<T extends AlbumOwnerBase = AlbumOwn
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    user = session?.user ?? null
+  }
 
   const protectedResult = checkProtectedManagement(album, cleanSlug, user)
   if (protectedResult !== null) return protectedResult
@@ -139,9 +141,11 @@ export async function verifyOwnerViaCookie<T extends AlbumOwnerBase = AlbumOwner
   }
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    const { data: { session } } = await supabase.auth.getSession()
+    user = session?.user ?? null
+  }
 
   const protectedResult = checkProtectedManagement(album, cleanSlug, user)
   if (protectedResult !== null) return protectedResult
