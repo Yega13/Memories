@@ -100,7 +100,7 @@ export async function POST(req: Request) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[upload/stream/tus] init fetch failed:', msg)
-    return NextResponse.json({ error: `Stream init failed: ${msg}` }, { status: 502, headers: NO_STORE })
+    return NextResponse.json({ error: 'Stream service unavailable' }, { status: 502, headers: NO_STORE })
   }
 
   const uploadUrl = res.headers.get('location') ?? ''
