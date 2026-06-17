@@ -103,6 +103,15 @@ export async function POST(req: Request) {
   // Album rate-limit check and DB owner lookup are independent — run in parallel
   // to cut one sequential Supabase round-trip off every upload.
   const admin = createAdminClient()
+  // Diagnostic: confirm which Supabase role the service key claims (safe — only logs the role name, not the key itself)
+  let keyRole = 'unknown'
+  try {
+    // JWT payload is base64url — normalize to standard base64 for atob
+    const rawPayload = (process.env.SUPABASE_SERVICE_ROLE_KEY?.split('.')[1] ?? '').replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = JSON.parse(atob(rawPayload)) as { role?: string }
+    keyRole = decoded.role ?? 'no-role-field'
+  } catch { keyRole = 'decode-error' }
+  console.log('[upload/r2] albumId:', albumId, 'kind:', kind, 'size:', file.size, 'serviceKeyRole:', keyRole)
   const [albumLimit, ownerResult] = await Promise.all([
     checkRateLimit(`r2_upload_album:${albumId}`, 3600, 5000, { failOpen: true }),
     admin
@@ -121,11 +130,11 @@ export async function POST(req: Request) {
 
   const { data: ownerRow, error: ownerErr } = ownerResult
   if (ownerErr) {
-    console.error('[upload/r2] album lookup error:', ownerErr.message, 'albumId:', albumId)
+    console.error('[upload/r2] album lookup DB error — code:', ownerErr.code, 'message:', ownerErr.message, 'hint:', ownerErr.hint, 'albumId:', albumId)
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
   if (!ownerRow) {
-    console.error('[upload/r2] album not found for id:', albumId)
+    console.error('[upload/r2] album row is null for albumId:', albumId, '— verify this UUID exists in the albums table')
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
   }
 
