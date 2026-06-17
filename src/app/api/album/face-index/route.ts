@@ -73,7 +73,7 @@ export async function GET(req: Request) {
   const slug = url.searchParams.get('slug')?.trim() ?? ''
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
-  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index_list'), 60, 30)
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index_list'), 60, 30, { failOpen: true })
   if (!ipLimit.ok) return rateLimitResponse(ipLimit.retryAfterSeconds)
 
   const { admin, album } = await resolveAlbum(slug)
@@ -127,7 +127,7 @@ async function handlePost(req: Request) {
   const slug = String(body.slug ?? '').trim()
   if (!slug || !isValidSlug(slug)) return NextResponse.json({ error: 'Invalid slug' }, { status: 400, headers: NO_STORE })
 
-  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index'), INDEX_WINDOW_SECONDS, INDEX_IP_MAX)
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_index'), INDEX_WINDOW_SECONDS, INDEX_IP_MAX, { failOpen: true })
   if (!ipLimit.ok) return rateLimitResponse(ipLimit.retryAfterSeconds)
 
   // Face indexing triggers paid Rekognition API calls — verify the requester owns this album.
@@ -140,7 +140,7 @@ async function handlePost(req: Request) {
     return NextResponse.json({ error: 'Face Finder is not enabled for this album' }, { status: 403, headers: NO_STORE })
   }
 
-  const albumLimit = await checkRateLimit(`face_index_album:${album.id}`, INDEX_WINDOW_SECONDS, INDEX_ALBUM_MAX)
+  const albumLimit = await checkRateLimit(`face_index_album:${album.id}`, INDEX_WINDOW_SECONDS, INDEX_ALBUM_MAX, { failOpen: true })
   if (!albumLimit.ok) return rateLimitResponse(albumLimit.retryAfterSeconds)
 
   const photoId = body.photoId ? String(body.photoId).trim() : null

@@ -86,14 +86,13 @@ export async function POST(req: Request) {
 
     if (!error) {
       return NextResponse.json(
-        // TODO: remove dbg_uid after diagnosing account linking
-        { slug: nextSlug, owner_token: nextOwnerToken, dbg_uid: user?.id ?? null },
+        { slug: nextSlug, owner_token: nextOwnerToken },
         { headers: NO_STORE },
       )
     }
     if (error.code !== '23505') {
       console.error('[album/create] insert failed:', error.code, error.message)
-      return NextResponse.json({ error: `DBG:${error.code}:${error.message}` }, { status: 500, headers: NO_STORE })
+      return NextResponse.json({ error: 'Could not create album' }, { status: 500, headers: NO_STORE })
     }
   }
 

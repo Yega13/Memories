@@ -40,7 +40,7 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
-  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_search'), SEARCH_WINDOW_SECONDS, SEARCH_IP_MAX)
+  const ipLimit = await checkRateLimit(clientIpKey(req, 'face_search'), SEARCH_WINDOW_SECONDS, SEARCH_IP_MAX, { failOpen: true })
   if (!ipLimit.ok) {
     return NextResponse.json(
       { error: 'Too many searches. Please wait a minute and try again.' },
@@ -85,7 +85,7 @@ async function handlePost(req: Request) {
     return NextResponse.json({ error: 'Face Finder is not enabled for this album' }, { status: 403, headers: NO_STORE })
   }
 
-  const albumLimit = await checkRateLimit(`face_search_album:${album.id}`, SEARCH_WINDOW_SECONDS, SEARCH_ALBUM_MAX)
+  const albumLimit = await checkRateLimit(`face_search_album:${album.id}`, SEARCH_WINDOW_SECONDS, SEARCH_ALBUM_MAX, { failOpen: true })
   if (!albumLimit.ok) {
     return NextResponse.json(
       { error: 'Too many searches. Please wait a minute and try again.' },

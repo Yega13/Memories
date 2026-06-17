@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   //   2. Composite (album_id, IP) — prevents distributed attackers each getting 10 guesses on the same album.
   const ip = clientIp(req)
 
-  const globalRl = await checkRateLimit(clientIpKey(req, 'pw_verify_global'), 5 * 60, 20)
+  const globalRl = await checkRateLimit(clientIpKey(req, 'pw_verify_global'), 5 * 60, 20, { failOpen: true })
   if (!globalRl.ok) {
     return NextResponse.json(
       { error: 'Too many attempts. Please try again in a few minutes.', retry_after_seconds: LOCKOUT_SECONDS },

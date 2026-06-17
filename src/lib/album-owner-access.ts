@@ -103,7 +103,7 @@ export async function verifyOwnerWithRateLimit(
   token: string,
   extraColumns?: string,
 ) {
-  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_settings'), 60, 30)
+  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_settings'), 60, 30, { failOpen: true })
   if (!ipRl.ok) {
     return { ok: false as const, status: 429, error: 'Too many requests. Please slow down.', reason: 'rate_limited' as const }
   }
@@ -163,7 +163,7 @@ export async function verifyOwnerViaCookieWithRateLimit(
   slug: string,
   extraColumns?: string,
 ) {
-  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_settings'), 60, 30)
+  const ipRl = await checkRateLimit(clientIpKey(req, 'owner_settings'), 60, 30, { failOpen: true })
   if (!ipRl.ok) {
     return { ok: false as const, status: 429, error: 'Too many requests. Please slow down.', reason: 'rate_limited' as const }
   }

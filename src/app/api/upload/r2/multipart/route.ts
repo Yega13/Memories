@@ -81,7 +81,7 @@ export async function POST(req: Request) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[r2/multipart] createMultipartUpload failed:', msg)
-      return NextResponse.json({ error: `Failed to init upload: ${msg}` }, { status: 500, headers: NO_STORE })
+      return NextResponse.json({ error: 'Failed to start upload' }, { status: 500, headers: NO_STORE })
     }
   }
 
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[r2/multipart] presign failed:', msg)
-      return NextResponse.json({ error: `Presign failed: ${msg}` }, { status: 500, headers: NO_STORE })
+      return NextResponse.json({ error: 'Failed to generate upload URL' }, { status: 500, headers: NO_STORE })
     }
   }
 
@@ -150,7 +150,7 @@ export async function POST(req: Request) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[r2/multipart] chunk upload failed:', msg, 'part', partNumber, 'key', key)
-      return NextResponse.json({ error: `Chunk ${partNumber} failed: ${msg}` }, { status: 500, headers: NO_STORE })
+      return NextResponse.json({ error: `Chunk ${partNumber} failed` }, { status: 500, headers: NO_STORE })
     }
   }
 
@@ -173,7 +173,7 @@ export async function POST(req: Request) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[r2/multipart] complete failed:', msg, 'key', key)
-      return NextResponse.json({ error: `Upload complete failed: ${msg}` }, { status: 500, headers: NO_STORE })
+      return NextResponse.json({ error: 'Failed to complete upload' }, { status: 500, headers: NO_STORE })
     }
     return NextResponse.json({ storage_path: key, url: `https://${publicHost}/${key}` }, { headers: NO_STORE })
   }
@@ -195,7 +195,7 @@ export async function POST(req: Request) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       console.error('[r2/multipart] abort failed:', msg, 'key', key)
-      return NextResponse.json({ error: `Abort failed: ${msg}` }, { status: 500, headers: NO_STORE })
+      return NextResponse.json({ error: 'Failed to abort upload' }, { status: 500, headers: NO_STORE })
     }
     return NextResponse.json({ ok: true }, { headers: NO_STORE })
   }

@@ -198,7 +198,7 @@ async function lookupAlbum(
 
   // Backward compatibility for deployments where the app has updated before
   // the media display migration has reached Supabase.
-  if (error.message.includes('media_radius') || error.message.includes('video_autoplay') || error.message.includes('media_filter') || error.message.includes('media_hover') || error.message.includes('mobile_grid_columns') || error.message.includes('slideshow_interval_ms') || error.message.includes('slideshow_animation') || error.message.includes('allow_guest_downloads')) {
+  if (error.message.includes('media_radius') || error.message.includes('video_autoplay') || error.message.includes('media_filter') || error.message.includes('media_hover') || error.message.includes('mobile_grid_columns') || error.message.includes('slideshow_interval_ms') || error.message.includes('slideshow_animation') || error.message.includes('allow_guest_downloads') || error.message.includes('cover_photo_id')) {
     console.warn('[album/resolve] media settings columns missing; using legacy album projection')
     const { data: legacy, error: legacyError } = await admin
       .from('albums')
