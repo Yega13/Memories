@@ -122,11 +122,13 @@ export async function POST(req: Request) {
   const { data: ownerRow, error: ownerErr } = ownerResult
   if (ownerErr) {
     console.error('[upload/r2] album lookup error:', ownerErr.message, 'albumId:', albumId)
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+    // TODO: remove debug
+    return NextResponse.json({ error: `DBG_ERR:${ownerErr.code}:${ownerErr.message}` }, { status: 404, headers: NO_STORE })
   }
   if (!ownerRow) {
     console.error('[upload/r2] album not found for id:', albumId)
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+    // TODO: remove debug
+    return NextResponse.json({ error: `DBG_NOTFOUND:id=${albumId}` }, { status: 404, headers: NO_STORE })
   }
 
   const contentType = file.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg')
