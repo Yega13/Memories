@@ -47,7 +47,13 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('[album/create] createAdminClient failed — SUPABASE_SERVICE_ROLE_KEY missing?', err)
+    return NextResponse.json({ error: 'Service configuration error. Please try again.' }, { status: 503, headers: NO_STORE })
+  }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const nextSlug = slug()

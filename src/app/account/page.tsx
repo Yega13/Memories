@@ -168,7 +168,27 @@ export default async function AccountPage({ searchParams }: Props) {
     ? ['Max Collections', 'Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
     : ['Custom album backgrounds', 'Password protection', 'Custom URLs', '200 MB uploads']
   const nextLabel = subscription?.cancel_at_period_end ? 'Access ends' : 'Next renewal'
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('[account] createAdminClient failed:', err)
+    return (
+      <div className="min-h-screen" style={{ background: '#FDFAF5' }}>
+        <AccountNav />
+        <main className="flex items-center justify-center px-4 py-16">
+          <div className="max-w-md w-full rounded-2xl p-8 text-center" style={{ background: '#FFFFFF', border: '1px solid #DDD5C5' }}>
+            <p className="text-xs uppercase mb-3" style={{ color: '#8B6F4E', letterSpacing: '0.18em', fontWeight: 600 }}>Service error</p>
+            <h1 className="text-2xl font-bold mb-3" style={{ color: '#254F22', fontFamily: 'var(--font-serif)' }}>Dashboard temporarily unavailable</h1>
+            <p className="text-sm leading-relaxed mb-5" style={{ color: '#5C4A3C' }}>
+              We&apos;re having trouble connecting to our database. Your albums and data are safe. Please try again in a moment.
+            </p>
+            <SignOutButton />
+          </div>
+        </main>
+      </div>
+    )
+  }
   const { data: collections } = await admin
     .from('collections')
     .select('id, name, slug, description, created_at')
