@@ -75,7 +75,8 @@ export async function POST(req: Request) {
     }
     if (error.code !== '23505') {
       console.error('[album/create] insert failed:', error.code, error.message)
-      return NextResponse.json({ error: 'Could not create album' }, { status: 500, headers: NO_STORE })
+      // TODO: remove debug line after diagnosing
+      return NextResponse.json({ error: `DBG:${error.code}:${error.message}` }, { status: 500, headers: NO_STORE })
     }
   }
 
