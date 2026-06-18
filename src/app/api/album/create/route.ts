@@ -52,6 +52,9 @@ export async function POST(req: Request) {
     const { data: { session } } = await supabase.auth.getSession()
     user = session?.user ?? null
   }
+  const svcKeySnippet = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').slice(0, 30)
+  console.log('[album/create] svcKey prefix:', svcKeySnippet, 'len:', (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').length)
+
   let admin: ReturnType<typeof createAdminClient>
   try {
     admin = createAdminClient()
@@ -91,7 +94,7 @@ export async function POST(req: Request) {
       )
     }
     if (error.code !== '23505') {
-      console.error('[album/create] insert failed:', error.code, error.message)
+      console.error('[album/create] insert failed — code:', error.code, 'msg:', error.message, 'hint:', error.hint)
       return NextResponse.json({ error: 'Could not create album' }, { status: 500, headers: NO_STORE })
     }
   }

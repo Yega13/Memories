@@ -23,7 +23,20 @@
       "Bash(npx eslint *)",
       "Bash(node *)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('version','?'\\)\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\.next\\\\server\\\\app\\\\api\\\\album\\\\create\\\\route.js\" -Pattern \"SUPABASE\" -SimpleMatch | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(400, $_.Line.Length\\)\\) })",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\worker.js\" -Pattern \"process\\\\.env|SUPABASE|globalThis\" -SimpleMatch | Select-Object -First 20 | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(300, $_.Line.Length\\)\\) })",
+      "PowerShell(Get-Item \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\worker.js\" | Select-Object Length; Get-Content \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\worker.js\" -TotalCount 5 | ForEach-Object { $_.Substring\\(0, [Math]::Min\\(500, $_.Length\\)\\) })",
+      "Skill(code-review)",
+      "Skill(code-review:*)",
+      "Bash(git show *)",
+      "Bash(cat src/app/api/account/albums/delete/route.ts)",
+      "Bash(cat src/app/api/account/albums/rename/route.ts)",
+      "Bash(cat open-next.config.ts)",
+      "Bash(cat open-next.config.js)",
+      "Bash(curl -s -X POST https://hushare.space/api/album/password -H 'Content-Type: application/json' -H 'Origin: https://hushare.space' -d '{\"slug\":\"testslug\",\"password\":\"testpass\"}')",
+      "Bash(grep -v \"//.*\\\\.select\\(\")",
+      "Bash(grep -v \"\\\\/\\\\*\")"
     ]
   }
 }

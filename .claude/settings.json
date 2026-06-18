@@ -53,7 +53,20 @@
       "Read(//c/Users/yegan/OneDrive/Desktop/**)",
       "PowerShell(cd \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\"; $content = Get-Content \"Supabase Snippet Find Duplicate Photo Locations.csv\" -Raw; $lines = $content -split \"`n\"; \"Total lines: $\\($lines.Count\\)\"; \"Has quoted fields: $\\($content -match '\\\\\"'\\)\"; \"Has CRLF: $\\($content -match '\\\\r\\\\n'\\)\")",
       "PowerShell(cd \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\"; $lines = Get-Content \"Supabase Snippet Find Duplicate Photo Locations.csv\"; $bad = $lines | Where-Object { \\($_ -split ','\\).Count -ne 5 }; \"Lines with wrong column count: $\\($bad.Count\\)\"; $bad | Select-Object -First 5)",
-      "Bash(xargs grep -l \"photos\\\\|insert\")"
+      "Bash(xargs grep -l \"photos\\\\|insert\")",
+      "Bash(curl -s \"https://hushare.space/_next/static/chunks/app/login/page-d3d953aff3dd07a7.js\")",
+      "Bash(xargs grep -l \"NEXT_PUBLIC\")",
+      "Bash(curl -s \"https://api.github.com/repos/Yega13/Memories/actions/jobs/81306100699/logs\" -L -o /tmp/actions_log.txt)",
+      "Read(//tmp/**)",
+      "Bash(cat \"C:/Users/yegan/.wrangler/config/default.toml\" 2>/dev/null || echo \"NOT FOUND\")",
+      "Read(//c/Users/yegan/.wrangler/config/**)",
+      "Bash(ls \"C:/Users/yegan/.wrangler/\" 2>/dev/null && ls \"C:/Users/yegan/.wrangler/config/\" 2>/dev/null)",
+      "Read(//c/Users/yegan/**)",
+      "PowerShell(Write-Output $key)",
+      "PowerShell(npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY --name memories 2>&1)",
+      "PowerShell($key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0ZW92bmtwbGhvd2Z2YnpwYWxwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTMzMzg0NiwiZXhwIjoyMDk2OTA5ODQ2fQ.dSf3RKJcEWMDOGWTPY77POEbZJAuuqBroYnUFdDDQ2A')",
+      "PowerShell(cd \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\"; npx wrangler tail memories --format pretty 2>&1 | Tee-Object -FilePath \"$env:TEMP\\\\wrangler-tail-live.txt\")",
+      "PowerShell(Select-String -Path \"C:\\\\Users\\\\yegan\\\\OneDrive\\\\Desktop\\\\Hushare\\\\.open-next\\\\server-functions\\\\default\\\\.next\\\\server\\\\app\\\\api\\\\album\\\\create\\\\route.js\" -Pattern \"SUPABASE_SERVICE_ROLE|serviceRoleKey|service_role\" -SimpleMatch | Select-Object -First 5 | ForEach-Object { $_.Line.Substring\\(0, [Math]::Min\\(300, $_.Line.Length\\)\\) })"
     ]
   }
 }
