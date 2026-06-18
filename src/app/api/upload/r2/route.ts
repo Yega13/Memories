@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserTierById } from '@/lib/subscriptions'
 import { uploadCapsForTier, PRO_IMAGE_BYTES, PRO_VIDEO_BYTES } from '@/lib/media'
 import type { R2Env } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { verifyMimeByMagic } from '@/lib/file-magic'
 import { checkRateLimit, clientIpKey } from '@/lib/rate-limit'
+import { lookupUploadAlbumById } from '@/lib/album-upload-access'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -100,16 +100,11 @@ export async function POST(req: Request) {
     )
   }
 
-  // Album rate-limit check and DB owner lookup are independent — run in parallel
+  // Album rate-limit check and DB album lookup are independent — run in parallel
   // to cut one sequential Supabase round-trip off every upload.
-  const admin = createAdminClient()
-  const [albumLimit, ownerResult] = await Promise.all([
+  const [albumLimit, albumLookup] = await Promise.all([
     checkRateLimit(`r2_upload_album:${albumId}`, 3600, 5000, { failOpen: true }),
-    admin
-      .from('albums')
-      .select('user_id')
-      .eq('id', albumId)
-      .maybeSingle<{ user_id: string | null }>(),
+    lookupUploadAlbumById(albumId, 'upload/r2', { checkGuestUploads: true }),
   ])
 
   if (!albumLimit.ok) {
@@ -119,15 +114,10 @@ export async function POST(req: Request) {
     )
   }
 
-  const { data: ownerRow, error: ownerErr } = ownerResult
-  if (ownerErr) {
-    console.error('[upload/r2] album lookup error — code:', ownerErr.code, 'msg:', ownerErr.message, 'albumId:', albumId)
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+  if (!albumLookup.ok) {
+    return NextResponse.json({ error: albumLookup.error }, { status: albumLookup.status, headers: NO_STORE })
   }
-  if (!ownerRow) {
-    console.error('[upload/r2] album not found in DB — albumId:', albumId)
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-  }
+  const ownerRow = albumLookup.album
 
   const contentType = file.type || (kind === 'video' ? 'video/mp4' : 'image/jpeg')
   const allowed = kind === 'video' ? ALLOWED_VIDEO_MIMES : kind === 'image' ? ALLOWED_IMAGE_MIMES : ALLOWED_POSTER_MIMES

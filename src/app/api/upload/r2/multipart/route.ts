@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getCloudflareContext } from '@opennextjs/cloudflare'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { getUserTierById } from '@/lib/subscriptions'
 import { uploadCapsForTier } from '@/lib/media'
 import type { R2Env, R2UploadPart } from '@/lib/r2'
 import { forbidCrossSiteRequest } from '@/lib/request-security'
 import { presignR2UploadPart } from '@/lib/r2-presign'
+import { lookupUploadAlbumById } from '@/lib/album-upload-access'
 
 export const runtime = 'nodejs'
 // Long videos on slow mobile data: a single chunk PUT can take a couple of minutes. Give the
@@ -54,17 +54,11 @@ export async function POST(req: Request) {
     if (!ALLOWED_VIDEO_MIMES.has(contentType)) return NextResponse.json({ error: 'Unsupported content type' }, { status: 415, headers: NO_STORE })
 
     // Tier-aware size cap
-    const admin = createAdminClient()
-    const { data: ownerRow, error: ownerErr } = await admin
-      .from('albums').select('user_id').eq('id', albumId).maybeSingle<{ user_id: string | null }>()
-    if (ownerErr) {
-      console.error('[upload/r2/multipart] album lookup error:', ownerErr.message, 'albumId:', albumId)
-      return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+    const albumLookup = await lookupUploadAlbumById(albumId, 'upload/r2/multipart', { checkGuestUploads: true })
+    if (!albumLookup.ok) {
+      return NextResponse.json({ error: albumLookup.error }, { status: albumLookup.status, headers: NO_STORE })
     }
-    if (!ownerRow) {
-      console.error('[upload/r2/multipart] album not found for id:', albumId)
-      return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
-    }
+    const ownerRow = albumLookup.album
     const tier = await getUserTierById(ownerRow.user_id)
     const caps = uploadCapsForTier(tier)
     if (totalSize > caps.video) {

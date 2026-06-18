@@ -13,6 +13,7 @@
     "start": "next start",
     "lint": "eslint",
     "smoke": "node scripts/smoke.mjs",
+    "health": "node scripts/check-health.mjs",
     "test": "playwright test --reporter=list"
   },
   "dependencies": {

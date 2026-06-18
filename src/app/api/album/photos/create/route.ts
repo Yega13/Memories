@@ -51,7 +51,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Missing album or photos' }, { status: 400, headers: NO_STORE })
   }
 
-  const admin = createAdminClient()
+  let admin: ReturnType<typeof createAdminClient>
+  try {
+    admin = createAdminClient()
+  } catch (err) {
+    console.error('[photos/create] createAdminClient failed:', err instanceof Error ? err.message : String(err))
+    return NextResponse.json({ error: 'Service configuration error. Please try again.' }, { status: 503, headers: NO_STORE })
+  }
   // Omit migration-added columns (guest_uploads_enabled, last_notification_at) from the
   // primary lookup so a missing migration never turns a valid album into a 404.
   // guest_uploads_enabled is checked separately below; last_notification_at is fetched
@@ -62,8 +68,17 @@ export async function POST(req: Request) {
     .eq('id', albumId)
     .maybeSingle<{ id: string; user_id: string | null; title: string; slug: string; custom_slug: string | null }>()
   if (albumErr) {
-    console.error('[photos/create] album lookup error:', albumErr.message, 'albumId:', albumId)
-    return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
+    console.error(
+      '[photos/create] album lookup failed:',
+      JSON.stringify({
+        code: albumErr.code,
+        message: albumErr.message,
+        details: albumErr.details,
+        hint: albumErr.hint,
+        albumId,
+      }),
+    )
+    return NextResponse.json({ error: 'Could not verify album. Please try again.' }, { status: 503, headers: NO_STORE })
   }
   if (!album) {
     return NextResponse.json({ error: 'Album not found' }, { status: 404, headers: NO_STORE })
@@ -71,16 +86,33 @@ export async function POST(req: Request) {
 
   // Check guest_uploads_enabled separately so a missing column (migration not yet applied)
   // degrades gracefully to the default (true) instead of blocking all uploads.
-  try {
-    const { data: gRow } = await admin
-      .from('albums')
-      .select('guest_uploads_enabled')
-      .eq('id', albumId)
-      .maybeSingle<{ guest_uploads_enabled: boolean | null }>()
-    if (gRow?.guest_uploads_enabled === false) {
-      return NextResponse.json({ error: 'Guest uploads are not enabled for this album' }, { status: 403, headers: NO_STORE })
+  const { data: gRow, error: guestUploadVerifyErr } = await admin
+    .from('albums')
+    .select('guest_uploads_enabled')
+    .eq('id', albumId)
+    .maybeSingle<{ guest_uploads_enabled: boolean | null }>()
+  if (guestUploadVerifyErr) {
+    const missingColumn = guestUploadVerifyErr.code === '42703'
+      || guestUploadVerifyErr.code === 'PGRST204'
+      || /column .* does not exist|schema cache/i.test(guestUploadVerifyErr.message ?? '')
+    if (missingColumn) {
+      console.warn('[photos/create] guest_uploads_enabled missing; defaulting guest uploads to enabled')
+    } else {
+      console.error(
+        '[photos/create] guest upload permission lookup failed:',
+        JSON.stringify({
+          code: guestUploadVerifyErr.code,
+          message: guestUploadVerifyErr.message,
+          details: guestUploadVerifyErr.details,
+          hint: guestUploadVerifyErr.hint,
+          albumId,
+        }),
+      )
+      return NextResponse.json({ error: 'Could not verify album upload permissions. Please try again.' }, { status: 503, headers: NO_STORE })
     }
-  } catch { /* column may not exist yet — default is true */ }
+  } else if (gRow?.guest_uploads_enabled === false) {
+    return NextResponse.json({ error: 'Guest uploads are not enabled for this album' }, { status: 403, headers: NO_STORE })
+  }
 
   // Per-album rate limit: caps total uploads regardless of how many IPs are attacking.
   // Prevents a distributed attacker from flooding one album from many IPs.
